@@ -3,8 +3,8 @@ package com.xrq.xxq.module.user.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableLogic;
-import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import org.jspecify.annotations.NonNull;
 
 import java.time.LocalDateTime;
@@ -12,11 +12,11 @@ import java.time.LocalDateTime;
 /**
  * @类名 User
  * @Date 2026/6/5
- *
+ * 用户基类（抽象），定义所有用户类型的公共字段
  */
 @Data
-@TableName("user")
-public class User {
+@EqualsAndHashCode
+public abstract class User {
     @TableId (type = IdType.AUTO)
     private Long id; //主键id
     @NonNull
