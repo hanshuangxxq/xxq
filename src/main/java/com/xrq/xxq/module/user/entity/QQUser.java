@@ -14,7 +14,8 @@ import lombok.Data;
 @TableName("qq_user")
 public class QQUser {
     @TableId(type = IdType.AUTO)
-    private Long id; //主键id
-    private String userId; //关联的用户id
-    private String qqOpenid; //QQ openid
+    private Long id;         // 主键id
+    private Long userId;     // 关联的用户表主键id
+    private String userType; // 用户类型（teacher/student/dean）
+    private String qqOpenid; // QQ openid
 }
