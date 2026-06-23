@@ -5,9 +5,10 @@ import com.xrq.xxq.module.user.entity.user.Teacher;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
+ * 教师表 Mapper，继承 MyBatis Plus BaseMapper 提供通用 CRUD。
+ *
  * @类名 TeacherMapper
  * @Date 2026/6/22
- * @Description 老师Mapper
  */
 @Mapper
 public interface TeacherMapper extends BaseMapper<Teacher> {
