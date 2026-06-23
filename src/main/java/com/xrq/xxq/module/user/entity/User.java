@@ -10,9 +10,11 @@ import org.jspecify.annotations.NonNull;
 import java.time.LocalDateTime;
 
 /**
+ * 用户基类（抽象），定义所有用户类型共有的基础字段。
+ * 子类通过 {@link com.baomidou.mybatisplus.annotation.TableName} 映射到各自的表。
+ *
  * @类名 User
  * @Date 2026/6/5
- * 用户基类（抽象），定义所有用户类型的公共字段
  */
 @Data
 @EqualsAndHashCode
