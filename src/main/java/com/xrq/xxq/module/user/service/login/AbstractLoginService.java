@@ -18,13 +18,10 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * 登录抽象基类 —— 封装公共逻辑（验密、会话组装、OAuth 用户解析）。
- * 子类按登录渠道覆写 {@link #login}。
- */
 @RequiredArgsConstructor
 public abstract class AbstractLoginService implements LoginService {
 
+    protected final UserMapper userMapper;
     protected final TeacherMapper teacherMapper;
     protected final StudentMapper studentMapper;
     protected final DeanMapper deanMapper;
@@ -49,54 +46,50 @@ public abstract class AbstractLoginService implements LoginService {
 
     // ---- 公共工具方法 ----
 
+    /** 按账号（用户名 或 工号/学号/职工号）在 user 表 + 子表中查找用户 */
     protected User lookupAcrossTables(String account) {
+        // 1. 先在 user 表按 name 查
+        User user = userMapper.selectOne(new LambdaQueryWrapper<User>()
+                .eq(User::getName, account));
+        if (user != null) return user;
+
+        // 2. 按工号查教师
         Teacher teacher = teacherMapper.selectOne(new LambdaQueryWrapper<Teacher>()
-                .eq(Teacher::getName, account).or()
                 .eq(Teacher::getTeacherNo, account));
-        if (teacher != null) return teacher;
+        if (teacher != null) return userMapper.selectById(teacher.getUserId());
 
+        // 3. 按学号查学生
         Student student = studentMapper.selectOne(new LambdaQueryWrapper<Student>()
-                .eq(Student::getName, account).or()
                 .eq(Student::getStudentNo, account));
-        if (student != null) return student;
+        if (student != null) return userMapper.selectById(student.getUserId());
 
+        // 4. 按职工号查教务主任
         Dean dean = deanMapper.selectOne(new LambdaQueryWrapper<Dean>()
-                .eq(Dean::getName, account).or()
                 .eq(Dean::getStaffNo, account));
-        if (dean != null) return dean;
+        if (dean != null) return userMapper.selectById(dean.getUserId());
 
         return null;
     }
 
+    /** 从第三方平台实体解析出 UserSession（直接通过 userId 查 user 表） */
     protected UserSession buildOAuthSession(Object platformUser) {
         if (platformUser == null) return null;
 
-        String table = switch (platformUser) {
-            case WXUser w     -> w.getType();
-            case QQUser q     -> q.getType();
-            case AlipayUser a -> a.getType();
-            default -> throw new IllegalArgumentException("未知的第三方平台实体");
-        };
-        Long uid = switch (platformUser) {
+        Long userId = switch (platformUser) {
             case WXUser w     -> w.getUserId();
             case QQUser q     -> q.getUserId();
             case AlipayUser a -> a.getUserId();
             default -> throw new IllegalArgumentException("未知的第三方平台实体");
         };
 
-        User user = switch (table) {
-            case "teacher" -> teacherMapper.selectById(uid);
-            case "student" -> studentMapper.selectById(uid);
-            case "dean"    -> deanMapper.selectById(uid);
-            default        -> throw new IllegalArgumentException("不支持的用户表: " + table);
-        };
+        User user = userMapper.selectById(userId);
         return user != null ? buildSession(user, user.getName()) : null;
     }
 
     protected UserSession buildSession(User user, String account) {
         UserSession session = new UserSession();
         session.setUserId(user.getId());
-        session.setUserType(detectUserType(user));
+        session.setUserType(user.getUserType());
         session.setName(user.getName());
         session.setAccount(account);
         session.setAvatar(user.getAvatar());
@@ -104,13 +97,6 @@ public abstract class AbstractLoginService implements LoginService {
         session.setTokenId(UUID.randomUUID().toString().replace("-", ""));
         session.setLoginTime(LocalDateTime.now());
         return session;
-    }
-
-    protected String detectUserType(User user) {
-        if (user instanceof Teacher) return "teacher";
-        if (user instanceof Student) return "student";
-        if (user instanceof Dean)    return "dean";
-        throw new IllegalArgumentException("未知的用户实体类型");
     }
 
     protected boolean matchPassword(String rawPassword, String storedPassword) {

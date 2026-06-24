@@ -1,0 +1,31 @@
+package com.xrq.xxq.module.user.service.login.impl;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.xrq.xxq.module.user.entity.QQUser;
+import com.xrq.xxq.module.user.dto.LoginRequest;
+import com.xrq.xxq.module.user.dto.UserSession;
+import com.xrq.xxq.module.user.service.login.AbstractLoginService;
+import com.xrq.xxq.module.user.mapper.*;
+import org.springframework.stereotype.Service;
+
+@Service
+public class QQLoginService extends AbstractLoginService {
+
+    public QQLoginService(UserMapper userMapper,
+                          TeacherMapper teacherMapper,
+                          StudentMapper studentMapper,
+                          DeanMapper deanMapper,
+                          WXUserMapper wxUserMapper,
+                          QQUserMapper qqUserMapper,
+                          AlipayUserMapper alipayUserMapper) {
+        super(userMapper, teacherMapper, studentMapper, deanMapper, wxUserMapper, qqUserMapper, alipayUserMapper);
+    }
+
+    @Override
+    public UserSession login(LoginRequest request) {
+        String code = (String) request.getData().get("code");
+        QQUser qq = qqUserMapper.selectOne(new LambdaQueryWrapper<QQUser>()
+                .eq(QQUser::getQqOpenid, code));
+        return buildOAuthSession(qq);
+    }
+}
