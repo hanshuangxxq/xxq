@@ -1,6 +1,7 @@
 package com.xrq.xxq.module.user.service.login;
 
 import com.xrq.xxq.module.user.dto.LoginRequest;
+import com.xrq.xxq.module.user.dto.RegisterRequest;
 import com.xrq.xxq.module.user.dto.UserSession;
 import com.xrq.xxq.module.user.service.login.impl.AccountLoginService;
 import com.xrq.xxq.module.user.service.login.impl.AlipayLoginService;
@@ -51,5 +52,10 @@ public class LoginServiceRouter implements LoginService {
     @Override
     public Boolean logout(String tokenId) {
         return accountLoginService.logout(tokenId);
+    }
+
+    @Override
+    public Boolean register(RegisterRequest request) {
+        return accountLoginService.register(request);
     }
 }
