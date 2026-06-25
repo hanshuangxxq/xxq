@@ -3,3 +3,6 @@ spring:
     name: xxq
   profiles:
     active: dev
+
+avatar:
+  storage-path: uploads/avatars
