@@ -1,6 +1,7 @@
 package com.xrq.xxq.module.user.service.login;
 
 import com.xrq.xxq.module.user.dto.LoginRequest;
+import com.xrq.xxq.module.user.dto.RegisterRequest;
 import com.xrq.xxq.module.user.dto.UserSession;
 
 /**
@@ -8,24 +9,11 @@ import com.xrq.xxq.module.user.dto.UserSession;
  */
 public interface LoginService {
 
-    /**
-     * 登录的接口方法
-     * @param request
-     * @return
-     */
     UserSession login(LoginRequest request);
 
-    /**
-     * 刷新访问令牌的接口方法
-     * @param refreshToken
-     * @return
-     */
     UserSession refreshAccessToken(String refreshToken);
 
-    /**
-     * 登出的接口方法
-     * @param tokenId
-     * @return
-     */
     Boolean logout(String tokenId);
+
+    Boolean register(RegisterRequest request);
 }
