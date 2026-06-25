@@ -8,13 +8,13 @@ import com.xrq.xxq.module.user.entity.WXUser;
 import com.xrq.xxq.module.user.entity.user.Dean;
 import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.entity.user.Teacher;
+import com.xrq.xxq.common.EncryptUtils;
 import com.xrq.xxq.module.user.dto.LoginRequest;
+import com.xrq.xxq.module.user.dto.RegisterRequest;
 import com.xrq.xxq.module.user.dto.UserSession;
 import com.xrq.xxq.module.user.mapper.*;
 import lombok.RequiredArgsConstructor;
-import org.springframework.util.DigestUtils;
 
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -101,7 +101,46 @@ public abstract class AbstractLoginService implements LoginService {
 
     protected boolean matchPassword(String rawPassword, String storedPassword) {
         if (storedPassword == null) return false;
-        String encoded = DigestUtils.md5DigestAsHex(rawPassword.getBytes(StandardCharsets.UTF_8));
-        return encoded.equalsIgnoreCase(storedPassword);
+        return EncryptUtils.verifyPbkdf2(rawPassword, storedPassword);
+    }
+
+    @Override
+    public Boolean register(RegisterRequest request) {
+        String account = request.getAccount();
+        if (lookupAcrossTables(account) != null) {
+            throw new IllegalArgumentException("账号已存在");
+        }
+
+        User user = new User();
+        user.setName(account);
+        user.setPassword(EncryptUtils.hashWithPbkdf2(request.getPassword()));
+        user.setUserType(request.getUserType());
+        user.setCreateTime(LocalDateTime.now());
+        user.setStatus(1);
+        userMapper.insert(user);
+
+        String identifier = request.getIdentifier();
+        switch (request.getUserType()) {
+            case "teacher" -> {
+                Teacher teacher = new Teacher();
+                teacher.setUserId(user.getId());
+                teacher.setTeacherNo(identifier);
+                teacherMapper.insert(teacher);
+            }
+            case "student" -> {
+                Student student = new Student();
+                student.setUserId(user.getId());
+                student.setStudentNo(identifier);
+                studentMapper.insert(student);
+            }
+            case "dean" -> {
+                Dean dean = new Dean();
+                dean.setUserId(user.getId());
+                dean.setStaffNo(identifier);
+                deanMapper.insert(dean);
+            }
+            default -> throw new IllegalArgumentException("不支持的用户类型: " + request.getUserType());
+        }
+        return true;
     }
 }
