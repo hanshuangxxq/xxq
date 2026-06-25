@@ -39,3 +39,7 @@ build/
 ### CLAUDE ###
 CLAUDE.md
 
+### SQL ###
+*.sql
+
+
