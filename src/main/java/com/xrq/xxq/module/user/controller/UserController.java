@@ -20,8 +20,8 @@ public class UserController {
     private final AvatarService avatarService;
 
     @GetMapping("/profile")
-    public Result<UserProfileResponse> getProfile(@RequestParam Long userId) {
-        return Result.ok(userService.getProfile(userId));
+    public Result<UserProfileResponse> getProfile(@RequestParam Long userId, @RequestParam(required = false) String tokenId) {
+        return Result.ok(userService.getProfile(userId, tokenId));
     }
 
     @PutMapping("/profile")
