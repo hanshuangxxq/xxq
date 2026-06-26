@@ -8,11 +8,13 @@ import com.xrq.xxq.module.user.entity.WXUser;
 import com.xrq.xxq.module.user.entity.user.Dean;
 import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.entity.user.Teacher;
-import com.xrq.xxq.common.EncryptUtils;
+import com.xrq.xxq.util.EncryptUtils;
 import com.xrq.xxq.module.user.dto.LoginRequest;
 import com.xrq.xxq.module.user.dto.RegisterRequest;
 import com.xrq.xxq.module.user.dto.UserSession;
 import com.xrq.xxq.module.user.mapper.*;
+import com.xrq.xxq.module.user.session.LoginSessionStore;
+import com.xrq.xxq.util.JwtUtils;
 import lombok.RequiredArgsConstructor;
 
 import java.time.LocalDateTime;
@@ -28,6 +30,8 @@ public abstract class AbstractLoginService implements LoginService {
     protected final WXUserMapper wxUserMapper;
     protected final QQUserMapper qqUserMapper;
     protected final AlipayUserMapper alipayUserMapper;
+    protected final LoginSessionStore sessionStore;
+    protected final JwtUtils jwtUtils;
 
     @Override
     public UserSession login(LoginRequest request) {
@@ -36,11 +40,22 @@ public abstract class AbstractLoginService implements LoginService {
 
     @Override
     public UserSession refreshAccessToken(String refreshToken) {
-        throw new UnsupportedOperationException("TODO: Redis 集成后实现");
+        UserSession session = sessionStore.get(refreshToken);
+        if (session == null) {
+            throw new IllegalArgumentException("refreshToken 无效或已过期");
+        }
+
+        String newAccessToken = jwtUtils.generateAccessToken(
+                session.getUserId(), session.getUserType(), session.getRole(), refreshToken);
+        session.setAccessToken(newAccessToken);
+
+        sessionStore.put(refreshToken, session);
+        return session;
     }
 
     @Override
     public Boolean logout(String tokenId) {
+        sessionStore.remove(tokenId);
         return true;
     }
 
@@ -87,6 +102,10 @@ public abstract class AbstractLoginService implements LoginService {
     }
 
     protected UserSession buildSession(User user, String account) {
+        String tokenId = UUID.randomUUID().toString().replace("-", "");
+        String accessToken = jwtUtils.generateAccessToken(
+                user.getId(), user.getUserType(), user.getRole(), tokenId);
+
         UserSession session = new UserSession();
         session.setUserId(user.getId());
         session.setUserType(user.getUserType());
@@ -94,8 +113,16 @@ public abstract class AbstractLoginService implements LoginService {
         session.setAccount(account);
         session.setAvatar(user.getAvatar());
         session.setRole(user.getRole());
-        session.setTokenId(UUID.randomUUID().toString().replace("-", ""));
+        session.setTokenId(tokenId);
+        session.setAccessToken(accessToken);
+        session.setRefreshToken(tokenId);
         session.setLoginTime(LocalDateTime.now());
+        session.setLastLoginTime(user.getLastLoginTime());
+
+        user.setLastLoginTime(LocalDateTime.now());
+        userMapper.updateById(user);
+
+        sessionStore.put(tokenId, session);
         return session;
     }
 
