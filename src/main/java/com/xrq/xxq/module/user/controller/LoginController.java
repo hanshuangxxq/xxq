@@ -5,6 +5,7 @@ import com.xrq.xxq.module.user.dto.LoginRequest;
 import com.xrq.xxq.module.user.dto.RegisterRequest;
 import com.xrq.xxq.module.user.dto.UserSession;
 import com.xrq.xxq.module.user.service.login.LoginService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -36,7 +37,8 @@ public class LoginController {
     }
 
     @PostMapping("/login/logout")
-    public Result<Boolean> logout(@RequestParam String tokenId) {
+    public Result<Boolean> logout(HttpServletRequest request) {
+        String tokenId = (String) request.getAttribute("tokenId");
         return Result.ok(loginService.logout(tokenId));
     }
 }
