@@ -1,4 +1,4 @@
-package com.xrq.xxq.common;
+package com.xrq.xxq.util;
 
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
