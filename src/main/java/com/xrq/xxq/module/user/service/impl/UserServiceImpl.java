@@ -13,6 +13,7 @@ import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.module.user.mapper.TeacherMapper;
 import com.xrq.xxq.module.user.mapper.UserMapper;
 import com.xrq.xxq.module.user.service.UserService;
+import com.xrq.xxq.module.user.session.LoginSessionStore;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -24,9 +25,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     private final StudentMapper studentMapper;
     private final TeacherMapper teacherMapper;
     private final DeanMapper deanMapper;
+    private final LoginSessionStore sessionStore;
 
     @Override
-    public UserProfileResponse getProfile(Long userId) {
+    public UserProfileResponse getProfile(Long userId, String tokenId) {
         User user = userMapper.selectById(userId);
         if (user == null) {
             throw new IllegalArgumentException("用户不存在");
@@ -42,9 +44,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         profile.setDescription(user.getDescription());
         profile.setRole(user.getRole());
         profile.setUserType(user.getUserType());
-        profile.setLastLoginTime(user.getLastLoginTime());
         profile.setCreateTime(user.getCreateTime());
         profile.setStatus(user.getStatus());
+
+        var session = sessionStore.get(tokenId);
+        profile.setLastLoginTime(session != null ? session.getLastLoginTime() : user.getLastLoginTime());
 
         fillSubtypeInfo(user.getUserType(), userId, profile);
         return profile;
