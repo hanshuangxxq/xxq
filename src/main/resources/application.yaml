@@ -6,3 +6,8 @@ spring:
 
 avatar:
   storage-path: uploads/avatars
+
+jwt:
+  secret: dGhpcyBpcyBhIHNlY3JldCBrZXkgZm9yIGp3dCB0b2tlbiBnZW5lcmF0aW9uIGFuZCB2YWxpZGF0aW9u
+  access-token-expiration: 30m
+  refresh-token-expiration: 7d
