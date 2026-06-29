@@ -1,5 +1,6 @@
 package com.xrq.xxq.module.user.service.login;
 
+import com.xrq.xxq.module.user.dto.ChangePasswordRequest;
 import com.xrq.xxq.module.user.dto.LoginRequest;
 import com.xrq.xxq.module.user.dto.RegisterRequest;
 import com.xrq.xxq.module.user.dto.UserSession;
@@ -57,5 +58,10 @@ public class LoginServiceRouter implements LoginService {
     @Override
     public Boolean register(RegisterRequest request) {
         return accountLoginService.register(request);
+    }
+
+    @Override
+    public Boolean changePassword(ChangePasswordRequest request) {
+        return accountLoginService.changePassword(request);
     }
 }
