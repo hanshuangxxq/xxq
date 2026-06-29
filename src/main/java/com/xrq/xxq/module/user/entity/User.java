@@ -26,5 +26,5 @@ public class User {
     private Integer status;
     @TableLogic(value = "0", delval = "1")
     private Boolean deleted;
-    private String userType;  // teacher / student / dean
+    private String userType;  // teacher / student / academic_admin / department
 }
