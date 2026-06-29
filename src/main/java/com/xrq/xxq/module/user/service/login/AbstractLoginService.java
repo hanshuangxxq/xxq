@@ -5,7 +5,8 @@ import com.xrq.xxq.module.user.entity.AlipayUser;
 import com.xrq.xxq.module.user.entity.QQUser;
 import com.xrq.xxq.module.user.entity.User;
 import com.xrq.xxq.module.user.entity.WXUser;
-import com.xrq.xxq.module.user.entity.user.Dean;
+import com.xrq.xxq.module.user.entity.user.AcademicAdmin;
+import com.xrq.xxq.module.user.entity.user.Department;
 import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.entity.user.Teacher;
 import com.xrq.xxq.common.BusinessException;
@@ -27,7 +28,8 @@ public abstract class AbstractLoginService implements LoginService {
     protected final UserMapper userMapper;
     protected final TeacherMapper teacherMapper;
     protected final StudentMapper studentMapper;
-    protected final DeanMapper deanMapper;
+    protected final AcademicAdminMapper academicAdminMapper;
+    protected final DepartmentMapper departmentMapper;
     protected final WXUserMapper wxUserMapper;
     protected final QQUserMapper qqUserMapper;
     protected final AlipayUserMapper alipayUserMapper;
@@ -64,26 +66,34 @@ public abstract class AbstractLoginService implements LoginService {
 
     /** 按账号（用户名 或 工号/学号/职工号）在 user 表 + 子表中查找用户 */
     protected User lookupAcrossTables(String account) {
-        // 1. 先在 user 表按 name 查
-        User user = userMapper.selectOne(new LambdaQueryWrapper<User>()
-                .eq(User::getName, account));
-        if (user != null) return user;
 
-        // 2. 按工号查教师
-        Teacher teacher = teacherMapper.selectOne(new LambdaQueryWrapper<Teacher>()
-                .eq(Teacher::getTeacherNo, account));
-        if (teacher != null) return userMapper.selectById(teacher.getUserId());
-
-        // 3. 按学号查学生
-        Student student = studentMapper.selectOne(new LambdaQueryWrapper<Student>()
-                .eq(Student::getStudentNo, account));
-        if (student != null) return userMapper.selectById(student.getUserId());
-
-        // 4. 按职工号查教务主任
-        Dean dean = deanMapper.selectOne(new LambdaQueryWrapper<Dean>()
-                .eq(Dean::getStaffNo, account));
-        if (dean != null) return userMapper.selectById(dean.getUserId());
-
+        //先通过正则表达式判断所使用的登录方式，有编号登录、账号登录等
+        if(account.matches("\\d+.*")){ // 编号登录
+            String lastChar = account.substring(account.length() - 1);
+            switch (lastChar) { // 根据最后一位是什么字母来判断进哪个case
+                case "s" -> { Student student = studentMapper
+                        .selectOne(new LambdaQueryWrapper<Student>()
+                                .eq(Student::getStudentNo, account));
+                    if (student != null) {return userMapper.selectById(student.getUserId());}
+                }
+                case "t" -> { Teacher teacher = teacherMapper.selectOne(new LambdaQueryWrapper<Teacher>()
+                        .eq(Teacher::getTeacherNo, account));
+                    if (teacher != null) {return userMapper.selectById(teacher.getUserId());}
+                }
+                case "d" -> { Department department = departmentMapper.selectOne(new LambdaQueryWrapper<Department>()
+                        .eq(Department::getDepartmentNo, account));
+                    if (department != null) {return userMapper.selectById(department.getUserId());}
+                }
+                case "a" -> { AcademicAdmin academicAdmin = academicAdminMapper.selectOne(new LambdaQueryWrapper<AcademicAdmin>()
+                        .eq(AcademicAdmin::getDepartmentNo, account));
+                    if (academicAdmin != null) {return userMapper.selectById(academicAdmin.getUserId());}
+                }
+                default -> throw new BusinessException(404, "用户不存在");
+            }
+        }else {
+            return userMapper.selectOne(new LambdaQueryWrapper<User>()
+                    .eq(User::getName, account));
+        }
         return null;
     }
 
@@ -161,11 +171,17 @@ public abstract class AbstractLoginService implements LoginService {
                 student.setStudentNo(identifier);
                 studentMapper.insert(student);
             }
-            case "dean" -> {
-                Dean dean = new Dean();
-                dean.setUserId(user.getId());
-                dean.setStaffNo(identifier);
-                deanMapper.insert(dean);
+            case "academic_admin" -> {
+                AcademicAdmin admin = new AcademicAdmin();
+                admin.setUserId(user.getId());
+                admin.setDepartmentNo(identifier);
+                academicAdminMapper.insert(admin);
+            }
+            case "department" -> {
+                Department dept = new Department();
+                dept.setUserId(user.getId());
+                dept.setDepartmentNo(identifier);
+                departmentMapper.insert(dept);
             }
             default -> throw new IllegalArgumentException("不支持的用户类型: " + request.getUserType());
         }
