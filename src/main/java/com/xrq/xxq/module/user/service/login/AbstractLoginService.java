@@ -11,9 +11,11 @@ import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.entity.user.Teacher;
 import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.util.EncryptUtils;
+import com.xrq.xxq.module.user.dto.ChangePasswordRequest;
 import com.xrq.xxq.module.user.dto.LoginRequest;
 import com.xrq.xxq.module.user.dto.RegisterRequest;
 import com.xrq.xxq.module.user.dto.UserSession;
+import com.xrq.xxq.module.user.mapper.*;
 import com.xrq.xxq.module.user.mapper.*;
 import com.xrq.xxq.module.user.session.LoginSessionStore;
 import com.xrq.xxq.util.JwtUtils;
@@ -140,6 +142,20 @@ public abstract class AbstractLoginService implements LoginService {
     protected boolean matchPassword(String rawPassword, String storedPassword) {
         if (storedPassword == null) return false;
         return EncryptUtils.verifyPbkdf2(rawPassword, storedPassword);
+    }
+
+    @Override
+    public Boolean changePassword(ChangePasswordRequest request) {
+        User user = lookupAcrossTables(request.getAccount());
+        if (user == null) {
+            throw new BusinessException(404, "用户不存在");
+        }
+        if (!matchPassword(request.getOldPassword(), user.getPassword())) {
+            throw new BusinessException(401, "原密码错误");
+        }
+        user.setPassword(EncryptUtils.hashWithPbkdf2(request.getNewPassword()));
+        userMapper.updateById(user);
+        return true;
     }
 
     @Override
