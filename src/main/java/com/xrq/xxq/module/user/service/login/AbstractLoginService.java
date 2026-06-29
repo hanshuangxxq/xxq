@@ -8,6 +8,7 @@ import com.xrq.xxq.module.user.entity.WXUser;
 import com.xrq.xxq.module.user.entity.user.Dean;
 import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.entity.user.Teacher;
+import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.util.EncryptUtils;
 import com.xrq.xxq.module.user.dto.LoginRequest;
 import com.xrq.xxq.module.user.dto.RegisterRequest;
@@ -42,7 +43,7 @@ public abstract class AbstractLoginService implements LoginService {
     public UserSession refreshAccessToken(String refreshToken) {
         UserSession session = sessionStore.get(refreshToken);
         if (session == null) {
-            throw new IllegalArgumentException("refreshToken 无效或已过期");
+            throw new BusinessException(401, "refreshToken 无效或已过期");
         }
 
         String newAccessToken = jwtUtils.generateAccessToken(
@@ -94,7 +95,7 @@ public abstract class AbstractLoginService implements LoginService {
             case WXUser w     -> w.getUserId();
             case QQUser q     -> q.getUserId();
             case AlipayUser a -> a.getUserId();
-            default -> throw new IllegalArgumentException("未知的第三方平台实体");
+            default -> throw new BusinessException(500, "未知的第三方平台实体");
         };
 
         User user = userMapper.selectById(userId);
@@ -135,7 +136,7 @@ public abstract class AbstractLoginService implements LoginService {
     public Boolean register(RegisterRequest request) {
         String account = request.getAccount();
         if (lookupAcrossTables(account) != null) {
-            throw new IllegalArgumentException("账号已存在");
+            throw new BusinessException(409, "账号已存在");
         }
 
         User user = new User();
