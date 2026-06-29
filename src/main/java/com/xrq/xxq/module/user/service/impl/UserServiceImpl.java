@@ -5,10 +5,12 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.xrq.xxq.module.user.dto.UpdateProfileRequest;
 import com.xrq.xxq.module.user.dto.UserProfileResponse;
 import com.xrq.xxq.module.user.entity.User;
-import com.xrq.xxq.module.user.entity.user.Dean;
+import com.xrq.xxq.module.user.entity.user.AcademicAdmin;
+import com.xrq.xxq.module.user.entity.user.Department;
 import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.entity.user.Teacher;
-import com.xrq.xxq.module.user.mapper.DeanMapper;
+import com.xrq.xxq.module.user.mapper.AcademicAdminMapper;
+import com.xrq.xxq.module.user.mapper.DepartmentMapper;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.module.user.mapper.TeacherMapper;
 import com.xrq.xxq.module.user.mapper.UserMapper;
@@ -25,7 +27,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     private final UserMapper userMapper;
     private final StudentMapper studentMapper;
     private final TeacherMapper teacherMapper;
-    private final DeanMapper deanMapper;
+    private final AcademicAdminMapper academicAdminMapper;
+    private final DepartmentMapper departmentMapper;
     private final LoginSessionStore sessionStore;
 
     @Override
@@ -93,13 +96,21 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                     profile.setDepartment(teacher.getDepartment());
                 }
             }
-            case "dean" -> {
-                Dean dean = deanMapper.selectOne(new LambdaQueryWrapper<Dean>()
-                        .eq(Dean::getUserId, userId));
-                if (dean != null) {
-                    profile.setIdentifier(dean.getStaffNo());
-                    profile.setDepartment(dean.getDepartment());
-                    profile.setPosition(dean.getPosition());
+            case "academic_admin" -> {
+                AcademicAdmin admin = academicAdminMapper.selectOne(new LambdaQueryWrapper<AcademicAdmin>()
+                        .eq(AcademicAdmin::getUserId, userId));
+                if (admin != null) {
+                    profile.setIdentifier(admin.getDepartmentNo());
+                    profile.setPosition("教务管理员");
+                }
+            }
+            case "department" -> {
+                Department dept = departmentMapper.selectOne(new LambdaQueryWrapper<Department>()
+                        .eq(Department::getUserId, userId));
+                if (dept != null) {
+                    profile.setIdentifier(dept.getDepartmentNo());
+                    profile.setDepartment(dept.getDepartmentName());
+                    profile.setPosition("院系管理员");
                 }
             }
         }
