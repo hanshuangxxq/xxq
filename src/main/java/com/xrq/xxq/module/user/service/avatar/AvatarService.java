@@ -1,5 +1,6 @@
 package com.xrq.xxq.module.user.service.avatar;
 
+import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.module.user.entity.User;
 import com.xrq.xxq.module.user.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
@@ -47,7 +48,7 @@ public class AvatarService {
 
         User user = userMapper.selectById(userId);
         if (user == null) {
-            throw new IllegalArgumentException("用户不存在");
+            throw new BusinessException(404, "用户不存在");
         }
 
         Path dir = Path.of(avatarStoragePath);
@@ -76,7 +77,7 @@ public class AvatarService {
             throw new IllegalArgumentException("非法的文件路径");
         }
         if (!Files.exists(filePath) || !Files.isRegularFile(filePath)) {
-            throw new IllegalArgumentException("文件不存在");
+            throw new BusinessException(404, "文件不存在");
         }
         return filePath;
     }
