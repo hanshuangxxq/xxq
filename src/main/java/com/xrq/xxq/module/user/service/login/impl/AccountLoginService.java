@@ -4,6 +4,7 @@ import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.module.user.entity.User;
 import com.xrq.xxq.module.user.dto.LoginRequest;
 import com.xrq.xxq.module.user.dto.UserSession;
+import com.xrq.xxq.module.user.mapper.*;
 import com.xrq.xxq.module.user.service.login.AbstractLoginService;
 import com.xrq.xxq.module.user.mapper.*;
 import com.xrq.xxq.module.user.session.LoginSessionStore;
