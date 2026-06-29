@@ -12,6 +12,7 @@ import com.xrq.xxq.module.user.mapper.DeanMapper;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.module.user.mapper.TeacherMapper;
 import com.xrq.xxq.module.user.mapper.UserMapper;
+import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.module.user.service.UserService;
 import com.xrq.xxq.module.user.session.LoginSessionStore;
 import lombok.RequiredArgsConstructor;
@@ -31,7 +32,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     public UserProfileResponse getProfile(Long userId, String tokenId) {
         User user = userMapper.selectById(userId);
         if (user == null) {
-            throw new IllegalArgumentException("用户不存在");
+            throw new BusinessException(404, "用户不存在");
         }
 
         UserProfileResponse profile = new UserProfileResponse();
@@ -58,7 +59,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     public boolean updateProfile(Long userId, UpdateProfileRequest request) {
         User user = userMapper.selectById(userId);
         if (user == null) {
-            throw new IllegalArgumentException("用户不存在");
+            throw new BusinessException(404, "用户不存在");
         }
 
         if (request.getEmail() != null) user.setEmail(request.getEmail());
