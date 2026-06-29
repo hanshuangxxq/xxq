@@ -16,13 +16,14 @@ public class AlipayLoginService extends AbstractLoginService {
     public AlipayLoginService(UserMapper userMapper,
                               TeacherMapper teacherMapper,
                               StudentMapper studentMapper,
-                              DeanMapper deanMapper,
+                              AcademicAdminMapper academicAdminMapper,
+                              DepartmentMapper departmentMapper,
                               WXUserMapper wxUserMapper,
                               QQUserMapper qqUserMapper,
                               AlipayUserMapper alipayUserMapper,
                               LoginSessionStore sessionStore,
                               JwtUtils jwtUtils) {
-        super(userMapper, teacherMapper, studentMapper, deanMapper, wxUserMapper, qqUserMapper, alipayUserMapper, sessionStore, jwtUtils);
+        super(userMapper, teacherMapper, studentMapper, academicAdminMapper, departmentMapper, wxUserMapper, qqUserMapper, alipayUserMapper, sessionStore, jwtUtils);
     }
 
     @Override
