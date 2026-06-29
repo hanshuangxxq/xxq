@@ -1,6 +1,7 @@
 package com.xrq.xxq.module.user.controller;
 
 import com.xrq.xxq.common.Result;
+import com.xrq.xxq.module.user.dto.ChangePasswordRequest;
 import com.xrq.xxq.module.user.dto.LoginRequest;
 import com.xrq.xxq.module.user.dto.RegisterRequest;
 import com.xrq.xxq.module.user.dto.UserSession;
@@ -40,5 +41,10 @@ public class LoginController {
     public Result<Boolean> logout(HttpServletRequest request) {
         String tokenId = (String) request.getAttribute("tokenId");
         return Result.ok(loginService.logout(tokenId));
+    }
+
+    @PostMapping("/password/change")
+    public Result<Boolean> changePassword(@RequestBody ChangePasswordRequest request) {
+        return Result.ok(loginService.changePassword(request));
     }
 }
