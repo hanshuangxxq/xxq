@@ -1,5 +1,6 @@
 package com.xrq.xxq.module.user.service.login;
 
+import com.xrq.xxq.module.user.dto.ChangePasswordRequest;
 import com.xrq.xxq.module.user.dto.LoginRequest;
 import com.xrq.xxq.module.user.dto.RegisterRequest;
 import com.xrq.xxq.module.user.dto.UserSession;
@@ -16,4 +17,6 @@ public interface LoginService {
     Boolean logout(String tokenId);
 
     Boolean register(RegisterRequest request);
+
+    Boolean changePassword(ChangePasswordRequest request);
 }
