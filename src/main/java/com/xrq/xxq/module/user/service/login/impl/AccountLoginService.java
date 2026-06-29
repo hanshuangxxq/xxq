@@ -1,5 +1,6 @@
 package com.xrq.xxq.module.user.service.login.impl;
 
+import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.module.user.entity.User;
 import com.xrq.xxq.module.user.dto.LoginRequest;
 import com.xrq.xxq.module.user.dto.UserSession;
@@ -31,10 +32,10 @@ public class AccountLoginService extends AbstractLoginService {
 
         User user = lookupAcrossTables(account);
         if (user == null) {
-            throw new IllegalArgumentException("账号不存在");
+            throw new BusinessException(401, "账号不存在");
         }
         if (!matchPassword(password, user.getPassword())) {
-            throw new IllegalArgumentException("密码错误");
+            throw new BusinessException(401, "密码错误");
         }
         return buildSession(user, account);
     }
