@@ -14,6 +14,6 @@ public class Student {
     private String studentNo;           // 学号
     private String grade;               // 班级
     private String major;               // 专业
-    private String className;           // 班级名称
+    private Long classId;           // 班级id
     private Integer enrollmentYear;    // 入学年份
 }
