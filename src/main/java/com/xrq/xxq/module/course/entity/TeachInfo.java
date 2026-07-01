@@ -18,6 +18,9 @@ public class TeachInfo {
     private Long courseId; // 课程ID
     private Long teacherId; // 教师ID
     private String className; // 班级名称
-    private Long timeId;  // FK → time.id  上课时间
+    private Long timeId;  // FK → time.id  上课时间段
     private Long localId; // FK → local.id 上课地点
+    private Integer dayOfWeek; //星期几
+    private Integer week; // 上几个星期
+
 }
