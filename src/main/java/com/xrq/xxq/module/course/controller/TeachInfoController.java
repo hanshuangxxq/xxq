@@ -1,7 +1,8 @@
 package com.xrq.xxq.module.course.controller;
 
 import com.xrq.xxq.common.Result;
-import com.xrq.xxq.module.course.dto.TeachInfoResponse;
+import com.xrq.xxq.module.course.dto.ClassCourseDto;
+import com.xrq.xxq.module.course.dto.CourseDto;
 import com.xrq.xxq.module.course.service.TeachInfoService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +18,7 @@ public class TeachInfoController {
     private final TeachInfoService teachInfoService;
 
     @GetMapping
-    public Result<List<TeachInfoResponse>> list(
+    public Result<List<CourseDto>> list(
             HttpServletRequest request,
             @RequestParam(required = false) Long teacherId,
             @RequestParam(required = false) Long courseId) {
@@ -27,13 +28,19 @@ public class TeachInfoController {
     }
 
     @GetMapping("/{id}")
-    public Result<TeachInfoResponse> getById(HttpServletRequest request, @PathVariable Long id) {
+    public Result<CourseDto> getById(HttpServletRequest request, @PathVariable Long id) {
         Long userId = (Long) request.getAttribute("userId");
         String userType = (String) request.getAttribute("userType");
-        TeachInfoResponse resp = teachInfoService.getDetailById(id, userId, userType);
+        CourseDto resp = teachInfoService.getDetailById(id, userId, userType);
         if (resp == null) {
             return Result.fail(404, "教学信息不存在");
         }
         return Result.ok(resp);
+    }
+
+    @GetMapping("/class-courses")
+    public Result<List<ClassCourseDto>> listClassCourses(HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute("userId");
+        return Result.ok(teachInfoService.listClassCourses(userId));
     }
 }
