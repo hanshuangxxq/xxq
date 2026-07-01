@@ -7,6 +7,7 @@ import com.xrq.xxq.module.user.dto.UserProfileResponse;
 import com.xrq.xxq.module.user.entity.User;
 import com.xrq.xxq.module.user.entity.user.AcademicAdmin;
 import com.xrq.xxq.module.user.entity.user.Department;
+import com.xrq.xxq.module.course.mapper.ClassNameMapper;
 import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.entity.user.Teacher;
 import com.xrq.xxq.module.user.mapper.AcademicAdminMapper;
@@ -29,6 +30,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     private final TeacherMapper teacherMapper;
     private final AcademicAdminMapper academicAdminMapper;
     private final DepartmentMapper departmentMapper;
+    private final ClassNameMapper classNameMapper;
     private final LoginSessionStore sessionStore;
 
     @Override
@@ -83,7 +85,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                     profile.setIdentifier(student.getStudentNo());
                     profile.setGrade(student.getGrade());
                     profile.setMajor(student.getMajor());
-                    profile.setClassName(student.getClassName());
+                    profile.setClassName(classNameMapper.selectById(student.getClassId()));
                     profile.setEnrollmentYear(student.getEnrollmentYear());
                 }
             }
