@@ -28,7 +28,7 @@ public class Result<T> {
     }
 
     /**
-     * 只代表成功
+     * 只代表成功i
      * @return
      * @param <T>
      */
