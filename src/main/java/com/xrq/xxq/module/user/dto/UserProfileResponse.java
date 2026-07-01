@@ -1,5 +1,6 @@
 package com.xrq.xxq.module.user.dto;
 
+import com.xrq.xxq.module.course.entity.ClassName;
 import com.xrq.xxq.module.user.entity.GenderEnum;
 import lombok.Data;
 
@@ -23,7 +24,7 @@ public class UserProfileResponse {
     private String identifier;
     private String grade;
     private String major;
-    private String className;
+    private ClassName className;
     private Integer enrollmentYear;
     private String title;
     private String department;
