@@ -1,0 +1,23 @@
+package com.xrq.xxq.module.course.entity;
+
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
+import lombok.Data;
+
+/**
+ * @类名 TeachInfo
+ * @Date 2026/6/30
+ * 教学信息，方便直接查询课表
+ */
+@Data
+@TableName("teach_info")
+public class TeachInfo {
+    @TableId (type = IdType.AUTO)
+    private Long id;
+    private Long courseId; // 课程ID
+    private Long teacherId; // 教师ID
+    private String className; // 班级名称
+    private Long timeId;  // FK → time.id  上课时间
+    private Long localId; // FK → local.id 上课地点
+}
