@@ -12,7 +12,6 @@ import java.time.LocalTime;
 public class Time {
     @TableId(type = IdType.AUTO)
     private Long id;
-    private Integer dayOfWeek;   // 星期几 (1=周一 ~ 7=周日)
     private LocalTime startPeriod; // 开始节次
     private LocalTime endPeriod;   // 结束节次
 }
