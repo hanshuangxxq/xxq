@@ -1,6 +1,7 @@
 package com.xrq.xxq.module.user.entity;
 
 import com.baomidou.mybatisplus.annotation.EnumValue;
+import com.fasterxml.jackson.annotation.JsonValue;
 import lombok.Getter;
 
 /**
@@ -20,6 +21,7 @@ public enum GenderEnum {
     @EnumValue
     private final int code;
     /** 中文描述 */
+    @JsonValue
     private final String desc;
 
     GenderEnum(int code, String desc) {
