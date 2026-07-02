@@ -12,4 +12,5 @@ public class Local {
     private Long id;
     private String building;  // 教学楼
     private String classRoom; // 教室
+    private Integer max;     // 最大容纳人数
 }
