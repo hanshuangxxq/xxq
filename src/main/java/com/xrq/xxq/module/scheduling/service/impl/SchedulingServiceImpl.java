@@ -11,6 +11,7 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.xrq.xxq.module.course.entity.ClassName;
 import com.xrq.xxq.module.course.entity.Course;
 import com.xrq.xxq.module.course.entity.Local;
 import com.xrq.xxq.module.course.entity.TeachInfo;
@@ -238,10 +239,16 @@ public class SchedulingServiceImpl implements SchedulingService {
         Map<Long, Long> classStudentCount = studentMapper.selectList(null).stream()
                 .collect(Collectors.groupingBy(Student::getClassId, Collectors.counting()));
 
-        Map<String, Long> classNameToClassId = classNameMapper.selectList(null).stream()
+        List<ClassName> allClasses = classNameMapper.selectList(null);
+        Map<String, Long> classNameToClassId = allClasses.stream()
                 .collect(Collectors.toMap(
                         cn -> cn.getClassName(),
                         cn -> cn.getId(),
+                        (a, b) -> a));
+        Map<String, String> classNameToCollege = allClasses.stream()
+                .collect(Collectors.toMap(
+                        ClassName::getClassName,
+                        cn -> cn.getCollege() != null ? cn.getCollege() : "",
                         (a, b) -> a));
 
         Map<String, StudentGroup> groups = new LinkedHashMap<>();
@@ -256,7 +263,8 @@ public class SchedulingServiceImpl implements SchedulingService {
                     int count = classId != null
                             ? classStudentCount.getOrDefault(classId, 0L).intValue()
                             : 0;
-                    groups.put(name, new StudentGroup(id++, name, null, count));
+                    String college = classNameToCollege.getOrDefault(name, "");
+                    groups.put(name, new StudentGroup(id++, name, college, count));
                 }
             }
         }
