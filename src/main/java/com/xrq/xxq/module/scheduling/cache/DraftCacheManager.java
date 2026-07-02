@@ -11,8 +11,11 @@ import java.util.stream.Collectors;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.xrq.xxq.module.course.entity.ClassName;
 import com.xrq.xxq.module.course.entity.Course;
 import com.xrq.xxq.module.course.entity.TeachInfo;
+import com.xrq.xxq.module.course.mapper.ClassNameMapper;
 import com.xrq.xxq.module.course.mapper.CourseMapper;
 import com.xrq.xxq.module.user.entity.User;
 import com.xrq.xxq.module.user.entity.user.Teacher;
@@ -45,6 +48,7 @@ public class DraftCacheManager {
     private final CourseMapper courseMapper;
     private final TeacherMapper teacherMapper;
     private final UserMapper userMapper;
+    private final ClassNameMapper classNameMapper;
 
     private final List<DraftItem> drafts = Collections.synchronizedList(new ArrayList<>());
 
@@ -75,7 +79,7 @@ public class DraftCacheManager {
     }
 
     /**
-     * 批量追加授课草稿，解析课程名和教师名后富化存储。
+     * 批量追加授课草稿，解析课程名、教师名和院系后富化存储。
      */
     public void addDrafts(List<TeachInfo> newDrafts) {
         if (newDrafts.isEmpty()) {
@@ -84,11 +88,13 @@ public class DraftCacheManager {
 
         Map<Long, String> courseNames = loadCourseNames(newDrafts);
         Map<Long, String> teacherNames = loadTeacherNames(newDrafts);
+        Map<String, String> classColleges = loadClassColleges(newDrafts);
 
         List<DraftItem> items = newDrafts.stream()
                 .map(ti -> DraftItem.from(ti,
                         courseNames.getOrDefault(ti.getCourseId(), "未知课程"),
-                        teacherNames.getOrDefault(ti.getTeacherId(), "未知教师")))
+                        teacherNames.getOrDefault(ti.getTeacherId(), "未知教师"),
+                        resolveCollege(ti.getClassName(), classColleges)))
                 .toList();
 
         drafts.addAll(items);
@@ -99,6 +105,26 @@ public class DraftCacheManager {
     public List<DraftItem> getAllDrafts() {
         synchronized (drafts) {
             return new ArrayList<>(drafts);
+        }
+    }
+
+    /** 按院系名称过滤草稿——院系管理者只能查看本院系的草稿。 */
+    public List<DraftItem> getDraftsByCollege(String collegeName) {
+        synchronized (drafts) {
+            return drafts.stream()
+                    .filter(d -> {
+                        String c = d.getCollege();
+                        if (c == null || c.isEmpty()) {
+                            return false;
+                        }
+                        for (String part : c.split(",")) {
+                            if (part.strip().equals(collegeName)) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    })
+                    .toList();
         }
     }
 
@@ -168,6 +194,49 @@ public class DraftCacheManager {
     }
 
     // ────────────────────────── 名称解析 ──────────────────────────
+
+    /** 解析草稿中每个班级名称对应的院系。多班级时逐个拆分后去重查询。 */
+    private Map<String, String> loadClassColleges(List<TeachInfo> drafts) {
+        Set<String> classNames = drafts.stream()
+                .map(TeachInfo::getClassName)
+                .filter(name -> name != null && !name.isBlank())
+                .flatMap(name -> {
+                    List<String> parts = new ArrayList<>();
+                    for (String part : name.split(",")) {
+                        String trimmed = part.strip();
+                        if (!trimmed.isEmpty()) {
+                            parts.add(trimmed);
+                        }
+                    }
+                    return parts.stream();
+                })
+                .collect(Collectors.toSet());
+        if (classNames.isEmpty()) {
+            return Map.of();
+        }
+        return classNameMapper.selectList(
+                        new LambdaQueryWrapper<ClassName>().in(ClassName::getClassName, classNames))
+                .stream()
+                .collect(Collectors.toMap(ClassName::getClassName, ClassName::getCollege, (a, b) -> a));
+    }
+
+    /** 将合班 className 解析为去重院系名，逗号分隔。 */
+    private String resolveCollege(String className, Map<String, String> classColleges) {
+        if (className == null || className.isBlank()) {
+            return "";
+        }
+        Set<String> colleges = new LinkedHashSet<>();
+        for (String part : className.split(",")) {
+            String trimmed = part.strip();
+            if (!trimmed.isEmpty()) {
+                String c = classColleges.get(trimmed);
+                if (c != null && !c.isEmpty()) {
+                    colleges.add(c);
+                }
+            }
+        }
+        return String.join(",", colleges);
+    }
 
     private Map<Long, String> loadCourseNames(List<TeachInfo> drafts) {
         Set<Long> courseIds = drafts.stream()
