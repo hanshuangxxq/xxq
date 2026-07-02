@@ -21,13 +21,14 @@ public class DraftItem {
     private Long teacherId;
     private String teacherName;
     private String className;
+    private String college;
     private Long timeId;
     private Long localId;
     private Integer dayOfWeek;
     private Integer week;
 
     /** 从 TeachInfo 创建富化项。 */
-    public static DraftItem from(TeachInfo ti, String courseName, String teacherName) {
+    public static DraftItem from(TeachInfo ti, String courseName, String teacherName, String college) {
         DraftItem item = new DraftItem();
         item.setId(ti.getId());
         item.setCourseId(ti.getCourseId());
@@ -35,6 +36,7 @@ public class DraftItem {
         item.setTeacherId(ti.getTeacherId());
         item.setTeacherName(teacherName);
         item.setClassName(ti.getClassName());
+        item.setCollege(college);
         item.setTimeId(ti.getTimeId());
         item.setLocalId(ti.getLocalId());
         item.setDayOfWeek(ti.getDayOfWeek());
