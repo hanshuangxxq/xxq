@@ -162,7 +162,39 @@ public class TeachInfoController {
     }
 
     /**
-     * 按班级名称移除草稿。
+     * 按唯一键删除单条草稿。
+     * 教务管理员可删任意记录；院系管理者仅可删本院系记录。
+     */
+    @DeleteMapping("/draft/item")
+    public Result<Void> removeDraftItem(HttpServletRequest request,
+                                        @RequestParam Long courseId,
+                                        @RequestParam Long teacherId,
+                                        @RequestParam String className) {
+        String userType = (String) request.getAttribute("userType");
+
+        if ("department".equals(userType)) {
+            Department dept = resolveDepartment(request);
+            List<DraftItem> deptDrafts = draftCacheManager.getDraftsByCollege(dept.getDepartmentName());
+            boolean belongsToDept = deptDrafts.stream()
+                    .anyMatch(d -> courseId.equals(d.getCourseId())
+                            && teacherId.equals(d.getTeacherId())
+                            && className.equals(d.getClassName()));
+            if (!belongsToDept) {
+                throw new BusinessException(403, "无权删除其他院系的草稿");
+            }
+        } else {
+            checkDraftWritePermission(request);
+        }
+
+        boolean removed = draftCacheManager.removeByKey(courseId, teacherId, className);
+        if (!removed) {
+            return Result.fail(404, "草稿记录不存在");
+        }
+        return Result.ok();
+    }
+
+    /**
+     * 按班级名称移除草稿（批量）。
      * 教务管理员可移除任意班级；院系管理者仅可移除本院系班级。
      */
     @DeleteMapping("/draft/{className}")
