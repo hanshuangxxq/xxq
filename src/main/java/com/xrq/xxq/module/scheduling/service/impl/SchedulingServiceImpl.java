@@ -27,6 +27,7 @@ import com.xrq.xxq.module.course.service.TeachInfoService;
 import com.xrq.xxq.module.scheduling.cache.DraftCacheManager;
 import com.xrq.xxq.module.scheduling.cache.DraftItem;
 import com.xrq.xxq.module.scheduling.domain.CourseSchedule;
+import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.module.scheduling.domain.Lesson;
 import com.xrq.xxq.module.scheduling.domain.Room;
 import com.xrq.xxq.module.scheduling.domain.StudentGroup;
@@ -85,7 +86,7 @@ public class SchedulingServiceImpl implements SchedulingService {
     public Long solve() {
         List<DraftItem> drafts = draftCacheManager.consumeDrafts();
         if (drafts.isEmpty()) {
-            throw new IllegalStateException("没有待排课的授课草稿，请先通过 POST /api/teach-info/draft 提交授课安排");
+            throw new BusinessException(400, "没有待排课的授课草稿");
         }
 
         // 保存草稿并收集 DB 生成的 ID，确保后续查询一致
@@ -125,6 +126,9 @@ public class SchedulingServiceImpl implements SchedulingService {
         if (status == SolverStatus.NOT_SOLVING) {
             solution.setSolverStatus("FINISHED");
             solutionManager.update(solution, SolutionUpdatePolicy.UPDATE_SCORE_ONLY);
+            if (solution.getScore() != null && !solution.getScore().isFeasible()) {
+                throw new BusinessException(500, "无法完成排课：当前时间限制下无法为所有课程分配合适的时间段，请调整时间限制或减少课程数量");
+            }
         } else {
             solution.setSolverStatus(status.name());
         }
