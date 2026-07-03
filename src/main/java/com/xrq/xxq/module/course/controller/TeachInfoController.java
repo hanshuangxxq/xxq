@@ -146,8 +146,18 @@ public class TeachInfoController {
                 .toList());
         result.put("countByClass", drafts.stream()
                 .filter(d -> d.getClassName() != null && !d.getClassName().isBlank())
+                .flatMap(d -> {
+                    var list = new java.util.ArrayList<String>();
+                    for (String part : d.getClassName().split(",")) {
+                        String trimmed = part.strip();
+                        if (!trimmed.isEmpty()) {
+                            list.add(trimmed);
+                        }
+                    }
+                    return list.stream();
+                })
                 .collect(java.util.stream.Collectors.groupingBy(
-                        DraftItem::getClassName,
+                        name -> name,
                         java.util.stream.Collectors.counting())));
         result.put("totalDrafts", drafts.size());
         return Result.ok(result);
@@ -205,7 +215,16 @@ public class TeachInfoController {
             Department dept = resolveDepartment(request);
             List<DraftItem> deptDrafts = draftCacheManager.getDraftsByCollege(dept.getDepartmentName());
             boolean belongsToDept = deptDrafts.stream()
-                    .anyMatch(d -> className.equals(d.getClassName()));
+                    .anyMatch(d -> {
+                        String cn = d.getClassName();
+                        if (cn == null) return false;
+                        for (String part : cn.split(",")) {
+                            if (part.strip().equals(className)) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    });
             if (!belongsToDept) {
                 throw new BusinessException(403, "无权移除其他院系的草稿");
             }
