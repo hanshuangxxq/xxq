@@ -144,12 +144,74 @@ public class DraftCacheManager {
         redisTemplate.delete(REDIS_KEY);
     }
 
-    /** 按班级名称移除草稿。 */
+    /** 按班级名称移除草稿。单班精确匹配则整条删除，合班则仅移除该班并重算院系。 */
     public void removeByClassName(String className) {
         synchronized (drafts) {
-            drafts.removeIf(d -> className.equals(d.getClassName()));
+            var it = drafts.iterator();
+            while (it.hasNext()) {
+                DraftItem d = it.next();
+                String cn = d.getClassName();
+                if (className.equals(cn)) {
+                    it.remove();
+                } else if (containsClassName(cn, className)) {
+                    String newClassName = removeClass(cn, className);
+                    d.setClassName(newClassName);
+                    d.setCollege(recalcCollege(newClassName));
+                }
+            }
         }
         saveToRedis();
+    }
+
+    private static boolean containsClassName(String draftClassName, String target) {
+        if (draftClassName == null) {
+            return false;
+        }
+        for (String part : draftClassName.split(",")) {
+            if (part.strip().equals(target)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String removeClass(String className, String target) {
+        List<String> parts = new ArrayList<>();
+        for (String part : className.split(",")) {
+            String trimmed = part.strip();
+            if (!trimmed.isEmpty() && !trimmed.equals(target)) {
+                parts.add(trimmed);
+            }
+        }
+        return String.join(",", parts);
+    }
+
+    private String recalcCollege(String className) {
+        if (className == null || className.isBlank()) {
+            return "";
+        }
+        Set<String> names = new LinkedHashSet<>();
+        for (String part : className.split(",")) {
+            String trimmed = part.strip();
+            if (!trimmed.isEmpty()) {
+                names.add(trimmed);
+            }
+        }
+        if (names.isEmpty()) {
+            return "";
+        }
+        Map<String, String> classColleges = classNameMapper.selectList(
+                new LambdaQueryWrapper<ClassName>().in(ClassName::getClassName, names))
+                .stream()
+                .collect(Collectors.toMap(ClassName::getClassName, ClassName::getCollege, (a, b) -> a));
+        Set<String> colleges = new LinkedHashSet<>();
+        for (String name : names) {
+            String c = classColleges.get(name);
+            if (c != null && !c.isEmpty()) {
+                colleges.add(c);
+            }
+        }
+        return String.join(",", colleges);
     }
 
     /** 按唯一键（courseId + teacherId + className）移除单条草稿。 */
@@ -196,13 +258,23 @@ public class DraftCacheManager {
         }
     }
 
-    /** 按班级名称统计草稿条目数。 */
+    /** 按班级名称统计草稿条目数。合班时每个班级各计 1。 */
     public Map<String, Long> countByClass() {
         synchronized (drafts) {
             return drafts.stream()
                     .filter(d -> d.getClassName() != null && !d.getClassName().isBlank())
+                    .flatMap(d -> {
+                        List<String> parts = new ArrayList<>();
+                        for (String part : d.getClassName().split(",")) {
+                            String trimmed = part.strip();
+                            if (!trimmed.isEmpty()) {
+                                parts.add(trimmed);
+                            }
+                        }
+                        return parts.stream();
+                    })
                     .collect(Collectors.groupingBy(
-                            DraftItem::getClassName,
+                            name -> name,
                             Collectors.counting()));
         }
     }
