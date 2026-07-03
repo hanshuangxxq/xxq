@@ -152,6 +152,20 @@ public class DraftCacheManager {
         saveToRedis();
     }
 
+    /** 按唯一键（courseId + teacherId + className）移除单条草稿。 */
+    public boolean removeByKey(Long courseId, Long teacherId, String className) {
+        synchronized (drafts) {
+            boolean removed = drafts.removeIf(d ->
+                    courseId.equals(d.getCourseId())
+                            && teacherId.equals(d.getTeacherId())
+                            && className.equals(d.getClassName()));
+            if (removed) {
+                saveToRedis();
+            }
+            return removed;
+        }
+    }
+
     /** 是否有草稿。 */
     public boolean isEmpty() {
         return drafts.isEmpty();
