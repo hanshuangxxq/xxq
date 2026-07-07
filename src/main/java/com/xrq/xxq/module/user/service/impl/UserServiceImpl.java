@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.xrq.xxq.module.user.dto.UpdateProfileRequest;
 import com.xrq.xxq.module.user.dto.UserProfileResponse;
+import com.xrq.xxq.module.user.entity.Major;
 import com.xrq.xxq.module.user.entity.User;
 import com.xrq.xxq.module.user.entity.user.AcademicAdmin;
 import com.xrq.xxq.module.user.entity.user.Department;
@@ -12,6 +13,7 @@ import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.entity.user.Teacher;
 import com.xrq.xxq.module.user.mapper.AcademicAdminMapper;
 import com.xrq.xxq.module.user.mapper.DepartmentMapper;
+import com.xrq.xxq.module.user.mapper.MajorMapper;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.module.user.mapper.TeacherMapper;
 import com.xrq.xxq.module.user.mapper.UserMapper;
@@ -31,6 +33,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     private final AcademicAdminMapper academicAdminMapper;
     private final DepartmentMapper departmentMapper;
     private final ClassNameMapper classNameMapper;
+    private final MajorMapper majorMapper;
     private final LoginSessionStore sessionStore;
 
     @Override
@@ -84,7 +87,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 if (student != null) {
                     profile.setIdentifier(student.getStudentNo());
                     profile.setGrade(student.getGrade());
-                    profile.setMajor(student.getMajor());
+                    Major major = majorMapper.selectById(student.getMajorId());
+                    profile.setMajor(major != null ? major.getMajorName() : null);
                     profile.setClassName(classNameMapper.selectById(student.getClassId()));
                     profile.setEnrollmentYear(student.getEnrollmentYear());
                 }
