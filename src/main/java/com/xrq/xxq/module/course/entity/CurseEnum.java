@@ -1,6 +1,7 @@
 package com.xrq.xxq.module.course.entity;
 
 import com.baomidou.mybatisplus.annotation.EnumValue;
+import com.fasterxml.jackson.annotation.JsonValue;
 import lombok.Getter;
 
 /**
@@ -17,6 +18,7 @@ public enum CurseEnum {
 
     @EnumValue
     private final Integer value;
+    @JsonValue
     private final String description;
 
     CurseEnum (Integer value, String description) {

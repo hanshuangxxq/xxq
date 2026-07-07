@@ -52,7 +52,7 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
         if (!isInScope(info, userId, userType)) {
             return null;
         }
-        return assembleDto(List.of(info)).getFirst();
+        return assembleDto(List.of(info), userType).getFirst();
     }
 
     @Override
@@ -70,7 +70,7 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
         }
 
         List<TeachInfo> list = teachInfoMapper.selectList(wrapper);
-        return assembleDto(list);
+        return assembleDto(list, userType);
     }
 
     @Override
@@ -86,44 +86,19 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
         }
 
         List<TeachInfo> list = teachInfoMapper.selectList(
-                new LambdaQueryWrapper<TeachInfo>().eq(TeachInfo::getClassName, cls.getClassName()));
+                new LambdaQueryWrapper<TeachInfo>()
+                        .apply("FIND_IN_SET({0}, class_name) > 0", cls.getClassName()));
         if (list.isEmpty()) {
             return List.of();
         }
 
         List<Long> courseIds = list.stream().map(TeachInfo::getCourseId).distinct().toList();
-        List<Long> teacherIds = list.stream().map(TeachInfo::getTeacherId).distinct().toList();
-        List<Long> localIds = list.stream().map(TeachInfo::getLocalId).distinct().toList();
-
         Map<Long, String> courseNameMap = courseMapper.selectByIds(courseIds).stream()
                 .collect(Collectors.toMap(Course::getId, Course::getCourseName, (a, b) -> a));
-        Map<Long, Long> teacherUserIdMap = teacherMapper.selectByIds(teacherIds).stream()
-                .collect(Collectors.toMap(Teacher::getId, Teacher::getUserId, (a, b) -> a));
-        List<Long> userIds = teacherUserIdMap.values().stream().distinct().toList();
-        Map<Long, String> userNameMap = userIds.isEmpty()
-                ? Map.of()
-                : userMapper.selectByIds(userIds).stream()
-                        .collect(Collectors.toMap(User::getId, User::getName, (a, b) -> a));
-        Map<Long, Local> localMap = localMapper.selectByIds(localIds).stream()
-                .collect(Collectors.toMap(Local::getId, identity(), (a, b) -> a));
 
-        return list.stream().map(info -> {
-            ClassCourseDto dto = new ClassCourseDto();
-            dto.setCourseName(courseNameMap.getOrDefault(info.getCourseId(), ""));
-            Long teacherUserId = teacherUserIdMap.get(info.getTeacherId());
-            if (teacherUserId != null) {
-                dto.setTeacherName(userNameMap.getOrDefault(teacherUserId, ""));
-            }
-            dto.setDayOfWeek(info.getDayOfWeek());
-            dto.setWeek(info.getWeek());
-            dto.setTimeId(info.getTimeId());
-            Local local = localMap.get(info.getLocalId());
-            if (local != null) {
-                dto.setBuilding(local.getBuilding());
-                dto.setClassroom(local.getClassRoom());
-            }
-            return dto;
-        }).toList();
+        return courseIds.stream()
+                .map(id -> new ClassCourseDto(courseNameMap.getOrDefault(id, "")))
+                .toList();
     }
 
     private LambdaQueryWrapper<TeachInfo> resolveScopeCondition(Long userId, String userType) {
@@ -140,7 +115,7 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
                 if (cls == null) {
                     return null;
                 }
-                wrapper.eq(TeachInfo::getClassName, cls.getClassName());
+                wrapper.apply("FIND_IN_SET({0}, class_name) > 0", cls.getClassName());
             }
             case "teacher" -> {
                 Teacher teacher = teacherMapper.selectOne(
@@ -165,7 +140,13 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
                 if (classNames.isEmpty()) {
                     return null;
                 }
-                wrapper.in(TeachInfo::getClassName, classNames);
+                wrapper.and(w -> {
+                    String first = classNames.getFirst();
+                    w.apply("FIND_IN_SET({0}, class_name) > 0", first);
+                    for (int i = 1; i < classNames.size(); i++) {
+                        w.or().apply("FIND_IN_SET({0}, class_name) > 0", classNames.get(i));
+                    }
+                });
             }
             case "academic_admin" -> {
                 // 教务管理员，无过滤条件
@@ -187,14 +168,20 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
         return teachInfoMapper.selectCount(scope) > 0;
     }
 
-    private List<CourseDto> assembleDto(List<TeachInfo> list) {
+    private List<CourseDto> assembleDto(List<TeachInfo> list, String userType) {
         if (list.isEmpty()) {
             return List.of();
         }
 
         List<Long> courseIds = list.stream().map(TeachInfo::getCourseId).distinct().toList();
         List<Long> teacherIds = list.stream().map(TeachInfo::getTeacherId).distinct().toList();
-        List<String> classNames = list.stream().map(TeachInfo::getClassName).distinct().toList();
+        List<String> classNames = list.stream()
+                .map(TeachInfo::getClassName)
+                .distinct()
+                .flatMap(raw -> java.util.Arrays.stream(raw.split(",")))
+                .map(String::strip)
+                .distinct()
+                .toList();
         List<Long> localIds = list.stream().map(TeachInfo::getLocalId).distinct().toList();
 
         Map<Long, Course> courseMap = courseMapper.selectByIds(courseIds).stream()
@@ -240,14 +227,16 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
                 resp.setCollege(cls.getCollege());
             }
 
-            resp.setDayOfWeek(info.getDayOfWeek());
-            resp.setWeek(info.getWeek());
-            resp.setTimeId(info.getTimeId());
+            if (!"teacher".equals(userType)) {
+                resp.setDayOfWeek(info.getDayOfWeek());
+                resp.setWeek(info.getWeek());
+                resp.setTimeId(info.getTimeId());
 
-            Local local = localMap.get(info.getLocalId());
-            if (local != null) {
-                resp.setBuilding(local.getBuilding());
-                resp.setClassroom(local.getClassRoom());
+                Local local = localMap.get(info.getLocalId());
+                if (local != null) {
+                    resp.setBuilding(local.getBuilding());
+                    resp.setClassroom(local.getClassRoom());
+                }
             }
 
             return resp;

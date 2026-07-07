@@ -1,0 +1,74 @@
+package com.xrq.xxq.module.scheduling.domain;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+
+import ai.timefold.solver.core.api.domain.entity.PlanningEntity;
+import ai.timefold.solver.core.api.domain.common.PlanningId;
+import ai.timefold.solver.core.api.domain.variable.PlanningVariable;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+/**
+ * 规划实体：被求解器分配的一节课（对应一条 teach_info 记录）。
+ * <p>
+ * 规划变量（求解器赋值）：
+ * <ul>
+ *   <li>{@link #timeslot} — 分配到哪个时间段（周几 + 起止时间）</li>
+ *   <li>{@link #room} — 分配到哪个教室</li>
+ * </ul>
+ */
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@PlanningEntity
+public class Lesson {
+
+    /** 规划实体ID，对应 teach_info.id */
+    @PlanningId
+    private Long id;
+
+    /** 课程ID（FK → course.id） */
+    private Long courseId;
+
+    /** 课程名称（冗余，避免约束计算时查库） */
+    private String courseName;
+
+    /** 教师ID（FK → teacher.id） */
+    private Long teacherId;
+
+    /** 教师姓名（冗余，避免约束计算时查库） */
+    private String teacherName;
+
+    /** 上课学生所属的班级集合（支持合班/重修场景，一个课堂可能有多个班级的学生） */
+    private List<StudentGroup> studentGroups = new ArrayList<>();
+
+    /** 分配的时间段 */
+    @PlanningVariable(valueRangeProviderRefs = "timeslotRange")
+    private Timeslot timeslot;
+
+    /** 分配的教室 */
+    @PlanningVariable(valueRangeProviderRefs = "roomRange")
+    private Room room;
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Lesson lesson)) return false;
+        return Objects.equals(id, lesson.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(id);
+    }
+
+    @Override
+    public String toString() {
+        return "Lesson(id=" + id + ", courseName=" + courseName + ")";
+    }
+}

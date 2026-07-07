@@ -9,10 +9,4 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class ClassCourseDto {
     private String courseName;
-    private String teacherName;
-    private Integer dayOfWeek;
-    private Integer week;
-    private Long timeId;
-    private String building;
-    private String classroom;
 }
