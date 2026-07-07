@@ -6,13 +6,16 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.xrq.xxq.module.user.dto.BatchImportResponse;
 import com.xrq.xxq.module.user.dto.BatchImportResponse.ImportResultDetail;
 import com.xrq.xxq.module.user.dto.UserImportItem;
 import com.xrq.xxq.module.user.entity.GenderEnum;
+import com.xrq.xxq.module.user.entity.Major;
 import com.xrq.xxq.module.user.entity.User;
 import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.entity.user.Teacher;
+import com.xrq.xxq.module.user.mapper.MajorMapper;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.module.user.mapper.TeacherMapper;
 import com.xrq.xxq.module.user.mapper.UserMapper;
@@ -27,6 +30,7 @@ public class BatchImportService {
     private final UserMapper userMapper;
     private final StudentMapper studentMapper;
     private final TeacherMapper teacherMapper;
+    private final MajorMapper majorMapper;
 
     @Transactional
     public BatchImportResponse batchImport(List<UserImportItem> items) {
@@ -86,7 +90,7 @@ public class BatchImportService {
             student.setUserId(user.getId());
             student.setStudentNo(item.getIdentifier());
             student.setGrade(item.getClassName());
-            student.setMajor(item.getDepartment());
+            student.setMajorId(resolveMajorId(item.getDepartment()));
             studentMapper.insert(student);
         } else {
             Teacher teacher = new Teacher();
@@ -107,5 +111,20 @@ public class BatchImportService {
             }
         }
         return GenderEnum.MALE;
+    }
+
+    private Long resolveMajorId(String majorName) {
+        if (majorName == null || majorName.isBlank()) {
+            return null;
+        }
+        Major major = majorMapper.selectOne(
+                new LambdaQueryWrapper<Major>().eq(Major::getMajorName, majorName.strip()));
+        if (major != null) {
+            return major.getId();
+        }
+        Major newMajor = new Major();
+        newMajor.setMajorName(majorName.strip());
+        majorMapper.insert(newMajor);
+        return newMajor.getId();
     }
 }
