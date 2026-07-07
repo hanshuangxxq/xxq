@@ -1,7 +1,11 @@
 package com.xrq.xxq.module.user.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.xrq.xxq.module.user.dto.StudentDto;
+import com.xrq.xxq.module.user.dto.UpdateStudentRequest;
 import com.xrq.xxq.module.user.entity.user.Student;
+
+import java.util.List;
 
 /**
  * 学生业务服务，继承 MyBatis Plus IService 提供通用 CRUD。
@@ -10,4 +14,8 @@ import com.xrq.xxq.module.user.entity.user.Student;
  * @Date 2026/6/22
  */
 public interface StudentService extends IService<Student> {
+
+    List<StudentDto> queryStudents(String grade, List<Long> classIds, List<Long> majorIds, Boolean unassigned, String name);
+
+    boolean updateStudentInfo(Long studentId, UpdateStudentRequest request);
 }
