@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.xrq.xxq.common.Result;
@@ -30,8 +31,8 @@ public class SchedulingController {
      * 返回方案ID，前端可通过 {@code GET /api/scheduling/solution/{id}} 轮询结果。
      */
     @PostMapping("/solve")
-    public Result<Map<String, Long>> solve() {
-        Long scheduleId = schedulingService.solve();
+    public Result<Map<String, Long>> solve(@RequestParam(required = false) Long semesterId) {
+        Long scheduleId = schedulingService.solve(semesterId);
         return Result.ok(Map.of("scheduleId", scheduleId));
     }
 
