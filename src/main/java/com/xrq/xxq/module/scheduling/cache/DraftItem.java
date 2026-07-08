@@ -25,7 +25,9 @@ public class DraftItem {
     private Long timeId;
     private Long localId;
     private Integer dayOfWeek;
-    private Integer week;
+    private Integer startWeek;
+    private Integer endWeek;
+    private Long semesterId;
 
     /** 从 TeachInfo 创建富化项。 */
     public static DraftItem from(TeachInfo ti, String courseName, String teacherName, String college) {
@@ -40,7 +42,9 @@ public class DraftItem {
         item.setTimeId(ti.getTimeId());
         item.setLocalId(ti.getLocalId());
         item.setDayOfWeek(ti.getDayOfWeek());
-        item.setWeek(ti.getWeek());
+        item.setStartWeek(ti.getStartWeek());
+        item.setEndWeek(ti.getEndWeek());
+        item.setSemesterId(ti.getSemesterId());
         return item;
     }
 
@@ -54,7 +58,9 @@ public class DraftItem {
         ti.setTimeId(timeId);
         ti.setLocalId(localId);
         ti.setDayOfWeek(dayOfWeek);
-        ti.setWeek(week);
+        ti.setStartWeek(startWeek);
+        ti.setEndWeek(endWeek);
+        ti.setSemesterId(semesterId);
         return ti;
     }
 }
