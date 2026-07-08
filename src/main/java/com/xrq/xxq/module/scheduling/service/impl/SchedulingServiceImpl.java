@@ -14,6 +14,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.xrq.xxq.module.course.entity.ClassName;
 import com.xrq.xxq.module.course.entity.Course;
 import com.xrq.xxq.module.course.entity.Local;
+import com.xrq.xxq.module.course.entity.Semester;
 import com.xrq.xxq.module.course.entity.TeachInfo;
 import com.xrq.xxq.module.course.entity.Time;
 import com.xrq.xxq.module.course.entity.TimeRestriction;
@@ -23,6 +24,7 @@ import com.xrq.xxq.module.course.mapper.LocalMapper;
 import com.xrq.xxq.module.course.mapper.TeachInfoMapper;
 import com.xrq.xxq.module.course.mapper.TimeMapper;
 import com.xrq.xxq.module.course.mapper.TimeRestrictionMapper;
+import com.xrq.xxq.module.course.service.SemesterService;
 import com.xrq.xxq.module.course.service.TeachInfoService;
 import com.xrq.xxq.module.scheduling.cache.DraftCacheManager;
 import com.xrq.xxq.module.scheduling.cache.DraftItem;
@@ -68,6 +70,7 @@ public class SchedulingServiceImpl implements SchedulingService {
     private final SolutionManager<CourseSchedule, HardSoftScore> solutionManager;
 
     private final TeachInfoService teachInfoService;
+    private final SemesterService semesterService;
     private final DraftCacheManager draftCacheManager;
 
     private final TeachInfoMapper teachInfoMapper;
@@ -83,16 +86,55 @@ public class SchedulingServiceImpl implements SchedulingService {
     private final Map<Long, CourseSchedule> solutionCache = new ConcurrentHashMap<>();
 
     @Override
-    public Long solve() {
-        List<DraftItem> drafts = draftCacheManager.consumeDrafts();
+    public Long solve(Long semesterId) {
+        List<DraftItem> drafts = draftCacheManager.getAllDrafts();
         if (drafts.isEmpty()) {
             throw new BusinessException(400, "没有待排课的授课草稿");
+        }
+
+        Semester semester;
+        if (semesterId != null) {
+            semester = semesterService.getById(semesterId);
+            if (semester == null) {
+                throw new BusinessException(404, "学期不存在: " + semesterId);
+            }
+        } else {
+            // 优先从草稿中获取学期ID，草稿无学期ID时才回退到当前学期
+            semesterId = drafts.stream()
+                    .map(DraftItem::getSemesterId)
+                    .filter(id -> id != null)
+                    .findFirst()
+                    .orElse(null);
+            if (semesterId != null) {
+                semester = semesterService.getById(semesterId);
+                if (semester == null) {
+                    throw new BusinessException(404, "学期不存在: " + semesterId);
+                }
+            } else {
+                semester = semesterService.getCurrent();
+                if (semester == null) {
+                    throw new BusinessException(400, "没有当前学期数据，请先设置学期或指定 semesterId");
+                }
+            }
         }
 
         // 保存草稿并收集 DB 生成的 ID，确保后续查询一致
         List<TeachInfo> saved = new ArrayList<>();
         for (DraftItem draft : drafts) {
             TeachInfo ti = draft.toTeachInfo();
+            if (ti.getSemesterId() == null) {
+                ti.setSemesterId(semester.getId());
+            }
+            if (ti.getStartWeek() == null) {
+                ti.setStartWeek(semester.getStartWeek());
+            }
+            if (ti.getEndWeek() == null) {
+                ti.setEndWeek(semester.getEndWeek());
+            }
+            if (ti.getStartWeek() < semester.getStartWeek() || ti.getEndWeek() > semester.getEndWeek()) {
+                throw new BusinessException(400,
+                        "课程周次范围超出学期范围（" + semester.getStartWeek() + "-" + semester.getEndWeek() + "周）");
+            }
             teachInfoService.save(ti);
             saved.add(ti);
         }
@@ -105,9 +147,12 @@ public class SchedulingServiceImpl implements SchedulingService {
 
         solverManager.solveBuilder()
                 .withProblemId(scheduleId)
-                .withProblemFinder(id -> buildProblem((Long) id, teachInfoMapper.selectBatchIds(savedIds)))
+                .withProblemFinder(id -> buildProblem((Long) id, teachInfoMapper.selectByIds (savedIds)))
                 .withBestSolutionEventConsumer(event -> saveSolution(event.solution()))
                 .run();
+
+        // 排课求解成功启动后才清空草稿箱，防止中途失败导致 Redis 数据丢失
+        draftCacheManager.clear();
 
         log.info("排课求解已启动, scheduleId={}, lessons={}, timeslots={}, rooms={}",
                 scheduleId, problem.getLessonList().size(),
@@ -316,6 +361,9 @@ public class SchedulingServiceImpl implements SchedulingService {
                     ti.getTeacherId(),
                     teacherNames.getOrDefault(ti.getTeacherId(), "未知教师"),
                     groups,
+                    ti.getStartWeek(),
+                    ti.getEndWeek(),
+                    ti.getSemesterId(),
                     initialTimeslot,
                     initialRoom));
         }
@@ -368,6 +416,12 @@ public class SchedulingServiceImpl implements SchedulingService {
             }
             if (room != null) {
                 uw.set(TeachInfo::getLocalId, room.getId());
+            }
+            if (lesson.getStartWeek() != null) {
+                uw.set(TeachInfo::getStartWeek, lesson.getStartWeek());
+            }
+            if (lesson.getEndWeek() != null) {
+                uw.set(TeachInfo::getEndWeek, lesson.getEndWeek());
             }
             teachInfoMapper.update(null, uw);
             assignedCount++;
