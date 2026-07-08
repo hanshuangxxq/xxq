@@ -20,7 +20,9 @@ public class TeachInfo {
     private String className; // 班级名称
     private Long timeId;  // FK → time.id  上课时间段
     private Long localId; // FK → local.id 上课地点
-    private Integer dayOfWeek; //星期几
-    private Integer week; // 上几个星期
+    private Integer dayOfWeek; // 星期几
+    private Integer startWeek; // 起始教学周
+    private Integer endWeek;   // 结束教学周
+    private Long semesterId;   // FK → semester.id
 
 }
