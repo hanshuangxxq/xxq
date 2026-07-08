@@ -13,9 +13,10 @@ public interface SchedulingService {
     /**
      * 触发排课求解（异步）。
      *
+     * @param semesterId 学期ID，为 null 时使用当前学期
      * @return 方案ID，可用于查询求解状态和结果
      */
-    Long solve();
+    Long solve(Long semesterId);
 
     /**
      * 获取排课方案。
