@@ -17,12 +17,20 @@ import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.common.Result;
 import com.xrq.xxq.module.course.dto.ClassCourseDto;
 import com.xrq.xxq.module.course.dto.CourseDto;
+import com.xrq.xxq.module.course.dto.UserCourseDto;
+import com.xrq.xxq.module.course.dto.WeekScheduleDto;
 import com.xrq.xxq.module.course.entity.TeachInfo;
+import com.xrq.xxq.module.course.entity.Semester;
+import com.xrq.xxq.module.course.service.SemesterService;
 import com.xrq.xxq.module.course.service.TeachInfoService;
 import com.xrq.xxq.module.scheduling.cache.DraftCacheManager;
 import com.xrq.xxq.module.scheduling.cache.DraftItem;
+import com.xrq.xxq.module.course.mapper.ClassNameMapper;
+import com.xrq.xxq.module.course.entity.ClassName;
 import com.xrq.xxq.module.user.entity.user.Department;
+import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.mapper.DepartmentMapper;
+import com.xrq.xxq.module.user.mapper.StudentMapper;
 
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -36,17 +44,21 @@ import lombok.RequiredArgsConstructor;
 public class TeachInfoController {
 
     private final TeachInfoService teachInfoService;
+    private final SemesterService semesterService;
     private final DraftCacheManager draftCacheManager;
     private final DepartmentMapper departmentMapper;
+    private final StudentMapper studentMapper;
+    private final ClassNameMapper classNameMapper;
 
     @GetMapping
-    public Result<List<CourseDto>> list(
+    public Result<UserCourseDto> list(
             HttpServletRequest request,
             @RequestParam(required = false) Long teacherId,
-            @RequestParam(required = false) Long courseId) {
+            @RequestParam(required = false) Long courseId,
+            @RequestParam(required = false) Integer week) {
         Long userId = (Long) request.getAttribute("userId");
         String userType = (String) request.getAttribute("userType");
-        return Result.ok(teachInfoService.listByUserScope(userId, userType, teacherId, courseId));
+        return Result.ok(teachInfoService.listByUserScope(userId, userType, teacherId, courseId, week));
     }
 
     @GetMapping("/{id}")
@@ -64,6 +76,31 @@ public class TeachInfoController {
     public Result<List<ClassCourseDto>> listClassCourses(HttpServletRequest request) {
         Long userId = (Long) request.getAttribute("userId");
         return Result.ok(teachInfoService.listClassCourses(userId));
+    }
+
+    /** 学生查询指定周次的班级课表（走 Redis 缓存）。 */
+    @GetMapping("/week-schedule")
+    public Result<WeekScheduleDto> getWeekSchedule(HttpServletRequest request,
+                                                    @RequestParam Integer week) {
+        Long userId = (Long) request.getAttribute("userId");
+        String userType = (String) request.getAttribute("userType");
+
+        if (!"student".equals(userType)) {
+            throw new BusinessException(403, "仅学生可查询周课表");
+        }
+
+        Student student = studentMapper.selectOne(
+                new LambdaQueryWrapper<Student>().eq(Student::getUserId, userId));
+        if (student == null || student.getClassId() == null) {
+            return Result.fail(404, "未找到您的班级信息");
+        }
+
+        ClassName cls = classNameMapper.selectById(student.getClassId());
+        if (cls == null) {
+            return Result.fail(404, "未找到您的班级信息");
+        }
+
+        return Result.ok(teachInfoService.getWeekSchedule(cls.getClassName(), week));
     }
 
     /** 新增授课安排。合班时 className 用逗号分隔：如 "计科2201,计科2101"。 */
@@ -124,11 +161,24 @@ public class TeachInfoController {
         return Result.ok(List.of());
     }
 
-    /** 查看缓存中已配置的班级汇总（去重）及每个班的课程数。 */
+    /** 查看缓存中已配置的班级汇总（去重）、每个班的课程数及学期信息。 */
     @GetMapping("/draft/classes")
     public Result<java.util.Map<String, Object>> getDraftClasses(HttpServletRequest request) {
         List<DraftItem> drafts = resolveDraftsByRole(request);
         var result = new java.util.LinkedHashMap<String, Object>();
+
+        // 学期信息：从草稿中提取学期ID并查询学期名称
+        Long semesterId = drafts.stream()
+                .map(DraftItem::getSemesterId)
+                .filter(id -> id != null)
+                .findFirst()
+                .orElse(null);
+        if (semesterId != null) {
+            Semester semester = semesterService.getById(semesterId);
+            result.put("semesterId", semesterId);
+            result.put("semesterName", semester != null ? semester.getName() : null);
+        }
+
         result.put("classes", drafts.stream()
                 .map(DraftItem::getClassName)
                 .filter(name -> name != null && !name.isBlank())
