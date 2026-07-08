@@ -47,6 +47,15 @@ public class Lesson {
     /** 上课学生所属的班级集合（支持合班/重修场景，一个课堂可能有多个班级的学生） */
     private List<StudentGroup> studentGroups = new ArrayList<>();
 
+    /** 起始教学周 */
+    private Integer startWeek;
+
+    /** 结束教学周 */
+    private Integer endWeek;
+
+    /** 学期ID */
+    private Long semesterId;
+
     /** 分配的时间段 */
     @PlanningVariable(valueRangeProviderRefs = "timeslotRange")
     private Timeslot timeslot;
