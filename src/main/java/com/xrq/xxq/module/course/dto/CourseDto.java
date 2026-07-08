@@ -21,7 +21,8 @@ public class CourseDto {
     private String college;
     // 上课时间
     private Integer dayOfWeek;
-    private Integer week;
+    private Integer startWeek;
+    private Integer endWeek;
     private Long timeId;
     // 上课地点（脱敏：不含 localId）
     private String building;
