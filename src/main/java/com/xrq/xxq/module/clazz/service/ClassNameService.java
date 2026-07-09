@@ -1,7 +1,7 @@
-package com.xrq.xxq.module.course.service;
+package com.xrq.xxq.module.clazz.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.xrq.xxq.module.course.entity.ClassName;
+import com.xrq.xxq.module.clazz.entity.ClassName;
 
 public interface ClassNameService extends IService<ClassName> {
 }
