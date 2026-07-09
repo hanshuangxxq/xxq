@@ -1,9 +1,9 @@
-package com.xrq.xxq.module.course.service.impl;
+package com.xrq.xxq.module.time.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.xrq.xxq.module.course.entity.TimeRestriction;
-import com.xrq.xxq.module.course.mapper.TimeRestrictionMapper;
-import com.xrq.xxq.module.course.service.TimeRestrictionService;
+import com.xrq.xxq.module.time.entity.TimeRestriction;
+import com.xrq.xxq.module.time.mapper.TimeRestrictionMapper;
+import com.xrq.xxq.module.time.service.TimeRestrictionService;
 import org.springframework.stereotype.Service;
 
 @Service
