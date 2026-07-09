@@ -13,6 +13,14 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 public class XxqApplication {
 
     public static void main(String[] args) {
+        // 打包后 jar 含 AOT 生成的 __ApplicationContextInitializer 类时启用 AOT；-Dspring.aot.enabled=false 可禁用
+        if (System.getProperty("spring.aot.enabled") == null) {
+            try {
+                Class.forName("com.xrq.xxq.XxqApplication__ApplicationContextInitializer");
+                System.setProperty("spring.aot.enabled", "true");
+            } catch (ClassNotFoundException ignored) {
+            }
+        }
         SpringApplication.run(XxqApplication.class, args);
     }
 }
