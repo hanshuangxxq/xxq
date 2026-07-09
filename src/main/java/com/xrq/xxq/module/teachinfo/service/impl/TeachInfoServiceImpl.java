@@ -1,7 +1,7 @@
 package com.xrq.xxq.module.teachinfo.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.module.teachinfo.cache.ClassScheduleCacheManager;
 import com.xrq.xxq.module.course.dto.ClassCourseDto;
 import com.xrq.xxq.module.course.dto.CourseDto;
