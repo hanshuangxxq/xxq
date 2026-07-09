@@ -12,10 +12,10 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.xrq.xxq.module.course.entity.ClassName;
+import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.course.entity.Course;
-import com.xrq.xxq.module.course.entity.TeachInfo;
-import com.xrq.xxq.module.course.mapper.ClassNameMapper;
+import com.xrq.xxq.module.teachinfo.entity.TeachInfo;
+import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
 import com.xrq.xxq.module.course.mapper.CourseMapper;
 import com.xrq.xxq.module.user.entity.User;
 import com.xrq.xxq.module.user.entity.user.Teacher;
