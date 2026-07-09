@@ -1,4 +1,4 @@
-package com.xrq.xxq.module.course.cache;
+package com.xrq.xxq.module.teachinfo.cache;
 
 import java.time.Duration;
 import java.util.List;
