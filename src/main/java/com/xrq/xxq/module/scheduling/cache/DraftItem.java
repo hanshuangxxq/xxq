@@ -1,6 +1,6 @@
 package com.xrq.xxq.module.scheduling.cache;
 
-import com.xrq.xxq.module.course.entity.TeachInfo;
+import com.xrq.xxq.module.teachinfo.entity.TeachInfo;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
