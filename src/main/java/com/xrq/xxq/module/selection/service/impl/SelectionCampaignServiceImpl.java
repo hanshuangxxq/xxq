@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
@@ -101,6 +102,7 @@ public class SelectionCampaignServiceImpl
     }
 
     @Override
+    @Transactional
     public void delete(Long id) {
         SelectionCampaign campaign = getById(id);
         if (campaign == null) {
@@ -146,6 +148,7 @@ public class SelectionCampaignServiceImpl
     }
 
     @Override
+    @Transactional
     public void finalizeCampaign(Long id) {
         SelectionCampaign campaign = getById(id);
         if (campaign == null) {
