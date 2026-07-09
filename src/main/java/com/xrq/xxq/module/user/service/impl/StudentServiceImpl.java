@@ -2,7 +2,7 @@ package com.xrq.xxq.module.user.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
