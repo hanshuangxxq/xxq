@@ -5,6 +5,9 @@ import org.jspecify.annotations.NonNull;
 
 import java.util.Map;
 
+/**
+ * 登录的接口类
+ */
 @Data
 public class LoginRequest {
     @NonNull
