@@ -1,13 +1,12 @@
-package com.xrq.xxq.module.course.controller;
+package com.xrq.xxq.module.semester.controller;
 
 import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.common.Result;
-import com.xrq.xxq.module.course.entity.Semester;
-import com.xrq.xxq.module.course.service.SemesterService;
+import com.xrq.xxq.module.semester.entity.Semester;
+import com.xrq.xxq.module.semester.service.SemesterService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 
