@@ -51,4 +51,6 @@ mcp.json
 
 **/src/main/resources/application-prd.yaml
 
+META-INF/
+
 
