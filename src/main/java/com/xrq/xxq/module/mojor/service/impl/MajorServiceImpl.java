@@ -1,6 +1,6 @@
 package com.xrq.xxq.module.mojor.service.impl;
 
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.module.mojor.entity.Major;
 import com.xrq.xxq.module.mojor.mapper.MajorMapper;
 import com.xrq.xxq.module.mojor.service.MajorService;
