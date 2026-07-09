@@ -1,4 +1,4 @@
-package com.xrq.xxq.module.course.controller;
+package com.xrq.xxq.module.teachinfo.controller;
 
 import java.util.List;
 
@@ -19,14 +19,14 @@ import com.xrq.xxq.module.course.dto.ClassCourseDto;
 import com.xrq.xxq.module.course.dto.CourseDto;
 import com.xrq.xxq.module.course.dto.UserCourseDto;
 import com.xrq.xxq.module.course.dto.WeekScheduleDto;
-import com.xrq.xxq.module.course.entity.TeachInfo;
-import com.xrq.xxq.module.course.entity.Semester;
-import com.xrq.xxq.module.course.service.SemesterService;
-import com.xrq.xxq.module.course.service.TeachInfoService;
+import com.xrq.xxq.module.teachinfo.entity.TeachInfo;
+import com.xrq.xxq.module.semester.entity.Semester;
+import com.xrq.xxq.module.semester.service.SemesterService;
+import com.xrq.xxq.module.teachinfo.service.TeachInfoService;
 import com.xrq.xxq.module.scheduling.cache.DraftCacheManager;
 import com.xrq.xxq.module.scheduling.cache.DraftItem;
-import com.xrq.xxq.module.course.mapper.ClassNameMapper;
-import com.xrq.xxq.module.course.entity.ClassName;
+import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
+import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.user.entity.user.Department;
 import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.mapper.DepartmentMapper;
