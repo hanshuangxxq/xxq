@@ -1,10 +1,14 @@
-package com.xrq.xxq.module.course.entity;
+package com.xrq.xxq.module.local.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
+/**
+ * 地点类
+ * 主要是体现教室信息
+ */
 @Data
 @TableName("local")
 public class Local {
