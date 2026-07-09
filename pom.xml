@@ -28,7 +28,7 @@
     </scm>
     <properties>
         <java.version>25</java.version>
-        <mybatis-plus.version>3.5.16</mybatis-plus.version>
+        <mybatis-plus.version>3.5.17</mybatis-plus.version>
         <jjwt.version>0.13.0</jjwt.version>
         <timefold.version>2.2.0</timefold.version>
     </properties>
@@ -149,6 +149,17 @@
                         </exclude>
                     </excludes>
                 </configuration>
+                <executions>
+                    <!-- AOT 处理：构建时生成 Bean 定义元数据与 __BeanDefinitions/__ApplicationContextInitializer 类 -->
+                    <!-- XxqApplication.main 检测到 __ApplicationContextInitializer 类后自动启用 AOT，无需 -D 参数 -->
+                    <!-- 用 -Dspring.aot.enabled=false 可禁用（开发模式快速重启） -->
+                    <execution>
+                        <id>process-aot</id>
+                        <goals>
+                            <goal>process-aot</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
