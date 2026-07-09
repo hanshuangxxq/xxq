@@ -1,7 +1,7 @@
-package com.xrq.xxq.module.user.mapper;
+package com.xrq.xxq.module.mojor.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.xrq.xxq.module.user.entity.Major;
+import com.xrq.xxq.module.mojor.entity.Major;
 import org.apache.ibatis.annotations.Mapper;
 
 @Mapper
