@@ -4,6 +4,9 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
+/**
+ * 学生信息返回结果类
+ */
 @Data
 public class StudentDto {
     private Long studentId;
