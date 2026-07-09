@@ -1,7 +1,7 @@
-package com.xrq.xxq.module.course.mapper;
+package com.xrq.xxq.module.local.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.xrq.xxq.module.course.entity.Local;
+import com.xrq.xxq.module.local.entity.Local;
 import org.apache.ibatis.annotations.Mapper;
 
 @Mapper
