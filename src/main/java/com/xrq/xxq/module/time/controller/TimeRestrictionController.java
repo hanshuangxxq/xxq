@@ -1,4 +1,4 @@
-package com.xrq.xxq.module.course.controller;
+package com.xrq.xxq.module.time.controller;
 
 import java.util.List;
 
@@ -12,8 +12,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.xrq.xxq.common.Result;
-import com.xrq.xxq.module.course.entity.TimeRestriction;
-import com.xrq.xxq.module.course.service.TimeRestrictionService;
+import com.xrq.xxq.module.time.entity.TimeRestriction;
+import com.xrq.xxq.module.time.service.TimeRestrictionService;
 
 import lombok.RequiredArgsConstructor;
 
