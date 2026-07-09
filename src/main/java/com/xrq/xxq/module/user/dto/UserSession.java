@@ -5,6 +5,9 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
+/**
+ * 登录状态存储信息
+ */
 @Data
 public class UserSession {
     private Long userId;
