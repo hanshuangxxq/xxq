@@ -2,8 +2,8 @@ package com.xrq.xxq.module.user.controller;
 
 import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.common.Result;
-import com.xrq.xxq.module.user.entity.Major;
-import com.xrq.xxq.module.user.service.MajorService;
+import com.xrq.xxq.module.mojor.entity.Major;
+import com.xrq.xxq.module.mojor.service.MajorService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
