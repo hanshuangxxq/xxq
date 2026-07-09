@@ -1,4 +1,4 @@
-package com.xrq.xxq.module.course.entity;
+package com.xrq.xxq.module.clazz.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -6,9 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 /**
- * @类名 ClassName
- * @Date 2026/6/30
- *
+ * 班级名称类
  */
 @Data
 @TableName("class_name")
