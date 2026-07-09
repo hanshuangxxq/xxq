@@ -1,11 +1,11 @@
-package com.xrq.xxq.module.course.service;
+package com.xrq.xxq.module.teachinfo.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.xrq.xxq.module.course.dto.ClassCourseDto;
 import com.xrq.xxq.module.course.dto.CourseDto;
 import com.xrq.xxq.module.course.dto.UserCourseDto;
 import com.xrq.xxq.module.course.dto.WeekScheduleDto;
-import com.xrq.xxq.module.course.entity.TeachInfo;
+import com.xrq.xxq.module.teachinfo.entity.TeachInfo;
 
 import java.util.List;
 
