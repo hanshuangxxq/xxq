@@ -1,10 +1,7 @@
 package com.xrq.xxq.module.scheduling.service.impl;
 
 import java.time.DayOfWeek;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
@@ -13,7 +10,7 @@ import org.springframework.stereotype.Service;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.course.entity.Course;
-import com.xrq.xxq.module.semedter.entity.Semester;
+import com.xrq.xxq.module.semester.entity.Semester;
 import com.xrq.xxq.module.teachinfo.entity.TeachInfo;
 import com.xrq.xxq.module.time.entity.Time;
 import com.xrq.xxq.module.time.entity.TimeRestriction;
@@ -23,7 +20,7 @@ import com.xrq.xxq.module.local.mapper.LocalMapper;
 import com.xrq.xxq.module.teachinfo.mapper.TeachInfoMapper;
 import com.xrq.xxq.module.time.mapper.TimeMapper;
 import com.xrq.xxq.module.time.mapper.TimeRestrictionMapper;
-import com.xrq.xxq.module.semedter.service.SemesterService;
+import com.xrq.xxq.module.semester.service.SemesterService;
 import com.xrq.xxq.module.teachinfo.service.TeachInfoService;
 import com.xrq.xxq.module.scheduling.cache.DraftCacheManager;
 import com.xrq.xxq.module.scheduling.cache.DraftItem;
@@ -101,7 +98,7 @@ public class SchedulingServiceImpl implements SchedulingService {
             // 优先从草稿中获取学期ID，草稿无学期ID时才回退到当前学期
             semesterId = drafts.stream()
                     .map(DraftItem::getSemesterId)
-                    .filter(id -> id != null)
+                    .filter(Objects::nonNull)
                     .findFirst()
                     .orElse(null);
             if (semesterId != null) {
