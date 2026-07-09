@@ -1,4 +1,4 @@
-package com.xrq.xxq.module.course.controller;
+package com.xrq.xxq.module.clazz.controller;
 
 import java.util.List;
 
@@ -14,8 +14,8 @@ import org.springframework.web.bind.annotation.RestController;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.common.Result;
-import com.xrq.xxq.module.course.entity.ClassName;
-import com.xrq.xxq.module.course.service.ClassNameService;
+import com.xrq.xxq.module.clazz.entity.ClassName;
+import com.xrq.xxq.module.clazz.service.ClassNameService;
 import com.xrq.xxq.module.user.entity.user.Department;
 import com.xrq.xxq.module.user.mapper.DepartmentMapper;
 
