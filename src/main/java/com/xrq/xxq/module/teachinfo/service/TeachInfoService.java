@@ -1,6 +1,6 @@
 package com.xrq.xxq.module.teachinfo.service;
 
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 import com.xrq.xxq.module.course.dto.ClassCourseDto;
 import com.xrq.xxq.module.course.dto.CourseDto;
 import com.xrq.xxq.module.course.dto.UserCourseDto;
