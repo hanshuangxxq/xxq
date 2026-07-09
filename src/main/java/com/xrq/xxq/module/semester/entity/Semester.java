@@ -1,4 +1,4 @@
-package com.xrq.xxq.module.semedter.entity;
+package com.xrq.xxq.module.semester.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
