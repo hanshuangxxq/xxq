@@ -2,12 +2,12 @@ package com.xrq.xxq.module.user.controller;
 
 import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.common.Result;
-import com.xrq.xxq.module.course.entity.ClassName;
-import com.xrq.xxq.module.course.service.ClassNameService;
+import com.xrq.xxq.module.clazz.entity.ClassName;
+import com.xrq.xxq.module.clazz.service.ClassNameService;
 import com.xrq.xxq.module.user.dto.StudentDto;
 import com.xrq.xxq.module.user.dto.UpdateStudentRequest;
-import com.xrq.xxq.module.user.entity.Major;
-import com.xrq.xxq.module.user.service.MajorService;
+import com.xrq.xxq.module.mojor.entity.Major;
+import com.xrq.xxq.module.mojor.service.MajorService;
 import com.xrq.xxq.module.user.service.StudentService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
