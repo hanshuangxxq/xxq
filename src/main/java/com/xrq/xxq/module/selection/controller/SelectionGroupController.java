@@ -27,8 +27,8 @@ import lombok.RequiredArgsConstructor;
 /**
  * 选课组独立管理接口。
  * <p>
- * 选课组是独立实体，可被多个选课活动复用。绑定关系由
- * {@link CampaignGroupBindingController} 提供。
+ * 选课组是独立实体，可被多个选课活动复用。绑定关系通过
+ * {@code SelectionCampaignController} 的 create/update 接口携带 groupId 完成。
  * <p>
  * 权限：仅教务管理员（academic_admin）可操作。
  */
