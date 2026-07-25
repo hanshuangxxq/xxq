@@ -1,6 +1,7 @@
 package com.xrq.xxq.module.selection.service.impl;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
@@ -18,8 +19,10 @@ import com.xrq.xxq.module.selection.dto.CampaignResponse;
 import com.xrq.xxq.module.selection.dto.CampaignUpdateRequest;
 import com.xrq.xxq.module.selection.entity.CampaignStatusEnum;
 import com.xrq.xxq.module.selection.entity.SelectionCampaign;
+import com.xrq.xxq.module.selection.entity.SelectionCampaignGroup;
 import com.xrq.xxq.module.selection.entity.SelectionCourse;
 import com.xrq.xxq.module.selection.entity.SelectionGroup;
+import com.xrq.xxq.module.selection.mapper.SelectionCampaignGroupMapper;
 import com.xrq.xxq.module.selection.mapper.SelectionCampaignMapper;
 import com.xrq.xxq.module.selection.mapper.SelectionCourseMapper;
 import com.xrq.xxq.module.selection.mapper.SelectionGroupMapper;
@@ -40,6 +43,7 @@ public class SelectionCampaignServiceImpl
     private static final int DEFAULT_END_WEEK = 16;
 
     private final SelectionCourseMapper selectionCourseMapper;
+    private final SelectionCampaignGroupMapper selectionCampaignGroupMapper;
     private final SelectionGroupMapper selectionGroupMapper;
     private final SemesterService semesterService;
     private final SelectionClassService selectionClassService;
@@ -135,6 +139,40 @@ public class SelectionCampaignServiceImpl
     }
 
     @Override
+    public List<CampaignResponse> listBindableForGroup(Long groupId) {
+        if (selectionGroupMapper.selectById(groupId) == null) {
+            throw new BusinessException(404, "选课组不存在");
+        }
+        List<SelectionCampaign> allCampaigns = list();
+        if (allCampaigns.isEmpty()) {
+            return List.of();
+        }
+        // 一个活动只能绑定一个选课组：取每条绑定关系，按活动维度归集（兼容历史多绑数据）。
+        // 使用显式空 Wrapper 而非 selectList(null)，避免不同 MyBatis Plus 版本下行为差异。
+        List<SelectionCampaignGroup> allBindings = selectionCampaignGroupMapper.selectList(
+                new LambdaQueryWrapper<>());
+        Map<Long, List<Long>> boundGroupIdsByCampaign = allBindings.stream()
+                .collect(Collectors.groupingBy(
+                        SelectionCampaignGroup::getCampaignId,
+                        Collectors.mapping(SelectionCampaignGroup::getGroupId, Collectors.toList())));
+        // 过滤规则：未绑定任何组 -> 可绑定（保留）；已绑定到本组 -> 保留以便解绑；
+        //         已绑定到其它组 -> 排除，不能在本组的绑定管理中看到。
+        return allCampaigns.stream()
+                .filter(c -> {
+                    List<Long> boundGroupIds = boundGroupIdsByCampaign.getOrDefault(c.getId(), List.of());
+                    return boundGroupIds.isEmpty() || boundGroupIds.contains(groupId);
+                })
+                .map(c -> {
+                    CampaignResponse resp = toResponse(c, semesterService.getById(c.getSemesterId()));
+                    if (boundGroupIdsByCampaign.getOrDefault(c.getId(), List.of()).contains(groupId)) {
+                        resp.setBoundGroupId(groupId);
+                    }
+                    return resp;
+                })
+                .collect(Collectors.toList());
+    }
+
+    @Override
     @Transactional
     public void delete(Long id) {
         SelectionCampaign campaign = getById(id);
@@ -144,14 +182,15 @@ public class SelectionCampaignServiceImpl
         if (campaign.getStatus() != CampaignStatusEnum.DRAFT) {
             throw new BusinessException(409, "仅草稿状态的活动可删除");
         }
-        // 级联删除：可选课程（含衍生 course 与 TimeRestriction）-> 选课组 -> 活动 -> 活动衍生 course
+        // 级联删除：可选课程（含衍生 course 与 TimeRestriction）-> 活动-组绑定关系 -> 活动 -> 活动衍生 course
+        // 注意：选课组本身是独立实体，可能被其他活动复用，不删除
         List<SelectionCourse> courses = selectionCourseMapper.selectList(
                 new LambdaQueryWrapper<SelectionCourse>().eq(SelectionCourse::getCampaignId, id));
         for (SelectionCourse sc : courses) {
             selectionCourseService.remove(id, sc.getId());
         }
-        selectionGroupMapper.delete(new LambdaQueryWrapper<SelectionGroup>()
-                .eq(SelectionGroup::getCampaignId, id));
+        selectionCampaignGroupMapper.delete(new LambdaQueryWrapper<SelectionCampaignGroup>()
+                .eq(SelectionCampaignGroup::getCampaignId, id));
         Long campaignCourseId = campaign.getCourseId();
         removeById(id);
         if (campaignCourseId != null) {
@@ -167,11 +206,6 @@ public class SelectionCampaignServiceImpl
         }
         if (campaign.getStatus() != CampaignStatusEnum.DRAFT) {
             throw new BusinessException(409, "仅草稿状态的活动可开启");
-        }
-        Long courseCount = selectionCourseMapper.selectCount(
-                new LambdaQueryWrapper<SelectionCourse>().eq(SelectionCourse::getCampaignId, id));
-        if (courseCount == 0) {
-            throw new BusinessException(409, "活动未配置可选课程，无法开启");
         }
         campaign.setStatus(CampaignStatusEnum.OPEN);
         updateById(campaign);
