@@ -21,7 +21,7 @@ import com.xrq.xxq.module.user.mapper.UserMapper;
 import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.module.user.entity.user.Grade;
 import com.xrq.xxq.module.user.service.UserService;
-import com.xrq.xxq.module.user.session.LoginSessionStore;
+import com.xrq.xxq.util.auth.LoginSessionStore;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
