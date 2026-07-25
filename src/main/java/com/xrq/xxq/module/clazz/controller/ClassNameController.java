@@ -18,6 +18,7 @@ import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.clazz.service.ClassNameService;
 import com.xrq.xxq.module.user.entity.user.Department;
 import com.xrq.xxq.module.user.mapper.DepartmentMapper;
+import com.xrq.xxq.util.auth.AuthFacade;
 
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -27,8 +28,8 @@ import lombok.RequiredArgsConstructor;
  * <p>
  * 权限：
  * <ul>
- *   <li>院系管理者（department）— 可查看本院系班级，不能新增/修改/删除</li>
- *   <li>教务管理员（academic_admin）— 全校班级增删改查</li>
+ *   <li>院系管理者（department）- 可查看本院系班级，不能新增/修改/删除</li>
+ *   <li>教务管理员（academic_admin）- 全校班级增删改查</li>
  * </ul>
  */
 @RestController
@@ -38,19 +39,20 @@ public class ClassNameController {
 
     private final ClassNameService classNameService;
     private final DepartmentMapper departmentMapper;
+    private final AuthFacade authFacade;
 
     /**
      * 查询班级列表。
      * <ul>
-     *   <li>院系管理者 — 仅返回本院系班级</li>
-     *   <li>教务管理员 — 返回全校班级</li>
+     *   <li>院系管理者 - 仅返回本院系班级</li>
+     *   <li>教务管理员 - 返回全校班级</li>
      * </ul>
      */
     @GetMapping
     public Result<List<ClassName>> list(HttpServletRequest request) {
-        String userType = (String) request.getAttribute("userType");
+        String userType = authFacade.currentUserType(request);
 
-        if ("department".equals(userType)) {
+        if (AuthFacade.USER_TYPE_DEPARTMENT.equals(userType)) {
             Department dept = resolveDepartment(request);
             List<ClassName> list = classNameService.list(
                     new LambdaQueryWrapper<ClassName>().eq(ClassName::getCollege, dept.getDepartmentName()));
@@ -76,8 +78,8 @@ public class ClassNameController {
             return Result.fail(404, "班级不存在");
         }
 
-        String userType = (String) request.getAttribute("userType");
-        if ("department".equals(userType)) {
+        String userType = authFacade.currentUserType(request);
+        if (AuthFacade.USER_TYPE_DEPARTMENT.equals(userType)) {
             Department dept = resolveDepartment(request);
             if (!dept.getDepartmentName().equals(className.getCollege())) {
                 throw new BusinessException(403, "无权查看其他院系的班级");
@@ -89,14 +91,14 @@ public class ClassNameController {
 
     @PostMapping
     public Result<ClassName> create(HttpServletRequest request, @RequestBody ClassName className) {
-        checkAcademicAdmin(request);
+        authFacade.requireAcademicAdmin(request);
         classNameService.save(className);
         return Result.ok(className);
     }
 
     @PutMapping("/{id}")
     public Result<ClassName> update(HttpServletRequest request, @PathVariable Long id, @RequestBody ClassName className) {
-        checkAcademicAdmin(request);
+        authFacade.requireAcademicAdmin(request);
         className.setId(id);
         classNameService.updateById(className);
         return Result.ok(className);
@@ -104,19 +106,9 @@ public class ClassNameController {
 
     @DeleteMapping("/{id}")
     public Result<Void> delete(HttpServletRequest request, @PathVariable Long id) {
-        checkAcademicAdmin(request);
+        authFacade.requireAcademicAdmin(request);
         classNameService.removeById(id);
         return Result.ok();
-    }
-
-    // ──────────────────────── 权限校验 ────────────────────────
-
-    /** 仅教务管理员可执行写操作。 */
-    private void checkAcademicAdmin(HttpServletRequest request) {
-        String userType = (String) request.getAttribute("userType");
-        if (!"academic_admin".equals(userType)) {
-            throw new BusinessException(403, "仅教务管理员可操作班级数据");
-        }
     }
 
     /**
@@ -125,12 +117,7 @@ public class ClassNameController {
      * @throws BusinessException(403) 非院系管理者或院系记录不存在
      */
     private Department resolveDepartment(HttpServletRequest request) {
-        Long userId = (Long) request.getAttribute("userId");
-        String userType = (String) request.getAttribute("userType");
-
-        if (!"department".equals(userType)) {
-            throw new BusinessException(403, "仅院系管理者可执行此操作");
-        }
+        Long userId = authFacade.requireDepartmentUserId(request);
 
         Department dept = departmentMapper.selectOne(
                 new LambdaQueryWrapper<Department>().eq(Department::getUserId, userId));
