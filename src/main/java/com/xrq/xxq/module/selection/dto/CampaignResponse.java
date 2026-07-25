@@ -12,9 +12,11 @@ public class CampaignResponse {
     private String name;
     private Long semesterId;
     private String semesterName;
+    private Long courseId;
+    private Integer startWeek;
+    private Integer endWeek;
     private LocalDateTime startTime;
     private LocalDateTime endTime;
-    private Integer maxCoursesPerStudent;
     private CampaignStatusEnum status;
     private LocalDateTime createTime;
     private Integer selectedCourseCount;
