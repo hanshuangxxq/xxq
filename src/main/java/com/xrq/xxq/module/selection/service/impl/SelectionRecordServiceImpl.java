@@ -207,7 +207,6 @@ public class SelectionRecordServiceImpl implements SelectionRecordService {
         List<SelectionCampaignGroup> bindings = selectionCampaignGroupMapper.selectList(
                 new LambdaQueryWrapper<SelectionCampaignGroup>()
                         .eq(SelectionCampaignGroup::getCampaignId, campaignId)
-                        .orderByAsc(SelectionCampaignGroup::getSortOrder)
                         .orderByAsc(SelectionCampaignGroup::getGroupId));
         if (bindings.isEmpty()) {
             return List.of();
