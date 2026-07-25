@@ -9,6 +9,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
+import com.xrq.xxq.module.course.entity.Course;
+import com.xrq.xxq.module.course.mapper.CourseMapper;
 import com.xrq.xxq.module.semester.entity.Semester;
 import com.xrq.xxq.module.semester.service.SemesterService;
 import com.xrq.xxq.module.selection.dto.CampaignCreateRequest;
@@ -17,10 +19,13 @@ import com.xrq.xxq.module.selection.dto.CampaignUpdateRequest;
 import com.xrq.xxq.module.selection.entity.CampaignStatusEnum;
 import com.xrq.xxq.module.selection.entity.SelectionCampaign;
 import com.xrq.xxq.module.selection.entity.SelectionCourse;
+import com.xrq.xxq.module.selection.entity.SelectionGroup;
 import com.xrq.xxq.module.selection.mapper.SelectionCampaignMapper;
 import com.xrq.xxq.module.selection.mapper.SelectionCourseMapper;
+import com.xrq.xxq.module.selection.mapper.SelectionGroupMapper;
 import com.xrq.xxq.module.selection.service.SelectionCampaignService;
 import com.xrq.xxq.module.selection.service.SelectionClassService;
+import com.xrq.xxq.module.selection.service.SelectionCourseService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -30,11 +35,19 @@ public class SelectionCampaignServiceImpl
         extends ServiceImpl<SelectionCampaignMapper, SelectionCampaign>
         implements SelectionCampaignService {
 
+    private static final String SOURCE_SELECTION_CAMPAIGN = "SELECTION_CAMPAIGN";
+    private static final int DEFAULT_START_WEEK = 1;
+    private static final int DEFAULT_END_WEEK = 16;
+
     private final SelectionCourseMapper selectionCourseMapper;
+    private final SelectionGroupMapper selectionGroupMapper;
     private final SemesterService semesterService;
     private final SelectionClassService selectionClassService;
+    private final SelectionCourseService selectionCourseService;
+    private final CourseMapper courseMapper;
 
     @Override
+    @Transactional
     public CampaignResponse create(CampaignCreateRequest request) {
         Semester semester = semesterService.getById(request.getSemesterId());
         if (semester == null) {
@@ -43,13 +56,23 @@ public class SelectionCampaignServiceImpl
         if (request.getEndTime().isBefore(request.getStartTime())) {
             throw new BusinessException(400, "结束时间不能早于开始时间");
         }
+
+        // 1. 在 course 表插入衍生记录（source = SELECTION_CAMPAIGN），courseName = 活动名
+        Course derivedCourse = new Course();
+        derivedCourse.setCourseName(request.getName());
+        derivedCourse.setCourseCode("SEL-CAMP-" + request.getSemesterId() + "-" + System.currentTimeMillis());
+        derivedCourse.setSource(SOURCE_SELECTION_CAMPAIGN);
+        courseMapper.insert(derivedCourse);
+
+        // 2. 创建 campaign 并关联 courseId
         SelectionCampaign campaign = new SelectionCampaign();
         campaign.setName(request.getName());
         campaign.setSemesterId(request.getSemesterId());
+        campaign.setCourseId(derivedCourse.getId());
+        campaign.setStartWeek(request.getStartWeek() != null ? request.getStartWeek() : DEFAULT_START_WEEK);
+        campaign.setEndWeek(request.getEndWeek() != null ? request.getEndWeek() : DEFAULT_END_WEEK);
         campaign.setStartTime(request.getStartTime());
         campaign.setEndTime(request.getEndTime());
-        campaign.setMaxCoursesPerStudent(
-                request.getMaxCoursesPerStudent() == null ? 1 : request.getMaxCoursesPerStudent());
         campaign.setStatus(CampaignStatusEnum.DRAFT);
         save(campaign);
         return toResponse(campaign, semester);
@@ -74,13 +97,23 @@ public class SelectionCampaignServiceImpl
         }
         if (request.getStartTime() != null) campaign.setStartTime(request.getStartTime());
         if (request.getEndTime() != null) campaign.setEndTime(request.getEndTime());
-        if (request.getMaxCoursesPerStudent() != null) {
-            campaign.setMaxCoursesPerStudent(request.getMaxCoursesPerStudent());
+        if (request.getStartWeek() != null) campaign.setStartWeek(request.getStartWeek());
+        if (request.getEndWeek() != null) campaign.setEndWeek(request.getEndWeek());
+        if (campaign.getEndWeek() < campaign.getStartWeek()) {
+            throw new BusinessException(400, "结束周不能早于开始周");
         }
         if (campaign.getEndTime().isBefore(campaign.getStartTime())) {
             throw new BusinessException(400, "结束时间不能早于开始时间");
         }
         updateById(campaign);
+        // 同步更新衍生 course 的 courseName（若活动名变更）
+        if (request.getName() != null) {
+            Course derived = courseMapper.selectById(campaign.getCourseId());
+            if (derived != null) {
+                derived.setCourseName(request.getName());
+                courseMapper.updateById(derived);
+            }
+        }
         return toResponse(campaign, semesterService.getById(campaign.getSemesterId()));
     }
 
@@ -111,9 +144,19 @@ public class SelectionCampaignServiceImpl
         if (campaign.getStatus() != CampaignStatusEnum.DRAFT) {
             throw new BusinessException(409, "仅草稿状态的活动可删除");
         }
-        selectionCourseMapper.delete(new LambdaQueryWrapper<SelectionCourse>()
-                .eq(SelectionCourse::getCampaignId, id));
+        // 级联删除：可选课程（含衍生 course 与 TimeRestriction）-> 选课组 -> 活动 -> 活动衍生 course
+        List<SelectionCourse> courses = selectionCourseMapper.selectList(
+                new LambdaQueryWrapper<SelectionCourse>().eq(SelectionCourse::getCampaignId, id));
+        for (SelectionCourse sc : courses) {
+            selectionCourseService.remove(id, sc.getId());
+        }
+        selectionGroupMapper.delete(new LambdaQueryWrapper<SelectionGroup>()
+                .eq(SelectionGroup::getCampaignId, id));
+        Long campaignCourseId = campaign.getCourseId();
         removeById(id);
+        if (campaignCourseId != null) {
+            courseMapper.deleteById(campaignCourseId);
+        }
     }
 
     @Override
@@ -168,9 +211,11 @@ public class SelectionCampaignServiceImpl
         resp.setName(campaign.getName());
         resp.setSemesterId(campaign.getSemesterId());
         resp.setSemesterName(semester != null ? semester.getName() : null);
+        resp.setCourseId(campaign.getCourseId());
+        resp.setStartWeek(campaign.getStartWeek());
+        resp.setEndWeek(campaign.getEndWeek());
         resp.setStartTime(campaign.getStartTime());
         resp.setEndTime(campaign.getEndTime());
-        resp.setMaxCoursesPerStudent(campaign.getMaxCoursesPerStudent());
         resp.setStatus(campaign.getStatus());
         resp.setCreateTime(campaign.getCreateTime());
         Long courseCount = selectionCourseMapper.selectCount(
