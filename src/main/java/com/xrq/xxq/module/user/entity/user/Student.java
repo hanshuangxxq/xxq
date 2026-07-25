@@ -10,10 +10,10 @@ import lombok.Data;
 public class Student {
     @TableId(type = IdType.AUTO)
     private Long id;                    // 主键id
-    private Long userId;                // FK → user.id
+    private Long userId;                // FK -> user.id
     private String studentNo;           // 学号
-    private String grade;               // 年级
-    private Long majorId;               // FK → major.id
-    private Long classId;           // 班级id
-    private Integer enrollmentYear;    // 入学年份
+    private Long gradeId;               // FK -> grade.id
+    private Long majorId;               // FK -> major.id
+    private Long classId;               // 班级id
+    private Integer enrollmentYear;     // 入学年份
 }
