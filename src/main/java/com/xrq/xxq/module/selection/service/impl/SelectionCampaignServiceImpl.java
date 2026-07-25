@@ -79,6 +79,11 @@ public class SelectionCampaignServiceImpl
         campaign.setEndTime(request.getEndTime());
         campaign.setStatus(CampaignStatusEnum.DRAFT);
         save(campaign);
+
+        // 3. 如果指定了 groupId，立即建立绑定（campaign 刚创建，必为 DRAFT）
+        if (request.getGroupId() != null) {
+            bindGroup(campaign, request.getGroupId());
+        }
         return toResponse(campaign, semester);
     }
 
@@ -117,6 +122,10 @@ public class SelectionCampaignServiceImpl
                 derived.setCourseName(request.getName());
                 courseMapper.updateById(derived);
             }
+        }
+        // 若指定 groupId，则换绑（要求 DRAFT 状态，已在上方校验）
+        if (request.getGroupId() != null) {
+            bindGroup(campaign, request.getGroupId());
         }
         return toResponse(campaign, semesterService.getById(campaign.getSemesterId()));
     }
@@ -237,6 +246,47 @@ public class SelectionCampaignServiceImpl
         selectionClassService.finalize(id);
         campaign.setStatus(CampaignStatusEnum.FINALIZED);
         updateById(campaign);
+    }
+
+    /**
+     * 将活动绑定到指定选课组。
+     * <p>
+     * 约束：一个活动只能绑定一个选课组。若已绑定到同组，视为幂等成功；若已绑定到其它组，
+     * 需先解绑原组，且原组内不得仍有可选课程（否则会破坏已配置数据）。
+     */
+    private void bindGroup(SelectionCampaign campaign, Long groupId) {
+        if (campaign.getStatus() != CampaignStatusEnum.DRAFT) {
+            throw new BusinessException(409, "仅草稿状态可配置选课组");
+        }
+        SelectionGroup group = selectionGroupMapper.selectById(groupId);
+        if (group == null) {
+            throw new BusinessException(404, "选课组不存在");
+        }
+        // 使用 selectList 而非 selectOne，避免历史多绑数据触发 TooManyResultsException。
+        List<SelectionCampaignGroup> existing = selectionCampaignGroupMapper.selectList(
+                new LambdaQueryWrapper<SelectionCampaignGroup>()
+                        .eq(SelectionCampaignGroup::getCampaignId, campaign.getId()));
+        if (!existing.isEmpty()) {
+            Long boundGroupId = existing.get(0).getGroupId();
+            if (boundGroupId.equals(groupId)) {
+                return;
+            }
+            // 换绑前校验原组内不得仍有课程
+            Long courseCountInOldGroup = selectionCourseMapper.selectCount(
+                    new LambdaQueryWrapper<SelectionCourse>()
+                            .eq(SelectionCourse::getCampaignId, campaign.getId())
+                            .eq(SelectionCourse::getGroupId, boundGroupId));
+            if (courseCountInOldGroup > 0) {
+                throw new BusinessException(409, "原选课组内仍有课程，无法换绑");
+            }
+            for (SelectionCampaignGroup b : existing) {
+                selectionCampaignGroupMapper.deleteById(b.getId());
+            }
+        }
+        SelectionCampaignGroup binding = new SelectionCampaignGroup();
+        binding.setCampaignId(campaign.getId());
+        binding.setGroupId(groupId);
+        selectionCampaignGroupMapper.insert(binding);
     }
 
     private CampaignResponse toResponse(SelectionCampaign campaign, Semester semester) {
