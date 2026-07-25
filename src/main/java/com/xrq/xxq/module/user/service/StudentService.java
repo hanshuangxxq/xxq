@@ -15,7 +15,7 @@ import java.util.List;
  */
 public interface StudentService extends IService<Student> {
 
-    List<StudentDto> queryStudents(String grade, List<Long> classIds, List<Long> majorIds, Boolean unassigned, String name);
+    List<StudentDto> queryStudents(Long gradeId, List<Long> classIds, List<Long> majorIds, Boolean unassigned, String name);
 
     boolean updateStudentInfo(Long studentId, UpdateStudentRequest request);
 }
