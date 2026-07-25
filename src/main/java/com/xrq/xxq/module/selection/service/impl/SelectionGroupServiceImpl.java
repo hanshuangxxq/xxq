@@ -1,20 +1,27 @@
 package com.xrq.xxq.module.selection.service.impl;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
+import com.xrq.xxq.module.selection.dto.CampaignGroupBindingRequest;
 import com.xrq.xxq.module.selection.dto.SelectionGroupCreateRequest;
 import com.xrq.xxq.module.selection.dto.SelectionGroupResponse;
 import com.xrq.xxq.module.selection.dto.SelectionGroupUpdateRequest;
 import com.xrq.xxq.module.selection.entity.CampaignStatusEnum;
 import com.xrq.xxq.module.selection.entity.SelectionCampaign;
+import com.xrq.xxq.module.selection.entity.SelectionCampaignGroup;
 import com.xrq.xxq.module.selection.entity.SelectionCourse;
 import com.xrq.xxq.module.selection.entity.SelectionGroup;
+import com.xrq.xxq.module.selection.mapper.SelectionCampaignGroupMapper;
 import com.xrq.xxq.module.selection.mapper.SelectionCampaignMapper;
 import com.xrq.xxq.module.selection.mapper.SelectionCourseMapper;
 import com.xrq.xxq.module.selection.mapper.SelectionGroupMapper;
@@ -28,14 +35,13 @@ public class SelectionGroupServiceImpl
         extends ServiceImpl<SelectionGroupMapper, SelectionGroup>
         implements SelectionGroupService {
 
-    private final SelectionCourseMapper selectionCourseMapper;
+    private final SelectionCampaignGroupMapper selectionCampaignGroupMapper;
     private final SelectionCampaignMapper selectionCampaignMapper;
+    private final SelectionCourseMapper selectionCourseMapper;
 
     @Override
-    public SelectionGroupResponse create(Long campaignId, SelectionGroupCreateRequest request) {
-        SelectionCampaign campaign = loadCampaignInDraft(campaignId);
+    public SelectionGroupResponse create(SelectionGroupCreateRequest request) {
         Long nameConflict = baseMapper.selectCount(new LambdaQueryWrapper<SelectionGroup>()
-                .eq(SelectionGroup::getCampaignId, campaignId)
                 .eq(SelectionGroup::getName, request.getName()));
         if (nameConflict > 0) {
             throw new BusinessException(409, "组名已存在");
@@ -44,29 +50,24 @@ public class SelectionGroupServiceImpl
             throw new BusinessException(400, "本组选课上限必须大于0");
         }
         SelectionGroup group = new SelectionGroup();
-        group.setCampaignId(campaignId);
         group.setName(request.getName());
         group.setMaxCourses(request.getMaxCourses());
-        group.setSortOrder(request.getSortOrder() == null ? 0 : request.getSortOrder());
         save(group);
-        return toResponse(group, 0);
+        return toResponse(group, 0, 0, null);
     }
 
     @Override
-    public SelectionGroupResponse update(Long campaignId, Long groupId, SelectionGroupUpdateRequest request) {
-        loadCampaignInDraft(campaignId);
+    public SelectionGroupResponse update(Long groupId, SelectionGroupUpdateRequest request) {
         SelectionGroup group = baseMapper.selectById(groupId);
-        if (group == null || !group.getCampaignId().equals(campaignId)) {
+        if (group == null) {
             throw new BusinessException(404, "选课组不存在");
         }
-        if (request.getName() != null) {
-            if (!request.getName().equals(group.getName())) {
-                Long nameConflict = baseMapper.selectCount(new LambdaQueryWrapper<SelectionGroup>()
-                        .eq(SelectionGroup::getCampaignId, campaignId)
-                        .eq(SelectionGroup::getName, request.getName()));
-                if (nameConflict > 0) {
-                    throw new BusinessException(409, "组名已存在");
-                }
+        if (request.getName() != null && !request.getName().equals(group.getName())) {
+            Long nameConflict = baseMapper.selectCount(new LambdaQueryWrapper<SelectionGroup>()
+                    .eq(SelectionGroup::getName, request.getName())
+                    .ne(SelectionGroup::getId, groupId));
+            if (nameConflict > 0) {
+                throw new BusinessException(409, "组名已存在");
             }
             group.setName(request.getName());
         }
@@ -74,14 +75,61 @@ public class SelectionGroupServiceImpl
             if (request.getMaxCourses() <= 0) {
                 throw new BusinessException(400, "本组选课上限必须大于0");
             }
+            if (!request.getMaxCourses().equals(group.getMaxCourses())) {
+                Long openCount = countOpenBindings(groupId);
+                if (openCount > 0) {
+                    throw new BusinessException(409, "组已被开放中的活动绑定，不可修改选课上限");
+                }
+            }
             group.setMaxCourses(request.getMaxCourses());
         }
-        if (request.getSortOrder() != null) {
-            group.setSortOrder(request.getSortOrder());
-        }
         updateById(group);
-        Integer courseCount = countCoursesInGroup(groupId);
-        return toResponse(group, courseCount);
+        Integer courseCount = countAllCoursesInGroup(groupId);
+        Integer boundCount = countBoundCampaigns(groupId);
+        return toResponse(group, courseCount, boundCount, null);
+    }
+
+    @Override
+    public SelectionGroupResponse getDetail(Long groupId) {
+        SelectionGroup group = baseMapper.selectById(groupId);
+        if (group == null) {
+            throw new BusinessException(404, "选课组不存在");
+        }
+        Integer courseCount = countAllCoursesInGroup(groupId);
+        Integer boundCount = countBoundCampaigns(groupId);
+        return toResponse(group, courseCount, boundCount, null);
+    }
+
+    @Override
+    public List<SelectionGroupResponse> listAll() {
+        List<SelectionGroup> groups = baseMapper.selectList(
+                new LambdaQueryWrapper<SelectionGroup>().orderByAsc(SelectionGroup::getId));
+        if (groups.isEmpty()) {
+            return List.of();
+        }
+        List<Long> groupIds = groups.stream().map(SelectionGroup::getId).toList();
+        Map<Long, Integer> courseCountMap = countAllCoursesByGroup(groupIds);
+        Map<Long, Integer> boundCountMap = countBoundCampaignsByGroup(groupIds);
+        return groups.stream()
+                .map(g -> toResponse(g,
+                        courseCountMap.getOrDefault(g.getId(), 0),
+                        boundCountMap.getOrDefault(g.getId(), 0),
+                        null))
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public void delete(Long groupId) {
+        SelectionGroup group = baseMapper.selectById(groupId);
+        if (group == null) {
+            throw new BusinessException(404, "选课组不存在");
+        }
+        Long boundCount = selectionCampaignGroupMapper.selectCount(new LambdaQueryWrapper<SelectionCampaignGroup>()
+                .eq(SelectionCampaignGroup::getGroupId, groupId));
+        if (boundCount > 0) {
+            throw new BusinessException(409, "请先从所有活动中解绑后再删除");
+        }
+        removeById(groupId);
     }
 
     @Override
@@ -90,33 +138,36 @@ public class SelectionGroupServiceImpl
         if (campaign == null) {
             throw new BusinessException(404, "选课活动不存在");
         }
-        List<SelectionGroup> groups = baseMapper.selectList(new LambdaQueryWrapper<SelectionGroup>()
-                .eq(SelectionGroup::getCampaignId, campaignId)
-                .orderByAsc(SelectionGroup::getSortOrder)
-                .orderByAsc(SelectionGroup::getId));
-        if (groups.isEmpty()) {
+        List<SelectionCampaignGroup> bindings = selectionCampaignGroupMapper.selectList(
+                new LambdaQueryWrapper<SelectionCampaignGroup>()
+                        .eq(SelectionCampaignGroup::getCampaignId, campaignId)
+                        .orderByAsc(SelectionCampaignGroup::getSortOrder)
+                        .orderByAsc(SelectionCampaignGroup::getGroupId));
+        if (bindings.isEmpty()) {
             return List.of();
         }
-        return groups.stream()
-                .map(g -> toResponse(g, countCoursesInGroup(g.getId())))
+        List<Long> groupIds = bindings.stream().map(SelectionCampaignGroup::getGroupId).toList();
+        Map<Long, SelectionGroup> groupMap = baseMapper.selectBatchIds(groupIds).stream()
+                .collect(Collectors.toMap(SelectionGroup::getId, g -> g));
+        Map<Long, Integer> courseCountMap = countCoursesInCampaignByGroup(campaignId, groupIds);
+        return bindings.stream()
+                .map(b -> {
+                    SelectionGroup g = groupMap.get(b.getGroupId());
+                    if (g == null) {
+                        return null;
+                    }
+                    return toResponse(g,
+                            courseCountMap.getOrDefault(g.getId(), 0),
+                            null,
+                            b.getSortOrder());
+                })
+                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
     }
 
     @Override
-    public void delete(Long campaignId, Long groupId) {
-        loadCampaignInDraft(campaignId);
-        SelectionGroup group = baseMapper.selectById(groupId);
-        if (group == null || !group.getCampaignId().equals(campaignId)) {
-            throw new BusinessException(404, "选课组不存在");
-        }
-        Integer courseCount = countCoursesInGroup(groupId);
-        if (courseCount > 0) {
-            throw new BusinessException(409, "组内仍有课程，无法删除");
-        }
-        removeById(groupId);
-    }
-
-    private SelectionCampaign loadCampaignInDraft(Long campaignId) {
+    @Transactional
+    public void bindToCampaign(Long campaignId, CampaignGroupBindingRequest request) {
         SelectionCampaign campaign = selectionCampaignMapper.selectById(campaignId);
         if (campaign == null) {
             throw new BusinessException(404, "选课活动不存在");
@@ -124,23 +175,128 @@ public class SelectionGroupServiceImpl
         if (campaign.getStatus() != CampaignStatusEnum.DRAFT) {
             throw new BusinessException(409, "仅草稿状态可配置选课组");
         }
-        return campaign;
+        SelectionGroup group = baseMapper.selectById(request.getGroupId());
+        if (group == null) {
+            throw new BusinessException(404, "选课组不存在");
+        }
+        // 约束：一个选课活动只能绑定一个选课组（在服务层强制，不在数据库加唯一约束）。
+        // 使用 selectList 而非 selectOne，避免历史多绑数据触发 TooManyResultsException。
+        List<SelectionCampaignGroup> existingBindings = selectionCampaignGroupMapper.selectList(
+                new LambdaQueryWrapper<SelectionCampaignGroup>()
+                        .eq(SelectionCampaignGroup::getCampaignId, campaignId));
+        if (!existingBindings.isEmpty()) {
+            Long boundGroupId = existingBindings.get(0).getGroupId();
+            if (boundGroupId.equals(request.getGroupId())) {
+                throw new BusinessException(409, "该组已绑定到本活动");
+            }
+            throw new BusinessException(409, "该活动已绑定其它选课组");
+        }
+        SelectionCampaignGroup binding = new SelectionCampaignGroup();
+        binding.setCampaignId(campaignId);
+        binding.setGroupId(request.getGroupId());
+        binding.setSortOrder(request.getSortOrder() == null ? 0 : request.getSortOrder());
+        selectionCampaignGroupMapper.insert(binding);
     }
 
-    private Integer countCoursesInGroup(Long groupId) {
+    @Override
+    @Transactional
+    public void unbindFromCampaign(Long campaignId, Long groupId) {
+        SelectionCampaign campaign = selectionCampaignMapper.selectById(campaignId);
+        if (campaign == null) {
+            throw new BusinessException(404, "选课活动不存在");
+        }
+        if (campaign.getStatus() != CampaignStatusEnum.DRAFT) {
+            throw new BusinessException(409, "仅草稿状态可解绑选课组");
+        }
+        // 使用 selectList 而非 selectOne，避免历史多绑数据触发 TooManyResultsException。
+        List<SelectionCampaignGroup> bindings = selectionCampaignGroupMapper.selectList(
+                new LambdaQueryWrapper<SelectionCampaignGroup>()
+                        .eq(SelectionCampaignGroup::getCampaignId, campaignId)
+                        .eq(SelectionCampaignGroup::getGroupId, groupId));
+        if (bindings.isEmpty()) {
+            throw new BusinessException(404, "该组未绑定到本活动");
+        }
+        Long courseCount = selectionCourseMapper.selectCount(new LambdaQueryWrapper<SelectionCourse>()
+                .eq(SelectionCourse::getCampaignId, campaignId)
+                .eq(SelectionCourse::getGroupId, groupId));
+        if (courseCount > 0) {
+            throw new BusinessException(409, "组内仍有课程，无法解绑");
+        }
+        // 兜底：清理该 campaign+group 下历史可能存在的多条绑定记录
+        for (SelectionCampaignGroup b : bindings) {
+            selectionCampaignGroupMapper.deleteById(b.getId());
+        }
+    }
+
+    private Long countOpenBindings(Long groupId) {
+        List<SelectionCampaignGroup> bindings = selectionCampaignGroupMapper.selectList(
+                new LambdaQueryWrapper<SelectionCampaignGroup>()
+                        .eq(SelectionCampaignGroup::getGroupId, groupId));
+        if (bindings.isEmpty()) {
+            return 0L;
+        }
+        List<Long> campaignIds = bindings.stream().map(SelectionCampaignGroup::getCampaignId).toList();
+        return selectionCampaignMapper.selectCount(new LambdaQueryWrapper<SelectionCampaign>()
+                .in(SelectionCampaign::getId, campaignIds)
+                .eq(SelectionCampaign::getStatus, CampaignStatusEnum.OPEN));
+    }
+
+    private Integer countAllCoursesInGroup(Long groupId) {
         Long count = selectionCourseMapper.selectCount(new LambdaQueryWrapper<SelectionCourse>()
                 .eq(SelectionCourse::getGroupId, groupId));
         return count == null ? 0 : count.intValue();
     }
 
-    private SelectionGroupResponse toResponse(SelectionGroup group, Integer courseCount) {
+    private Integer countBoundCampaigns(Long groupId) {
+        Long count = selectionCampaignGroupMapper.selectCount(new LambdaQueryWrapper<SelectionCampaignGroup>()
+                .eq(SelectionCampaignGroup::getGroupId, groupId));
+        return count == null ? 0 : count.intValue();
+    }
+
+    private Map<Long, Integer> countAllCoursesByGroup(List<Long> groupIds) {
+        if (groupIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<SelectionCourse> all = selectionCourseMapper.selectList(new LambdaQueryWrapper<SelectionCourse>()
+                .in(SelectionCourse::getGroupId, groupIds));
+        return all.stream().collect(Collectors.groupingBy(
+                SelectionCourse::getGroupId,
+                Collectors.summingInt(c -> 1)));
+    }
+
+    private Map<Long, Integer> countBoundCampaignsByGroup(List<Long> groupIds) {
+        if (groupIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<SelectionCampaignGroup> all = selectionCampaignGroupMapper.selectList(
+                new LambdaQueryWrapper<SelectionCampaignGroup>()
+                        .in(SelectionCampaignGroup::getGroupId, groupIds));
+        return all.stream().collect(Collectors.groupingBy(
+                SelectionCampaignGroup::getGroupId,
+                Collectors.summingInt(b -> 1)));
+    }
+
+    private Map<Long, Integer> countCoursesInCampaignByGroup(Long campaignId, List<Long> groupIds) {
+        if (groupIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<SelectionCourse> all = selectionCourseMapper.selectList(new LambdaQueryWrapper<SelectionCourse>()
+                .eq(SelectionCourse::getCampaignId, campaignId)
+                .in(SelectionCourse::getGroupId, groupIds));
+        return all.stream().collect(Collectors.groupingBy(
+                SelectionCourse::getGroupId,
+                Collectors.summingInt(c -> 1)));
+    }
+
+    private SelectionGroupResponse toResponse(SelectionGroup group, Integer courseCount,
+                                              Integer boundCampaignCount, Integer sortOrderInCampaign) {
         SelectionGroupResponse resp = new SelectionGroupResponse();
         resp.setId(group.getId());
-        resp.setCampaignId(group.getCampaignId());
         resp.setName(group.getName());
         resp.setMaxCourses(group.getMaxCourses());
-        resp.setSortOrder(group.getSortOrder());
         resp.setCourseCount(courseCount);
+        resp.setBoundCampaignCount(boundCampaignCount);
+        resp.setSortOrderInCampaign(sortOrderInCampaign);
         resp.setCreateTime(group.getCreateTime());
         return resp;
     }
