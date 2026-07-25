@@ -37,7 +37,7 @@ public class StudentController {
      */
     @GetMapping
     public Result<List<StudentDto>> list(HttpServletRequest request,
-                                         @RequestParam(required = false) String grade,
+                                         @RequestParam(required = false) Long gradeId,
                                          @RequestParam(required = false) String className,
                                          @RequestParam(required = false) String major,
                                          @RequestParam(required = false) Boolean unassigned,
@@ -67,7 +67,7 @@ public class StudentController {
                     .toList ();
         }
 
-        return Result.ok(studentService.queryStudents(grade, classIds, majorIds, unassigned, name));
+        return Result.ok(studentService.queryStudents(gradeId, classIds, majorIds, unassigned, name));
     }
 
     /** 修改学生信息（学号、班级、专业、入学年份）。仅教务管理员可用。 */
