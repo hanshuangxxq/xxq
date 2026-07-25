@@ -9,5 +9,5 @@ public class SelectionRecordRequest {
     @NonNull
     private Long campaignId;
     @NonNull
-    private Long courseId;
+    private Long selectionCourseId;
 }
