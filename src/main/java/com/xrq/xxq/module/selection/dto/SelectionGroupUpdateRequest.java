@@ -6,5 +6,4 @@ import lombok.Data;
 public class SelectionGroupUpdateRequest {
     private String name;
     private Integer maxCourses;
-    private Integer sortOrder;
 }
