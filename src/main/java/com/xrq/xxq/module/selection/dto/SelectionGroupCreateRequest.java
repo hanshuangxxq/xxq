@@ -10,5 +10,4 @@ public class SelectionGroupCreateRequest {
     private String name;
     @NonNull
     private Integer maxCourses;
-    private Integer sortOrder;
 }
