@@ -10,5 +10,6 @@ public class CampaignUpdateRequest {
     private Long semesterId;
     private LocalDateTime startTime;
     private LocalDateTime endTime;
-    private Integer maxCoursesPerStudent;
+    private Integer startWeek;
+    private Integer endWeek;
 }
