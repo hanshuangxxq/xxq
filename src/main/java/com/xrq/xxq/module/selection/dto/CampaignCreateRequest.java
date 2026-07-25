@@ -16,5 +16,6 @@ public class CampaignCreateRequest {
     private LocalDateTime startTime;
     @NonNull
     private LocalDateTime endTime;
-    private Integer maxCoursesPerStudent;
+    private Integer startWeek;
+    private Integer endWeek;
 }
