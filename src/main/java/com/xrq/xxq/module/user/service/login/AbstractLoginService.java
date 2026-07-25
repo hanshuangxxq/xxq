@@ -14,11 +14,10 @@ import com.xrq.xxq.util.EncryptUtils;
 import com.xrq.xxq.module.user.dto.ChangePasswordRequest;
 import com.xrq.xxq.module.user.dto.LoginRequest;
 import com.xrq.xxq.module.user.dto.RegisterRequest;
-import com.xrq.xxq.module.user.dto.UserSession;
 import com.xrq.xxq.module.user.mapper.*;
-import com.xrq.xxq.module.user.mapper.*;
-import com.xrq.xxq.module.user.session.LoginSessionStore;
 import com.xrq.xxq.util.JwtUtils;
+import com.xrq.xxq.util.auth.LoginSessionStore;
+import com.xrq.xxq.util.auth.UserSession;
 import lombok.RequiredArgsConstructor;
 
 import java.time.LocalDateTime;
