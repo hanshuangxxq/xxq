@@ -55,4 +55,4 @@ META-INF/
 
 docs/
 
-sql/
+**/sql/
