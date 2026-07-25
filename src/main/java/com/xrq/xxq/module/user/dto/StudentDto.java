@@ -11,7 +11,8 @@ import java.time.LocalDateTime;
 public class StudentDto {
     private Long studentId;
     private String studentNo;
-    private String grade;
+    private Long gradeId;
+    private String gradeName;
     private String majorName;
     private String className;
     private Integer enrollmentYear;
