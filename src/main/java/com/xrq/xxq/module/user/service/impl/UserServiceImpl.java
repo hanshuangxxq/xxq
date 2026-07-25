@@ -14,10 +14,12 @@ import com.xrq.xxq.module.user.entity.user.Teacher;
 import com.xrq.xxq.module.user.mapper.AcademicAdminMapper;
 import com.xrq.xxq.module.user.mapper.DepartmentMapper;
 import com.xrq.xxq.module.mojor.mapper.MajorMapper;
+import com.xrq.xxq.module.user.mapper.GradeMapper;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.module.user.mapper.TeacherMapper;
 import com.xrq.xxq.module.user.mapper.UserMapper;
 import com.xrq.xxq.common.BusinessException;
+import com.xrq.xxq.module.user.entity.user.Grade;
 import com.xrq.xxq.module.user.service.UserService;
 import com.xrq.xxq.module.user.session.LoginSessionStore;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +36,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     private final DepartmentMapper departmentMapper;
     private final ClassNameMapper classNameMapper;
     private final MajorMapper majorMapper;
+    private final GradeMapper gradeMapper;
     private final LoginSessionStore sessionStore;
 
     @Override
@@ -86,7 +89,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                         .eq(Student::getUserId, userId));
                 if (student != null) {
                     profile.setIdentifier(student.getStudentNo());
-                    profile.setGrade(student.getGrade());
+                    Grade grade = student.getGradeId() != null ? gradeMapper.selectById(student.getGradeId()) : null;
+                    profile.setGrade(grade != null ? grade.getName() : null);
                     Major major = majorMapper.selectById(student.getMajorId());
                     profile.setMajor(major != null ? major.getMajorName() : null);
                     profile.setClassName(classNameMapper.selectById(student.getClassId()));
