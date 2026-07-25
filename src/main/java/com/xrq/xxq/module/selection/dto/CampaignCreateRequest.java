@@ -18,4 +18,8 @@ public class CampaignCreateRequest {
     private LocalDateTime endTime;
     private Integer startWeek;
     private Integer endWeek;
+    /**
+     * 选课组 ID。可选；非空时在创建活动的同时绑定到该组。
+     */
+    private Long groupId;
 }
