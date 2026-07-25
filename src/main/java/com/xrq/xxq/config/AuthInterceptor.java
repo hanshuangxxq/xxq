@@ -1,7 +1,7 @@
 package com.xrq.xxq.config;
 
-import com.xrq.xxq.module.user.session.LoginSessionStore;
 import com.xrq.xxq.util.JwtUtils;
+import com.xrq.xxq.util.auth.LoginSessionStore;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
