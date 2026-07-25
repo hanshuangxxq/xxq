@@ -3,12 +3,11 @@ package com.xrq.xxq.module.user.service.login.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.xrq.xxq.module.user.entity.AlipayUser;
 import com.xrq.xxq.module.user.dto.LoginRequest;
-import com.xrq.xxq.module.user.dto.UserSession;
 import com.xrq.xxq.module.user.mapper.*;
 import com.xrq.xxq.module.user.service.login.AbstractLoginService;
-import com.xrq.xxq.module.user.mapper.*;
-import com.xrq.xxq.module.user.session.LoginSessionStore;
 import com.xrq.xxq.util.JwtUtils;
+import com.xrq.xxq.util.auth.LoginSessionStore;
+import com.xrq.xxq.util.auth.UserSession;
 import org.springframework.stereotype.Service;
 
 @Service
