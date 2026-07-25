@@ -20,4 +20,10 @@ public class CampaignResponse {
     private CampaignStatusEnum status;
     private LocalDateTime createTime;
     private Integer selectedCourseCount;
+    /**
+     * 该活动当前绑定的选课组 ID。
+     * 仅在 {@code listBindableForGroup} 等需要暴露绑定信息的场景填充，
+     * 其它接口（如 listAll / getDetail）保持为 null。
+     */
+    private Long boundGroupId;
 }
