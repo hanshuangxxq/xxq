@@ -20,6 +20,7 @@ import com.xrq.xxq.module.user.entity.user.Grade;
 import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.module.user.service.GradeService;
+import com.xrq.xxq.util.auth.AuthFacade;
 
 import lombok.RequiredArgsConstructor;
 
@@ -35,16 +36,17 @@ public class GradeController {
 
     private final GradeService gradeService;
     private final StudentMapper studentMapper;
+    private final AuthFacade authFacade;
 
     @GetMapping
     public Result<List<Grade>> list(HttpServletRequest request) {
-        checkAcademicAdmin(request);
+        authFacade.requireAcademicAdmin(request);
         return Result.ok(gradeService.list());
     }
 
     @GetMapping("/{id}")
     public Result<Grade> getById(HttpServletRequest request, @PathVariable Long id) {
-        checkAcademicAdmin(request);
+        authFacade.requireAcademicAdmin(request);
         Grade grade = gradeService.getById(id);
         if (grade == null) {
             throw new BusinessException(404, "年级不存在");
@@ -54,7 +56,7 @@ public class GradeController {
 
     @PostMapping
     public Result<Grade> create(HttpServletRequest request, @RequestBody Grade grade) {
-        checkAcademicAdmin(request);
+        authFacade.requireAcademicAdmin(request);
         if (grade.getName() == null || grade.getName().isBlank()) {
             throw new BusinessException(400, "年级名称不能为空");
         }
@@ -70,7 +72,7 @@ public class GradeController {
     public Result<Grade> update(HttpServletRequest request,
                                 @PathVariable Long id,
                                 @RequestBody Grade grade) {
-        checkAcademicAdmin(request);
+        authFacade.requireAcademicAdmin(request);
         Grade exists = gradeService.getById(id);
         if (exists == null) {
             throw new BusinessException(404, "年级不存在");
@@ -88,7 +90,7 @@ public class GradeController {
 
     @DeleteMapping("/{id}")
     public Result<Void> delete(HttpServletRequest request, @PathVariable Long id) {
-        checkAcademicAdmin(request);
+        authFacade.requireAcademicAdmin(request);
         Grade grade = gradeService.getById(id);
         if (grade == null) {
             throw new BusinessException(404, "年级不存在");
@@ -100,12 +102,5 @@ public class GradeController {
         }
         gradeService.removeById(id);
         return Result.ok();
-    }
-
-    private void checkAcademicAdmin(HttpServletRequest request) {
-        String userType = (String) request.getAttribute("userType");
-        if (!"academic_admin".equals(userType)) {
-            throw new BusinessException(403, "仅教务管理员可操作年级");
-        }
     }
 }
