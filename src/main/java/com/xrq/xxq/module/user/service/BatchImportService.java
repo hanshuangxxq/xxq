@@ -13,9 +13,11 @@ import com.xrq.xxq.module.user.dto.UserImportItem;
 import com.xrq.xxq.module.user.entity.GenderEnum;
 import com.xrq.xxq.module.mojor.entity.Major;
 import com.xrq.xxq.module.user.entity.User;
+import com.xrq.xxq.module.user.entity.user.Grade;
 import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.entity.user.Teacher;
 import com.xrq.xxq.module.mojor.mapper.MajorMapper;
+import com.xrq.xxq.module.user.mapper.GradeMapper;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.module.user.mapper.TeacherMapper;
 import com.xrq.xxq.module.user.mapper.UserMapper;
@@ -31,6 +33,7 @@ public class BatchImportService {
     private final StudentMapper studentMapper;
     private final TeacherMapper teacherMapper;
     private final MajorMapper majorMapper;
+    private final GradeMapper gradeMapper;
 
     @Transactional
     public BatchImportResponse batchImport(List<UserImportItem> items) {
@@ -89,7 +92,7 @@ public class BatchImportService {
             Student student = new Student();
             student.setUserId(user.getId());
             student.setStudentNo(item.getIdentifier());
-            student.setGrade(item.getClassName());
+            student.setGradeId(resolveGradeId(item.getClassName()));
             student.setMajorId(resolveMajorId(item.getDepartment()));
             studentMapper.insert(student);
         } else {
@@ -126,5 +129,20 @@ public class BatchImportService {
         newMajor.setMajorName(majorName.strip());
         majorMapper.insert(newMajor);
         return newMajor.getId();
+    }
+
+    private Long resolveGradeId(String gradeName) {
+        if (gradeName == null || gradeName.isBlank()) {
+            return null;
+        }
+        Grade grade = gradeMapper.selectOne(
+                new LambdaQueryWrapper<Grade>().eq(Grade::getName, gradeName.strip()));
+        if (grade != null) {
+            return grade.getId();
+        }
+        Grade newGrade = new Grade();
+        newGrade.setName(gradeName.strip());
+        gradeMapper.insert(newGrade);
+        return newGrade.getId();
     }
 }
