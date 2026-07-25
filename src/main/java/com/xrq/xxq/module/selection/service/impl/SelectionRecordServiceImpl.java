@@ -21,10 +21,12 @@ import com.xrq.xxq.module.selection.dto.StudentCourseGroupResponse;
 import com.xrq.xxq.module.selection.entity.CampaignStatusEnum;
 import com.xrq.xxq.module.selection.entity.RecordStatusEnum;
 import com.xrq.xxq.module.selection.entity.SelectionCampaign;
+import com.xrq.xxq.module.selection.entity.SelectionCampaignGroup;
 import com.xrq.xxq.module.selection.entity.SelectionCourse;
 import com.xrq.xxq.module.selection.entity.SelectionCourseTimeRestriction;
 import com.xrq.xxq.module.selection.entity.SelectionGroup;
 import com.xrq.xxq.module.selection.entity.SelectionRecord;
+import com.xrq.xxq.module.selection.mapper.SelectionCampaignGroupMapper;
 import com.xrq.xxq.module.selection.mapper.SelectionCourseMapper;
 import com.xrq.xxq.module.selection.mapper.SelectionCourseTimeRestrictionMapper;
 import com.xrq.xxq.module.selection.mapper.SelectionGroupMapper;
@@ -52,6 +54,7 @@ public class SelectionRecordServiceImpl implements SelectionRecordService {
     private final SelectionRecordMapper selectionRecordMapper;
     private final SelectionCourseMapper selectionCourseMapper;
     private final SelectionGroupMapper selectionGroupMapper;
+    private final SelectionCampaignGroupMapper selectionCampaignGroupMapper;
     private final SelectionCourseTimeRestrictionMapper selectionCourseTimeRestrictionMapper;
     private final StudentMapper studentMapper;
     private final SelectionCampaignService campaignService;
@@ -92,11 +95,12 @@ public class SelectionRecordServiceImpl implements SelectionRecordService {
         if (group == null) {
             throw new BusinessException(409, "该课程未归属任何选课组");
         }
+        // 组内选课上限跨活动共用：统计该生在本组下、跨所有活动的已选课程数。
+        // 不同选课组之间独立计数。
         List<Long> groupSelectionCourseIds = selectionCourseMapper.selectList(new LambdaQueryWrapper<SelectionCourse>()
                 .eq(SelectionCourse::getGroupId, sc.getGroupId()))
                 .stream().map(SelectionCourse::getId).toList();
         Long selectedInGroup = selectionRecordMapper.selectCount(new LambdaQueryWrapper<SelectionRecord>()
-                .eq(SelectionRecord::getCampaignId, request.getCampaignId())
                 .eq(SelectionRecord::getStudentId, studentUserId)
                 .in(SelectionRecord::getSelectionCourseId, groupSelectionCourseIds)
                 .eq(SelectionRecord::getStatus, RecordStatusEnum.SELECTED));
@@ -200,11 +204,21 @@ public class SelectionRecordServiceImpl implements SelectionRecordService {
         Long myGradeId = student.getGradeId();
         Long myMajorId = student.getMajorId();
 
-        List<SelectionGroup> groups = selectionGroupMapper.selectList(
-                new LambdaQueryWrapper<SelectionGroup>()
-                        .eq(SelectionGroup::getCampaignId, campaignId)
-                        .orderByAsc(SelectionGroup::getSortOrder)
-                        .orderByAsc(SelectionGroup::getId));
+        List<SelectionCampaignGroup> bindings = selectionCampaignGroupMapper.selectList(
+                new LambdaQueryWrapper<SelectionCampaignGroup>()
+                        .eq(SelectionCampaignGroup::getCampaignId, campaignId)
+                        .orderByAsc(SelectionCampaignGroup::getSortOrder)
+                        .orderByAsc(SelectionCampaignGroup::getGroupId));
+        if (bindings.isEmpty()) {
+            return List.of();
+        }
+        List<Long> groupIds = bindings.stream().map(SelectionCampaignGroup::getGroupId).toList();
+        Map<Long, SelectionGroup> groupMap = selectionGroupMapper.selectBatchIds(groupIds).stream()
+                .collect(Collectors.toMap(SelectionGroup::getId, g -> g));
+        List<SelectionGroup> groups = bindings.stream()
+                .map(b -> groupMap.get(b.getGroupId()))
+                .filter(g -> g != null)
+                .toList();
         if (groups.isEmpty()) {
             return List.of();
         }
