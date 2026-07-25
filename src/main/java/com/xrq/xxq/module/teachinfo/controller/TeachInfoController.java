@@ -31,6 +31,7 @@ import com.xrq.xxq.module.user.entity.user.Department;
 import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.mapper.DepartmentMapper;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
+import com.xrq.xxq.util.auth.AuthFacade;
 
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -49,6 +50,7 @@ public class TeachInfoController {
     private final DepartmentMapper departmentMapper;
     private final StudentMapper studentMapper;
     private final ClassNameMapper classNameMapper;
+    private final AuthFacade authFacade;
 
     @GetMapping
     public Result<UserCourseDto> list(
@@ -56,15 +58,15 @@ public class TeachInfoController {
             @RequestParam(required = false) Long teacherId,
             @RequestParam(required = false) Long courseId,
             @RequestParam(required = false) Integer week) {
-        Long userId = (Long) request.getAttribute("userId");
-        String userType = (String) request.getAttribute("userType");
+        Long userId = authFacade.currentUserId(request);
+        String userType = authFacade.currentUserType(request);
         return Result.ok(teachInfoService.listByUserScope(userId, userType, teacherId, courseId, week));
     }
 
     @GetMapping("/{id}")
     public Result<CourseDto> getById(HttpServletRequest request, @PathVariable Long id) {
-        Long userId = (Long) request.getAttribute("userId");
-        String userType = (String) request.getAttribute("userType");
+        Long userId = authFacade.currentUserId(request);
+        String userType = authFacade.currentUserType(request);
         CourseDto resp = teachInfoService.getDetailById(id, userId, userType);
         if (resp == null) {
             return Result.fail(404, "教学信息不存在");
@@ -74,7 +76,7 @@ public class TeachInfoController {
 
     @GetMapping("/class-courses")
     public Result<List<ClassCourseDto>> listClassCourses(HttpServletRequest request) {
-        Long userId = (Long) request.getAttribute("userId");
+        Long userId = authFacade.currentUserId(request);
         return Result.ok(teachInfoService.listClassCourses(userId));
     }
 
@@ -82,12 +84,7 @@ public class TeachInfoController {
     @GetMapping("/week-schedule")
     public Result<WeekScheduleDto> getWeekSchedule(HttpServletRequest request,
                                                     @RequestParam Integer week) {
-        Long userId = (Long) request.getAttribute("userId");
-        String userType = (String) request.getAttribute("userType");
-
-        if (!"student".equals(userType)) {
-            throw new BusinessException(403, "仅学生可查询周课表");
-        }
+        Long userId = authFacade.requireStudentUserId(request);
 
         Student student = studentMapper.selectOne(
                 new LambdaQueryWrapper<Student>().eq(Student::getUserId, userId));
@@ -133,7 +130,9 @@ public class TeachInfoController {
      */
     @PostMapping("/draft")
     public Result<Integer> addDrafts(HttpServletRequest request, @RequestBody List<TeachInfo> drafts) {
-        checkDraftWritePermission(request);
+        authFacade.requireUserTypes(request,
+                AuthFacade.USER_TYPE_ACADEMIC_ADMIN,
+                AuthFacade.USER_TYPE_DEPARTMENT);
         draftCacheManager.addDrafts(drafts);
         return Result.ok(draftCacheManager.size());
     }
@@ -141,19 +140,19 @@ public class TeachInfoController {
     /**
      * 查看草稿箱。
      * <ul>
-     *   <li>教务管理员 — 全校草稿</li>
-     *   <li>院系管理者 — 仅本院系草稿</li>
+     *   <li>教务管理员 - 全校草稿</li>
+     *   <li>院系管理者 - 仅本院系草稿</li>
      * </ul>
      */
     @GetMapping("/draft")
     public Result<List<DraftItem>> getDrafts(HttpServletRequest request) {
-        String userType = (String) request.getAttribute("userType");
+        String userType = authFacade.currentUserType(request);
 
-        if ("academic_admin".equals(userType)) {
+        if (AuthFacade.USER_TYPE_ACADEMIC_ADMIN.equals(userType)) {
             return Result.ok(draftCacheManager.getAllDrafts());
         }
 
-        if ("department".equals(userType)) {
+        if (AuthFacade.USER_TYPE_DEPARTMENT.equals(userType)) {
             Department dept = resolveDepartment(request);
             return Result.ok(draftCacheManager.getDraftsByCollege(dept.getDepartmentName()));
         }
@@ -216,7 +215,7 @@ public class TeachInfoController {
     /** 清空全部草稿。仅教务管理员可操作。 */
     @DeleteMapping("/draft")
     public Result<Void> clearDrafts(HttpServletRequest request) {
-        checkAcademicAdmin(request);
+        authFacade.requireAcademicAdmin(request);
         draftCacheManager.clear();
         return Result.ok();
     }
@@ -230,9 +229,9 @@ public class TeachInfoController {
                                         @RequestParam Long courseId,
                                         @RequestParam Long teacherId,
                                         @RequestParam String className) {
-        String userType = (String) request.getAttribute("userType");
+        String userType = authFacade.currentUserType(request);
 
-        if ("department".equals(userType)) {
+        if (AuthFacade.USER_TYPE_DEPARTMENT.equals(userType)) {
             Department dept = resolveDepartment(request);
             List<DraftItem> deptDrafts = draftCacheManager.getDraftsByCollege(dept.getDepartmentName());
             boolean belongsToDept = deptDrafts.stream()
@@ -243,7 +242,9 @@ public class TeachInfoController {
                 throw new BusinessException(403, "无权删除其他院系的草稿");
             }
         } else {
-            checkDraftWritePermission(request);
+            authFacade.requireUserTypes(request,
+                    AuthFacade.USER_TYPE_ACADEMIC_ADMIN,
+                    AuthFacade.USER_TYPE_DEPARTMENT);
         }
 
         boolean removed = draftCacheManager.removeByKey(courseId, teacherId, className);
@@ -259,9 +260,9 @@ public class TeachInfoController {
      */
     @DeleteMapping("/draft/{className}")
     public Result<Void> removeDraftsByClass(HttpServletRequest request, @PathVariable String className) {
-        String userType = (String) request.getAttribute("userType");
+        String userType = authFacade.currentUserType(request);
 
-        if ("department".equals(userType)) {
+        if (AuthFacade.USER_TYPE_DEPARTMENT.equals(userType)) {
             Department dept = resolveDepartment(request);
             List<DraftItem> deptDrafts = draftCacheManager.getDraftsByCollege(dept.getDepartmentName());
             boolean belongsToDept = deptDrafts.stream()
@@ -279,7 +280,9 @@ public class TeachInfoController {
                 throw new BusinessException(403, "无权移除其他院系的草稿");
             }
         } else {
-            checkDraftWritePermission(request);
+            authFacade.requireUserTypes(request,
+                    AuthFacade.USER_TYPE_ACADEMIC_ADMIN,
+                    AuthFacade.USER_TYPE_DEPARTMENT);
         }
 
         draftCacheManager.removeByClassName(className);
@@ -289,13 +292,13 @@ public class TeachInfoController {
     // ──────────────────────── 权限校验 ────────────────────────
 
     private List<DraftItem> resolveDraftsByRole(HttpServletRequest request) {
-        String userType = (String) request.getAttribute("userType");
+        String userType = authFacade.currentUserType(request);
 
-        if ("academic_admin".equals(userType)) {
+        if (AuthFacade.USER_TYPE_ACADEMIC_ADMIN.equals(userType)) {
             return draftCacheManager.getAllDrafts();
         }
 
-        if ("department".equals(userType)) {
+        if (AuthFacade.USER_TYPE_DEPARTMENT.equals(userType)) {
             Department dept = resolveDepartment(request);
             return draftCacheManager.getDraftsByCollege(dept.getDepartmentName());
         }
@@ -303,29 +306,8 @@ public class TeachInfoController {
         return List.of();
     }
 
-    /** 草稿写操作仅教务管理员和院系管理者可用。 */
-    private void checkDraftWritePermission(HttpServletRequest request) {
-        String userType = (String) request.getAttribute("userType");
-        if (!"academic_admin".equals(userType) && !"department".equals(userType)) {
-            throw new BusinessException(403, "无草稿箱操作权限");
-        }
-    }
-
-    /** 仅教务管理员可用。 */
-    private void checkAcademicAdmin(HttpServletRequest request) {
-        String userType = (String) request.getAttribute("userType");
-        if (!"academic_admin".equals(userType)) {
-            throw new BusinessException(403, "仅教务管理员可执行此操作");
-        }
-    }
-
     private Department resolveDepartment(HttpServletRequest request) {
-        Long userId = (Long) request.getAttribute("userId");
-        String userType = (String) request.getAttribute("userType");
-
-        if (!"department".equals(userType)) {
-            throw new BusinessException(403, "仅院系管理者可执行此操作");
-        }
+        Long userId = authFacade.requireDepartmentUserId(request);
 
         Department dept = departmentMapper.selectOne(
                 new LambdaQueryWrapper<Department>().eq(Department::getUserId, userId));
