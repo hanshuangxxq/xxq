@@ -1,6 +1,5 @@
 package com.xrq.xxq.module.user.controller;
 
-import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.common.Result;
 import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.clazz.service.ClassNameService;
@@ -9,6 +8,7 @@ import com.xrq.xxq.module.user.dto.UpdateStudentRequest;
 import com.xrq.xxq.module.mojor.entity.Major;
 import com.xrq.xxq.module.mojor.service.MajorService;
 import com.xrq.xxq.module.user.service.StudentService;
+import com.xrq.xxq.util.auth.AuthFacade;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -29,6 +29,7 @@ public class StudentController {
     private final StudentService studentService;
     private final ClassNameService classNameService;
     private final MajorService majorService;
+    private final AuthFacade authFacade;
 
 
     /**
@@ -42,7 +43,7 @@ public class StudentController {
                                          @RequestParam(required = false) String major,
                                          @RequestParam(required = false) Boolean unassigned,
                                          @RequestParam(required = false) String name) {
-        checkAcademicAdmin(request);
+        authFacade.requireAcademicAdmin(request);
 
         List<Long> classIds = Collections.emptyList();
         if (className != null && !className.isBlank()) {
@@ -75,14 +76,7 @@ public class StudentController {
     public Result<Boolean> update(HttpServletRequest request,
                                   @PathVariable Long id,
                                   @RequestBody UpdateStudentRequest updateRequest) {
-        checkAcademicAdmin(request);
+        authFacade.requireAcademicAdmin(request);
         return Result.ok(studentService.updateStudentInfo(id, updateRequest));
-    }
-
-    private void checkAcademicAdmin(HttpServletRequest request) {
-        String userType = (String) request.getAttribute("userType");
-        if (!"academic_admin".equals(userType)) {
-            throw new BusinessException(403, "仅教务管理员可操作学生数据");
-        }
     }
 }
