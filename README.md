@@ -140,9 +140,6 @@ accessToken 由登录接口返回，默认有效期 30 分钟。过期后调用�
 | GET | `/api/selection/groups/{groupId}` | 查询选课组详情 | 是 | 10.3.3 |
 | PUT | `/api/selection/groups/{groupId}` | 修改选课组 | 是 | 10.3.4 |
 | DELETE | `/api/selection/groups/{groupId}` | 删除选课组 | 是 | 10.3.5 |
-| GET | `/api/selection/campaigns/{campaignId}/groups` | 查询活动绑定的选课组 | 是 | 10.3.6 |
-| POST | `/api/selection/campaigns/{campaignId}/groups` | 绑定选课组到活动 | 是 | 10.3.7 |
-| DELETE | `/api/selection/campaigns/{campaignId}/groups/{groupId}` | 解绑选课组 | 是 | 10.3.8 |
 | POST | `/api/selection/campaigns/{campaignId}/courses` | 添加可选课程 | 是 | 10.4.1 |
 | GET | `/api/selection/campaigns/{campaignId}/courses` | 查询可选课程 | 是 | 10.4.2 |
 | DELETE | `/api/selection/campaigns/{campaignId}/courses/{courseId}` | 移除可选课程 | 是 | 10.4.3 |
@@ -2132,7 +2129,9 @@ Content-Type: application/json
 | semesterId | Long | 是 | 关联学期 ID |
 | startTime | LocalDateTime | 是 | 选课开始时间 |
 | endTime | LocalDateTime | 是 | 选课结束时间（需晚于 startTime） |
-| maxCoursesPerStudent | Integer | 否 | 每人最多选课门数，默认 1 |
+| startWeek | Integer | 否 | 排课起始周，默认 1 |
+| endWeek | Integer | 否 | 排课结束周，默认 16 |
+| groupId | Long | 否 | 选课组 ID；非空时在创建活动的同时绑定到该组 |
 
 **请求示例**
 
@@ -2142,7 +2141,9 @@ Content-Type: application/json
   "semesterId": 1,
   "startTime": "2026-09-01T08:00:00",
   "endTime": "2026-09-07T22:00:00",
-  "maxCoursesPerStudent": 3
+  "startWeek": 1,
+  "endWeek": 16,
+  "groupId": 1
 }
 ```
 
@@ -2157,9 +2158,11 @@ Content-Type: application/json
     "name": "2026秋季选课",
     "semesterId": 1,
     "semesterName": "2026-2027学年第一学期",
+    "courseId": 42,
+    "startWeek": 1,
+    "endWeek": 16,
     "startTime": "2026-09-01T08:00:00",
     "endTime": "2026-09-07T22:00:00",
-    "maxCoursesPerStudent": 3,
     "status": "DRAFT",
     "createTime": "2026-08-20T10:00:00",
     "selectedCourseCount": 0
@@ -2175,9 +2178,11 @@ Content-Type: application/json
 | name | String | 活动名称 |
 | semesterId | Long | 学期 ID |
 | semesterName | String | 学期名称（冗余） |
+| courseId | Long | 关联 course.id（衍生记录，source=SELECTION_CAMPAIGN） |
+| startWeek | Integer | 排课起始周 |
+| endWeek | Integer | 排课结束周 |
 | startTime | LocalDateTime | 选课开始时间 |
 | endTime | LocalDateTime | 选课结束时间 |
-| maxCoursesPerStudent | Integer | 每人最多选课门数 |
 | status | String | DRAFT / OPEN / CLOSED / FINALIZED |
 | createTime | LocalDateTime | 创建时间 |
 | selectedCourseCount | Integer | 已配置可选课程数 |
@@ -2188,6 +2193,8 @@ Content-Type: application/json
 |---------|
 | 学期不存在 |
 | 结束时间不能早于开始时间 |
+| 选课组不存在 |
+| 该活动已绑定其它选课组 |
 
 #### 10.2.2 查询全部活动
 
@@ -2235,7 +2242,9 @@ Content-Type: application/json
 | semesterId | Long | 否 | 学期 ID |
 | startTime | LocalDateTime | 否 | 选课开始时间 |
 | endTime | LocalDateTime | 否 | 选课结束时间 |
-| maxCoursesPerStudent | Integer | 否 | 每人最多选课门数 |
+| startWeek | Integer | 否 | 排课起始周 |
+| endWeek | Integer | 否 | 排课结束周 |
+| groupId | Long | 否 | 选课组 ID；非空且与当前绑定不同时触发换绑（要求 DRAFT 状态；原组内不得仍有课程） |
 
 **错误场景**
 
@@ -2245,6 +2254,8 @@ Content-Type: application/json
 | 仅草稿状态的活动可修改 |
 | 学期不存在 |
 | 结束时间不能早于开始时间 |
+| 选课组不存在 |
+| 原选课组内仍有课程，无法换绑 |
 
 #### 10.2.5 删除活动
 
@@ -2319,11 +2330,11 @@ Authorization: Bearer <accessToken>
 
 ### 10.3 选课组管理（教务管理员）
 
-选课组是独立实体，可被多个选课活动复用；但一个选课活动只能绑定一个选课组（该约束在服务层强制，不在数据库层加唯一约束）。每个选课组定义组内学生选课数上限（`maxCourses`），通过 `selection_campaign_group` 关联表与选课活动建立绑定关系。`sortOrder` 字段保留在关联表上以兼容历史数据，在一对一约束下不再具备业务含义。
+选课组是独立实体，可被多个选课活动复用；但一个选课活动只能绑定一个选课组（该约束在服务层强制，不在数据库层加唯一约束）。每个选课组定义组内学生选课数上限（`maxCourses`），通过 `selection_campaign_group` 关联表与选课活动建立绑定关系。
 
 > **组内选课上限的统计范围**：`maxCourses` 是组级别约束，**跨所有绑定该组的活动共用**——即一个学生在该组下、跨所有活动已选课程总数不能超过 `maxCourses`。不同选课组之间独立计数，互不影响。
 
-**典型流程**：教务管理员先通过 `/api/selection/groups` 创建/复用选课组，再通过 `/api/selection/campaigns/{campaignId}/groups` 把选课组绑定到具体活动，最后通过 `/api/selection/campaigns/{campaignId}/courses`（见 10.4）向已绑定的组添加可选课程。
+**典型流程**：教务管理员先通过 `/api/selection/groups` 创建/复用选课组，再通过 `/api/selection/campaigns`（POST 创建或 PUT 修改，携带 `groupId` 字段，见 10.2）把选课组绑定到具体活动，最后通过 `/api/selection/campaigns/{campaignId}/courses`（见 10.4）向已绑定的组添加可选课程。
 
 ```
 POST   /api/selection/groups                                   # 新建选课组
@@ -2331,13 +2342,11 @@ GET    /api/selection/groups                                   # 查询全部选
 GET    /api/selection/groups/{groupId}                         # 查询选课组详情
 PUT    /api/selection/groups/{groupId}                         # 修改选课组
 DELETE /api/selection/groups/{groupId}                         # 删除选课组（未绑定任何活动时）
-GET    /api/selection/campaigns/{campaignId}/groups            # 查询活动绑定的选课组
-POST   /api/selection/campaigns/{campaignId}/groups            # 绑定一个已存在的选课组
-DELETE /api/selection/campaigns/{campaignId}/groups/{groupId}  # 解绑选课组
+GET    /api/selection/groups/{groupId}/bindable-campaigns      # 查询可绑定到本组的活动
 Authorization: Bearer <accessToken>
 ```
 
-**权限**：全部接口仅 `academic_admin` 可调用，其他角色返回 403。绑定/解绑操作仅 DRAFT 状态活动可执行。
+**权限**：全部接口仅 `academic_admin` 可调用，其他角色返回 403。绑定/换绑通过 [10.2](#102-选课活动管理教务管理员) 的 create/update 接口完成，仅 DRAFT 状态活动可修改绑定。
 
 #### 10.3.1 新建选课组
 
@@ -2375,7 +2384,6 @@ Content-Type: application/json
     "maxCourses": 2,
     "courseCount": 0,
     "boundCampaignCount": 0,
-    "sortOrderInCampaign": null,
     "createTime": "2026-07-25T20:50:00"
   }
 }
@@ -2410,7 +2418,6 @@ Authorization: Bearer <accessToken>
       "maxCourses": 2,
       "courseCount": 5,
       "boundCampaignCount": 3,
-      "sortOrderInCampaign": null,
       "createTime": "2026-07-25T20:50:00"
     }
   ]
@@ -2479,124 +2486,14 @@ DELETE /api/selection/groups/{groupId}
 Authorization: Bearer <accessToken>
 ```
 
-**约束**：仅当该组未被任何活动绑定时可删除。已绑定的组需先从所有活动中解绑（[10.3.8](#1038-解绑选课组)）。
+**约束**：仅当该组未被任何活动绑定时可删除。已绑定的组需先在所有绑定该组的活动中清除 `groupId` 绑定（通过 [10.2.4](#1024-修改活动) 修改活动接口）。
 
 **错误场景**
 
 | message |
 |---------|
 | 选课组不存在 |
-| 请先从所有活动中解绑后再删除 |
-
-#### 10.3.6 查询活动绑定的选课组
-
-```
-GET /api/selection/campaigns/{campaignId}/groups
-Authorization: Bearer <accessToken>
-```
-
-返回该活动绑定的全部选课组，按关联表 `sortOrder` 升序、`groupId` 升序排列。每项含该活动内的课程数与组在该活动中的排序。
-
-**路径参数**
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| campaignId | Long | 是 | 活动 ID |
-
-**响应示例**
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": [
-    {
-      "id": 1,
-      "name": "公共选修课组",
-      "maxCourses": 2,
-      "courseCount": 3,
-      "boundCampaignCount": null,
-      "sortOrderInCampaign": 0,
-      "createTime": "2026-07-25T20:50:00"
-    }
-  ]
-}
-```
-
-> **字段语义**：`courseCount` 为该活动内、本组下的课程数；`sortOrderInCampaign` 为组在该活动中的排序；`boundCampaignCount` 在此接口下始终为 `null`。
-
-**错误场景**
-
-| message |
-|---------|
-| 选课活动不存在 |
-
-#### 10.3.7 绑定选课组到活动
-
-```
-POST /api/selection/campaigns/{campaignId}/groups
-Authorization: Bearer <accessToken>
-Content-Type: application/json
-```
-
-将一个已存在的选课组绑定到指定活动。一个选课活动只能绑定一个选课组（若活动已绑定其它组将返回 409）；同一选课组可被多个活动同时绑定。
-
-**路径参数**
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| campaignId | Long | 是 | 活动 ID（必须为 DRAFT 状态） |
-
-**请求体**
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| groupId | Long | 是 | 待绑定的选课组 ID |
-| sortOrder | Integer | 否 | 组在该活动中的排序，默认 0 |
-
-**请求示例**
-
-```json
-{
-  "groupId": 1,
-  "sortOrder": 0
-}
-```
-
-**错误场景**
-
-| message |
-|---------|
-| 选课活动不存在 |
-| 仅草稿状态可配置选课组 |
-| 选课组不存在 |
-| 该组已绑定到本活动 |
-| 该活动已绑定其它选课组 |
-
-#### 10.3.8 解绑选课组
-
-```
-DELETE /api/selection/campaigns/{campaignId}/groups/{groupId}
-Authorization: Bearer <accessToken>
-```
-
-将选课组从活动中解绑。仅 DRAFT 状态活动可解绑，且组内不得仍有可选课程（需先通过 [10.4.3](#1043-移除可选课程) 移除课程）。
-
-**路径参数**
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| campaignId | Long | 是 | 活动 ID |
-| groupId | Long | 是 | 选课组 ID |
-
-**错误场景**
-
-| message |
-|---------|
-| 选课活动不存在 |
-| 仅草稿状态可解绑选课组 |
-| 该组未绑定到本活动 |
-| 组内仍有课程，无法解绑 |
+| 请先从所有活动中清除选课组绑定后再删除 |
 
 **SelectionGroupResponse 字段说明**
 
@@ -2605,9 +2502,8 @@ Authorization: Bearer <accessToken>
 | id | Long | 选课组 ID |
 | name | String | 组名称 |
 | maxCourses | Integer | 本组学生最多选课门数 |
-| courseCount | Integer | 课程数（`listAll`/`getDetail` 为跨活动合计；`listByCampaign` 为该活动内计数） |
-| boundCampaignCount | Integer | 绑定的活动数（`listAll`/`getDetail` 填充；`listByCampaign` 为 `null`） |
-| sortOrderInCampaign | Integer | 组在该活动中的排序（仅 `listByCampaign` 填充；其他为 `null`） |
+| courseCount | Integer | 课程数（跨所有活动合计） |
+| boundCampaignCount | Integer | 绑定的活动数 |
 | createTime | LocalDateTime | 选课组创建时间 |
 
 ### 10.4 可选课程管理（教务管理员）
