@@ -1,5 +1,12 @@
 package com.xrq.xxq.module.user.service.impl;
 
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Service;
+
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
@@ -10,35 +17,31 @@ import com.xrq.xxq.module.user.dto.StudentDto;
 import com.xrq.xxq.module.user.dto.UpdateStudentRequest;
 import com.xrq.xxq.module.mojor.entity.Major;
 import com.xrq.xxq.module.user.entity.User;
+import com.xrq.xxq.module.user.entity.user.Grade;
 import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.mojor.mapper.MajorMapper;
+import com.xrq.xxq.module.user.mapper.GradeMapper;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.module.user.mapper.UserMapper;
 import com.xrq.xxq.module.user.service.StudentService;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
 
 /**
  * 学生服务实现，继承 MyBatis Plus ServiceImpl 提供通用 CRUD。
- *
- * @类名 StudentServiceImpl
- * @Date 2026/6/22
  */
 @Service
 @RequiredArgsConstructor
 public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> implements StudentService {
+
     private final StudentMapper studentMapper;
     private final UserMapper userMapper;
     private final ClassNameMapper classNameMapper;
     private final MajorMapper majorMapper;
+    private final GradeMapper gradeMapper;
 
     @Override
-    public List<StudentDto> queryStudents(String grade, List<Long> classIds, List<Long> majorIds, Boolean unassigned, String name) {
+    public List<StudentDto> queryStudents(Long gradeId, List<Long> classIds, List<Long> majorIds, Boolean unassigned, String name) {
         LambdaQueryWrapper<Student> wrapper = new LambdaQueryWrapper<>();
 
         if (name != null && !name.isBlank()) {
@@ -53,8 +56,8 @@ public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> impl
             wrapper.in(Student::getUserId, matchedUserIds);
         }
 
-        if (grade != null && !grade.isBlank()) {
-            wrapper.eq(Student::getGrade, grade);
+        if (gradeId != null) {
+            wrapper.eq(Student::getGradeId, gradeId);
         }
         if (classIds != null && !classIds.isEmpty()) {
             wrapper.in(Student::getClassId, classIds);
@@ -89,8 +92,19 @@ public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> impl
         Map<Long, String> majorNameMap = majorMapper.selectByIds(queriedMajorIds).stream()
                 .collect(Collectors.toMap(Major::getId, Major::getMajorName));
 
+        Set<Long> queriedGradeIds = students.stream()
+                .map(Student::getGradeId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, String> gradeNameMap = queriedGradeIds.isEmpty() ? Map.of()
+                : gradeMapper.selectByIds(queriedGradeIds).stream()
+                        .collect(Collectors.toMap(Grade::getId, Grade::getName));
+
         return students.stream()
-                .map(s -> toDto(s, userMap.get(s.getUserId()), classNameMap.get(s.getClassId()), majorNameMap.get(s.getMajorId())))
+                .map(s -> toDto(s, userMap.get(s.getUserId()),
+                        classNameMap.get(s.getClassId()),
+                        majorNameMap.get(s.getMajorId()),
+                        s.getGradeId() != null ? gradeNameMap.get(s.getGradeId()) : null))
                 .toList();
     }
 
@@ -123,6 +137,13 @@ public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> impl
             }
             wrapper.set(Student::getMajorId, major.getId());
         }
+        if (request.getGradeId() != null) {
+            Grade grade = gradeMapper.selectById(request.getGradeId());
+            if (grade == null) {
+                throw new BusinessException(404, "年级不存在: " + request.getGradeId());
+            }
+            wrapper.set(Student::getGradeId, request.getGradeId());
+        }
         if (request.getEnrollmentYear() != null) {
             wrapper.set(Student::getEnrollmentYear, request.getEnrollmentYear());
         }
@@ -130,11 +151,12 @@ public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> impl
         return studentMapper.update(null, wrapper) > 0;
     }
 
-    private StudentDto toDto(Student s, User u, String className, String majorName) {
+    private StudentDto toDto(Student s, User u, String className, String majorName, String gradeName) {
         StudentDto dto = new StudentDto();
         dto.setStudentId(s.getId());
         dto.setStudentNo(s.getStudentNo());
-        dto.setGrade(s.getGrade());
+        dto.setGradeId(s.getGradeId());
+        dto.setGradeName(gradeName);
         dto.setMajorName(majorName);
         dto.setClassName(className);
         dto.setEnrollmentYear(s.getEnrollmentYear());
