@@ -3,7 +3,7 @@ package com.xrq.xxq.module.user.service.login;
 import com.xrq.xxq.module.user.dto.ChangePasswordRequest;
 import com.xrq.xxq.module.user.dto.LoginRequest;
 import com.xrq.xxq.module.user.dto.RegisterRequest;
-import com.xrq.xxq.module.user.dto.UserSession;
+import com.xrq.xxq.util.auth.UserSession;
 
 /**
  * 唯一登录接口 —— 所有登录渠道的统一入口。
