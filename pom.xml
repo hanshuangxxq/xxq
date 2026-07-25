@@ -70,6 +70,12 @@
             <artifactId>commons-pool2</artifactId>
         </dependency>
 
+        <!-- 项目AOT启动 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-netty</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-aspectj</artifactId>
