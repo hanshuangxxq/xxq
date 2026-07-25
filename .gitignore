@@ -43,6 +43,7 @@ CLAUDE.md
 
 ### SQL ###
 *.sql
+**/sql/
 
 #### uploads ###
 uploads/
@@ -55,4 +56,3 @@ META-INF/
 
 docs/
 
-**/sql/
