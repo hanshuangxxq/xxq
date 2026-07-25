@@ -16,9 +16,11 @@ import com.xrq.xxq.module.selection.dto.SelectionCourseAddRequest;
 import com.xrq.xxq.module.selection.dto.SelectionCourseResponse;
 import com.xrq.xxq.module.selection.entity.CampaignStatusEnum;
 import com.xrq.xxq.module.selection.entity.SelectionCampaign;
+import com.xrq.xxq.module.selection.entity.SelectionCampaignGroup;
 import com.xrq.xxq.module.selection.entity.SelectionCourse;
 import com.xrq.xxq.module.selection.entity.SelectionCourseTimeRestriction;
 import com.xrq.xxq.module.selection.entity.SelectionGroup;
+import com.xrq.xxq.module.selection.mapper.SelectionCampaignGroupMapper;
 import com.xrq.xxq.module.selection.mapper.SelectionCampaignMapper;
 import com.xrq.xxq.module.selection.mapper.SelectionCourseMapper;
 import com.xrq.xxq.module.selection.mapper.SelectionCourseTimeRestrictionMapper;
@@ -37,6 +39,7 @@ public class SelectionCourseServiceImpl implements SelectionCourseService {
 
     private final SelectionCourseMapper selectionCourseMapper;
     private final SelectionGroupMapper selectionGroupMapper;
+    private final SelectionCampaignGroupMapper selectionCampaignGroupMapper;
     private final SelectionCourseTimeRestrictionMapper selectionCourseTimeRestrictionMapper;
     private final TimeRestrictionMapper timeRestrictionMapper;
     private final CourseMapper courseMapper;
@@ -53,8 +56,15 @@ public class SelectionCourseServiceImpl implements SelectionCourseService {
             throw new BusinessException(409, "仅草稿状态可配置可选课程");
         }
         SelectionGroup group = selectionGroupMapper.selectById(request.getGroupId());
-        if (group == null || !group.getCampaignId().equals(campaignId)) {
-            throw new BusinessException(400, "选课组不存在或不属于本活动");
+        if (group == null) {
+            throw new BusinessException(400, "选课组不存在");
+        }
+        Long boundCount = selectionCampaignGroupMapper.selectCount(
+                new LambdaQueryWrapper<SelectionCampaignGroup>()
+                        .eq(SelectionCampaignGroup::getCampaignId, campaignId)
+                        .eq(SelectionCampaignGroup::getGroupId, request.getGroupId()));
+        if (boundCount == 0) {
+            throw new BusinessException(400, "该组未绑定到本活动");
         }
         if (request.getCapacity() == null || request.getCapacity() <= 0) {
             throw new BusinessException(400, "容量必须大于0");
@@ -140,9 +150,7 @@ public class SelectionCourseServiceImpl implements SelectionCourseService {
         if (courses.isEmpty()) {
             return List.of();
         }
-        Map<Long, SelectionGroup> groupMap = selectionGroupMapper.selectList(
-                new LambdaQueryWrapper<SelectionGroup>().eq(SelectionGroup::getCampaignId, campaignId))
-                .stream().collect(Collectors.toMap(SelectionGroup::getId, g -> g));
+        Map<Long, SelectionGroup> groupMap = loadBoundGroupMap(campaignId);
         Map<Long, List<Long>> trMap = loadTimeRestrictions(courses.stream().map(SelectionCourse::getId).toList());
         return courses.stream()
                 .map(sc -> toResponse(sc, groupMap.get(sc.getGroupId()),
@@ -191,6 +199,18 @@ public class SelectionCourseServiceImpl implements SelectionCourseService {
         return rels.stream().collect(Collectors.groupingBy(
                 SelectionCourseTimeRestriction::getSelectionCourseId,
                 Collectors.mapping(SelectionCourseTimeRestriction::getTimeRestrictionId, Collectors.toList())));
+    }
+
+    private Map<Long, SelectionGroup> loadBoundGroupMap(Long campaignId) {
+        List<Long> boundGroupIds = selectionCampaignGroupMapper.selectList(
+                new LambdaQueryWrapper<SelectionCampaignGroup>()
+                        .eq(SelectionCampaignGroup::getCampaignId, campaignId))
+                .stream().map(SelectionCampaignGroup::getGroupId).toList();
+        if (boundGroupIds.isEmpty()) {
+            return Map.of();
+        }
+        return selectionGroupMapper.selectBatchIds(boundGroupIds).stream()
+                .collect(Collectors.toMap(SelectionGroup::getId, g -> g));
     }
 
     private SelectionCourseResponse toResponse(SelectionCourse sc, SelectionGroup group, List<Long> trIds) {
