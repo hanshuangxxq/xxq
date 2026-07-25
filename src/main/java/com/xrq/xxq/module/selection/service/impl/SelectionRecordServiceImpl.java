@@ -1,8 +1,10 @@
 package com.xrq.xxq.module.selection.service.impl;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -12,20 +14,25 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.xrq.xxq.common.BusinessException;
-import com.xrq.xxq.module.course.entity.Course;
-import com.xrq.xxq.module.course.mapper.CourseMapper;
 import com.xrq.xxq.module.selection.dto.SelectionCourseResponse;
 import com.xrq.xxq.module.selection.dto.SelectionRecordRequest;
 import com.xrq.xxq.module.selection.dto.SelectionRecordResponse;
+import com.xrq.xxq.module.selection.dto.StudentCourseGroupResponse;
 import com.xrq.xxq.module.selection.entity.CampaignStatusEnum;
 import com.xrq.xxq.module.selection.entity.RecordStatusEnum;
 import com.xrq.xxq.module.selection.entity.SelectionCampaign;
 import com.xrq.xxq.module.selection.entity.SelectionCourse;
+import com.xrq.xxq.module.selection.entity.SelectionCourseTimeRestriction;
+import com.xrq.xxq.module.selection.entity.SelectionGroup;
 import com.xrq.xxq.module.selection.entity.SelectionRecord;
 import com.xrq.xxq.module.selection.mapper.SelectionCourseMapper;
+import com.xrq.xxq.module.selection.mapper.SelectionCourseTimeRestrictionMapper;
+import com.xrq.xxq.module.selection.mapper.SelectionGroupMapper;
 import com.xrq.xxq.module.selection.mapper.SelectionRecordMapper;
 import com.xrq.xxq.module.selection.service.SelectionCampaignService;
 import com.xrq.xxq.module.selection.service.SelectionRecordService;
+import com.xrq.xxq.module.user.entity.user.Student;
+import com.xrq.xxq.module.user.mapper.StudentMapper;
 
 import lombok.RequiredArgsConstructor;
 
@@ -44,7 +51,9 @@ public class SelectionRecordServiceImpl implements SelectionRecordService {
 
     private final SelectionRecordMapper selectionRecordMapper;
     private final SelectionCourseMapper selectionCourseMapper;
-    private final CourseMapper courseMapper;
+    private final SelectionGroupMapper selectionGroupMapper;
+    private final SelectionCourseTimeRestrictionMapper selectionCourseTimeRestrictionMapper;
+    private final StudentMapper studentMapper;
     private final SelectionCampaignService campaignService;
     private final StringRedisTemplate redisTemplate;
 
@@ -64,30 +73,47 @@ public class SelectionRecordServiceImpl implements SelectionRecordService {
         }
 
         SelectionCourse sc = selectionCourseMapper.selectOne(new LambdaQueryWrapper<SelectionCourse>()
-                .eq(SelectionCourse::getCampaignId, request.getCampaignId())
-                .eq(SelectionCourse::getCourseId, request.getCourseId()));
+                .eq(SelectionCourse::getId, request.getSelectionCourseId())
+                .eq(SelectionCourse::getCampaignId, request.getCampaignId()));
         if (sc == null) {
             throw new BusinessException(404, "该课程不在可选列表中");
         }
 
-        Long selectedCount = selectionRecordMapper.selectCount(new LambdaQueryWrapper<SelectionRecord>()
+        Student student = studentMapper.selectOne(new LambdaQueryWrapper<Student>()
+                .eq(Student::getUserId, studentUserId));
+        if (student == null) {
+            throw new BusinessException(403, "学生信息不存在");
+        }
+        if (!isAllowed(sc, student.getGradeId(), student.getMajorId())) {
+            throw new BusinessException(409, "本课程不对您的年级或专业开放");
+        }
+
+        SelectionGroup group = selectionGroupMapper.selectById(sc.getGroupId());
+        if (group == null) {
+            throw new BusinessException(409, "该课程未归属任何选课组");
+        }
+        List<Long> groupSelectionCourseIds = selectionCourseMapper.selectList(new LambdaQueryWrapper<SelectionCourse>()
+                .eq(SelectionCourse::getGroupId, sc.getGroupId()))
+                .stream().map(SelectionCourse::getId).toList();
+        Long selectedInGroup = selectionRecordMapper.selectCount(new LambdaQueryWrapper<SelectionRecord>()
                 .eq(SelectionRecord::getCampaignId, request.getCampaignId())
                 .eq(SelectionRecord::getStudentId, studentUserId)
+                .in(SelectionRecord::getSelectionCourseId, groupSelectionCourseIds)
                 .eq(SelectionRecord::getStatus, RecordStatusEnum.SELECTED));
-        if (selectedCount >= campaign.getMaxCoursesPerStudent()) {
-            throw new BusinessException(409, "超过每人选课上限 " + campaign.getMaxCoursesPerStudent() + " 门");
+        if (selectedInGroup >= group.getMaxCourses()) {
+            throw new BusinessException(409, "超过本组选课上限 " + group.getMaxCourses() + " 门");
         }
 
         Long dupCount = selectionRecordMapper.selectCount(new LambdaQueryWrapper<SelectionRecord>()
                 .eq(SelectionRecord::getCampaignId, request.getCampaignId())
                 .eq(SelectionRecord::getStudentId, studentUserId)
-                .eq(SelectionRecord::getCourseId, request.getCourseId())
+                .eq(SelectionRecord::getSelectionCourseId, request.getSelectionCourseId())
                 .eq(SelectionRecord::getStatus, RecordStatusEnum.SELECTED));
         if (dupCount > 0) {
             throw new BusinessException(409, "已选该课程");
         }
 
-        String countKey = COUNT_KEY_PREFIX + request.getCampaignId() + ":" + request.getCourseId();
+        String countKey = COUNT_KEY_PREFIX + request.getCampaignId() + ":" + request.getSelectionCourseId();
         DefaultRedisScript<Long> script = new DefaultRedisScript<>(INCR_LUA, Long.class);
         Long result = redisTemplate.execute(script, List.of(countKey), String.valueOf(sc.getCapacity()));
         if (result == null || result == -1) {
@@ -98,11 +124,11 @@ public class SelectionRecordServiceImpl implements SelectionRecordService {
             SelectionRecord record = new SelectionRecord();
             record.setCampaignId(request.getCampaignId());
             record.setStudentId(studentUserId);
-            record.setCourseId(request.getCourseId());
+            record.setSelectionCourseId(request.getSelectionCourseId());
             record.setStatus(RecordStatusEnum.SELECTED);
             record.setSelectTime(LocalDateTime.now());
             selectionRecordMapper.insert(record);
-            return toResponse(record, courseMapper.selectById(request.getCourseId()));
+            return toResponse(record, sc);
         } catch (Exception e) {
             redisTemplate.opsForValue().decrement(countKey);
             throw e;
@@ -138,7 +164,7 @@ public class SelectionRecordServiceImpl implements SelectionRecordService {
         record.setDropTime(LocalDateTime.now());
         selectionRecordMapper.updateById(record);
 
-        String countKey = COUNT_KEY_PREFIX + record.getCampaignId() + ":" + record.getCourseId();
+        String countKey = COUNT_KEY_PREFIX + record.getCampaignId() + ":" + record.getSelectionCourseId();
         redisTemplate.opsForValue().decrement(countKey);
     }
 
@@ -152,75 +178,149 @@ public class SelectionRecordServiceImpl implements SelectionRecordService {
         if (records.isEmpty()) {
             return List.of();
         }
-        List<Long> courseIds = records.stream().map(SelectionRecord::getCourseId).distinct().toList();
-        Map<Long, Course> courseMap = courseMapper.selectByIds(courseIds).stream()
-                .collect(Collectors.toMap(Course::getId, c -> c));
+        List<Long> scIds = records.stream().map(SelectionRecord::getSelectionCourseId).distinct().toList();
+        Map<Long, SelectionCourse> scMap = selectionCourseMapper.selectByIds(scIds).stream()
+                .collect(Collectors.toMap(SelectionCourse::getId, c -> c));
         return records.stream()
-                .map(r -> toResponse(r, courseMap.get(r.getCourseId())))
+                .map(r -> toResponse(r, scMap.get(r.getSelectionCourseId())))
                 .toList();
     }
 
     @Override
-    public List<SelectionCourseResponse> listCampaignCoursesForStudent(Long campaignId, Long studentUserId) {
+    public List<StudentCourseGroupResponse> listCampaignCoursesForStudent(Long campaignId, Long studentUserId) {
         SelectionCampaign campaign = campaignService.getById(campaignId);
         if (campaign == null) {
             throw new BusinessException(404, "选课活动不存在");
         }
-        List<SelectionCourse> courses = selectionCourseMapper.selectList(
-                new LambdaQueryWrapper<SelectionCourse>().eq(SelectionCourse::getCampaignId, campaignId));
-        if (courses.isEmpty()) {
+        Student student = studentMapper.selectOne(new LambdaQueryWrapper<Student>()
+                .eq(Student::getUserId, studentUserId));
+        if (student == null) {
+            throw new BusinessException(403, "学生信息不存在");
+        }
+        Long myGradeId = student.getGradeId();
+        Long myMajorId = student.getMajorId();
+
+        List<SelectionGroup> groups = selectionGroupMapper.selectList(
+                new LambdaQueryWrapper<SelectionGroup>()
+                        .eq(SelectionGroup::getCampaignId, campaignId)
+                        .orderByAsc(SelectionGroup::getSortOrder)
+                        .orderByAsc(SelectionGroup::getId));
+        if (groups.isEmpty()) {
             return List.of();
         }
-        List<Long> courseIds = courses.stream().map(SelectionCourse::getCourseId).toList();
-        Map<Long, Course> courseMap = courseMapper.selectByIds(courseIds).stream()
-                .collect(Collectors.toMap(Course::getId, c -> c));
 
-        List<SelectionRecord> myRecords = selectionRecordMapper.selectList(
+        List<SelectionCourse> courses = selectionCourseMapper.selectList(
+                new LambdaQueryWrapper<SelectionCourse>().eq(SelectionCourse::getCampaignId, campaignId));
+        Map<Long, List<SelectionCourse>> coursesByGroup = courses.stream()
+                .collect(Collectors.groupingBy(SelectionCourse::getGroupId));
+
+        // 一次性加载所有 selection_course 的 TimeRestriction 关联
+        Map<Long, List<Long>> trMap = loadTimeRestrictions(courses.stream().map(SelectionCourse::getId).toList());
+
+        List<SelectionRecord> allRecords = selectionRecordMapper.selectList(
                 new LambdaQueryWrapper<SelectionRecord>()
                         .eq(SelectionRecord::getCampaignId, campaignId)
-                        .eq(SelectionRecord::getStudentId, studentUserId)
                         .eq(SelectionRecord::getStatus, RecordStatusEnum.SELECTED));
-        Map<Long, Long> mySelectedCourseIds = myRecords.stream()
-                .collect(Collectors.toMap(SelectionRecord::getCourseId, SelectionRecord::getId, (a, b) -> a));
+        Map<Long, Long> courseSelectedCount = allRecords.stream()
+                .collect(Collectors.groupingBy(SelectionRecord::getSelectionCourseId, Collectors.counting()));
+        Set<Long> mySelectedScIds = allRecords.stream()
+                .filter(r -> r.getStudentId().equals(studentUserId))
+                .map(SelectionRecord::getSelectionCourseId)
+                .collect(Collectors.toSet());
 
-        return courses.stream().map(sc -> {
-            Course course = courseMap.get(sc.getCourseId());
-            SelectionCourseResponse resp = new SelectionCourseResponse();
-            resp.setId(sc.getId());
-            resp.setCampaignId(sc.getCampaignId());
-            resp.setCourseId(sc.getCourseId());
-            resp.setCapacity(sc.getCapacity());
-            if (course != null) {
-                resp.setCourseName(course.getCourseName());
-                resp.setCourseCode(course.getCourseCode());
-                resp.setCredit(course.getCredit());
-                resp.setCourseType(course.getCourseType() != null ? course.getCourseType().getDescription() : null);
-            }
-            Long selectedCount = selectionRecordMapper.selectCount(new LambdaQueryWrapper<SelectionRecord>()
-                    .eq(SelectionRecord::getCampaignId, campaignId)
-                    .eq(SelectionRecord::getCourseId, sc.getCourseId())
-                    .eq(SelectionRecord::getStatus, RecordStatusEnum.SELECTED));
-            resp.setSelectedCount(selectedCount.intValue());
-            resp.setRemaining(Math.max(0, sc.getCapacity() - selectedCount.intValue()));
-            resp.setSelectedByMe(mySelectedCourseIds.containsKey(sc.getCourseId()));
-            return resp;
+        return groups.stream().map(g -> {
+            StudentCourseGroupResponse groupResp = new StudentCourseGroupResponse();
+            groupResp.setGroupId(g.getId());
+            groupResp.setGroupName(g.getName());
+            groupResp.setGroupMax(g.getMaxCourses());
+            List<SelectionCourse> groupCourses = coursesByGroup.getOrDefault(g.getId(), List.of()).stream()
+                    .filter(sc -> isAllowed(sc, myGradeId, myMajorId))
+                    .toList();
+            int selectedInGroup = (int) groupCourses.stream()
+                    .map(SelectionCourse::getId)
+                    .filter(mySelectedScIds::contains)
+                    .count();
+            groupResp.setSelectedInGroup(selectedInGroup);
+            groupResp.setCourses(groupCourses.stream().map(sc -> {
+                SelectionCourseResponse resp = new SelectionCourseResponse();
+                resp.setId(sc.getId());
+                resp.setCampaignId(sc.getCampaignId());
+                resp.setCourseId(sc.getCourseId());
+                resp.setCourseName(sc.getCourseName());
+                resp.setCourseCode(sc.getCourseCode());
+                resp.setCredit(sc.getCredit());
+                resp.setCourseHour(sc.getCourseHour());
+                resp.setDescription(sc.getDescription());
+                resp.setCourseType(sc.getCourseType() != null ? sc.getCourseType().getDescription() : null);
+                resp.setAllowedGradeIds(parseLongs(sc.getAllowedGradeIds()));
+                resp.setAllowedMajors(parseLongs(sc.getAllowedMajors()));
+                resp.setTimeRestrictionIds(trMap.getOrDefault(sc.getId(), List.of()));
+                resp.setGroupId(g.getId());
+                resp.setGroupName(g.getName());
+                resp.setCapacity(sc.getCapacity());
+                int cnt = courseSelectedCount.getOrDefault(sc.getId(), 0L).intValue();
+                resp.setSelectedCount(cnt);
+                resp.setRemaining(Math.max(0, sc.getCapacity() - cnt));
+                resp.setSelectedByMe(mySelectedScIds.contains(sc.getId()));
+                return resp;
+            }).toList());
+            return groupResp;
         }).toList();
     }
 
-    private SelectionRecordResponse toResponse(SelectionRecord record, Course course) {
+    private SelectionRecordResponse toResponse(SelectionRecord record, SelectionCourse sc) {
         SelectionRecordResponse resp = new SelectionRecordResponse();
         resp.setId(record.getId());
         resp.setCampaignId(record.getCampaignId());
-        resp.setCourseId(record.getCourseId());
+        resp.setSelectionCourseId(record.getSelectionCourseId());
         resp.setStatus(record.getStatus());
         resp.setSelectTime(record.getSelectTime());
         resp.setDropTime(record.getDropTime());
-        if (course != null) {
-            resp.setCourseName(course.getCourseName());
-            resp.setCourseCode(course.getCourseCode());
-            resp.setCredit(course.getCredit());
-            resp.setCourseType(course.getCourseType() != null ? course.getCourseType().getDescription() : null);
+        if (sc != null) {
+            resp.setCourseName(sc.getCourseName());
+            resp.setCourseCode(sc.getCourseCode());
+            resp.setCredit(sc.getCredit());
+            resp.setCourseType(sc.getCourseType() != null ? sc.getCourseType().getDescription() : null);
         }
         return resp;
+    }
+
+    private boolean isAllowed(SelectionCourse sc, Long studentGradeId, Long studentMajorId) {
+        List<Long> allowedGrades = parseLongs(sc.getAllowedGradeIds());
+        if (!allowedGrades.isEmpty()) {
+            if (studentGradeId == null || !allowedGrades.contains(studentGradeId)) {
+                return false;
+            }
+        }
+        List<Long> allowedMajors = parseLongs(sc.getAllowedMajors());
+        if (!allowedMajors.isEmpty()) {
+            if (studentMajorId == null || !allowedMajors.contains(studentMajorId)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private Map<Long, List<Long>> loadTimeRestrictions(List<Long> selectionCourseIds) {
+        if (selectionCourseIds.isEmpty()) {
+            return Map.of();
+        }
+        List<SelectionCourseTimeRestriction> rels = selectionCourseTimeRestrictionMapper.selectList(
+                new LambdaQueryWrapper<SelectionCourseTimeRestriction>()
+                        .in(SelectionCourseTimeRestriction::getSelectionCourseId, selectionCourseIds));
+        return rels.stream().collect(Collectors.groupingBy(
+                SelectionCourseTimeRestriction::getSelectionCourseId,
+                Collectors.mapping(SelectionCourseTimeRestriction::getTimeRestrictionId, Collectors.toList())));
+    }
+
+    private List<Long> parseLongs(String stored) {
+        if (stored == null || stored.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(stored.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .map(Long::valueOf)
+                .toList();
     }
 }
