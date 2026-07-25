@@ -18,6 +18,14 @@ public interface SelectionCampaignService extends IService<SelectionCampaign> {
 
     List<CampaignResponse> listAll();
 
+    /**
+     * 列出可绑定到指定选课组的选课活动。
+     * <p>
+     * 一个活动只能绑定一个选课组，因此返回结果排除已绑定到其它选课组的活动，
+     * 但保留未绑定任何组的活动以及已绑定到本组的活动（便于前端展示解绑入口）。
+     */
+    List<CampaignResponse> listBindableForGroup(Long groupId);
+
     void delete(Long id);
 
     void open(Long id);
