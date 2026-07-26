@@ -10,7 +10,6 @@ import lombok.Data;
 public class SelectionRecordResponse {
     private Long id;
     private Long campaignId;
-    private Long selectionCourseId;
     private String courseName;
     private String courseCode;
     private Integer credit;
