@@ -137,12 +137,13 @@ public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> impl
             }
             wrapper.set(Student::getMajorId, major.getId());
         }
-        if (request.getGradeId() != null) {
-            Grade grade = gradeMapper.selectById(request.getGradeId());
+        if (request.getGradeName() != null && !request.getGradeName().isBlank()) {
+            Grade grade = gradeMapper.selectOne(
+                    new LambdaQueryWrapper<Grade>().eq(Grade::getName, request.getGradeName()));
             if (grade == null) {
-                throw new BusinessException(404, "年级不存在: " + request.getGradeId());
+                throw new BusinessException(404, "年级不存在: " + request.getGradeName());
             }
-            wrapper.set(Student::getGradeId, request.getGradeId());
+            wrapper.set(Student::getGradeId, grade.getId());
         }
         if (request.getEnrollmentYear() != null) {
             wrapper.set(Student::getEnrollmentYear, request.getEnrollmentYear());
