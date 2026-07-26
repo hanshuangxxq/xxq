@@ -17,11 +17,10 @@ import com.xrq.xxq.module.selection.entity.RecordStatusEnum;
 import com.xrq.xxq.module.selection.entity.SelectionCampaign;
 import com.xrq.xxq.module.selection.entity.SelectionClass;
 import com.xrq.xxq.module.selection.entity.SelectionClassMember;
-import com.xrq.xxq.module.selection.entity.SelectionCourse;
 import com.xrq.xxq.module.selection.entity.SelectionRecord;
+import com.xrq.xxq.module.selection.mapper.SelectionCampaignMapper;
 import com.xrq.xxq.module.selection.mapper.SelectionClassMapper;
 import com.xrq.xxq.module.selection.mapper.SelectionClassMemberMapper;
-import com.xrq.xxq.module.selection.mapper.SelectionCourseMapper;
 import com.xrq.xxq.module.selection.mapper.SelectionRecordMapper;
 import com.xrq.xxq.module.selection.service.SelectionClassService;
 import com.xrq.xxq.module.teachinfo.entity.TeachInfo;
@@ -39,13 +38,12 @@ public class SelectionClassServiceImpl implements SelectionClassService {
 
     private final SelectionClassMapper selectionClassMapper;
     private final SelectionClassMemberMapper selectionClassMemberMapper;
-    private final SelectionCourseMapper selectionCourseMapper;
     private final SelectionRecordMapper selectionRecordMapper;
+    private final SelectionCampaignMapper selectionCampaignMapper;
     private final StudentMapper studentMapper;
     private final UserMapper userMapper;
     private final ClassNameMapper classNameMapper;
     private final TeachInfoMapper teachInfoMapper;
-    private final com.xrq.xxq.module.selection.mapper.SelectionCampaignMapper selectionCampaignMapper;
 
     @Override
     @Transactional
@@ -73,61 +71,55 @@ public class SelectionClassServiceImpl implements SelectionClassService {
                     .eq(SelectionClass::getCampaignId, campaignId));
         }
 
-        List<SelectionCourse> courses = selectionCourseMapper.selectList(
-                new LambdaQueryWrapper<SelectionCourse>().eq(SelectionCourse::getCampaignId, campaignId));
+        // 一个活动 = 一门课，按 selectTime 升序切班
+        List<SelectionRecord> records = selectionRecordMapper.selectList(
+                new LambdaQueryWrapper<SelectionRecord>()
+                        .eq(SelectionRecord::getCampaignId, campaignId)
+                        .eq(SelectionRecord::getStatus, RecordStatusEnum.SELECTED)
+                        .orderByAsc(SelectionRecord::getSelectTime));
+        if (records.isEmpty()) {
+            return;
+        }
 
-        for (SelectionCourse sc : courses) {
-            List<SelectionRecord> records = selectionRecordMapper.selectList(
-                    new LambdaQueryWrapper<SelectionRecord>()
-                            .eq(SelectionRecord::getCampaignId, campaignId)
-                            .eq(SelectionRecord::getSelectionCourseId, sc.getId())
-                            .eq(SelectionRecord::getStatus, RecordStatusEnum.SELECTED)
-                            .orderByAsc(SelectionRecord::getSelectTime));
-            if (records.isEmpty()) {
-                continue;
+        int capacity = campaign.getCapacity() == null || campaign.getCapacity() <= 0
+                ? Integer.MAX_VALUE : campaign.getCapacity();
+        int classNo = 1;
+        int idx = 0;
+        while (idx < records.size()) {
+            int end = Math.min(idx + capacity, records.size());
+            List<SelectionRecord> chunk = records.subList(idx, end);
+
+            // 1. 创建 teach_info 记录（courseId 用 campaign 衍生的 course.id）
+            TeachInfo ti = new TeachInfo();
+            ti.setCourseId(campaign.getCourseId());
+            ti.setTeacherId(null);
+            ti.setClassName(campaign.getName() + "-" + classNo);
+            ti.setTimeId(null);
+            ti.setLocalId(null);
+            ti.setDayOfWeek(null);
+            ti.setStartWeek(campaign.getStartWeek());
+            ti.setEndWeek(campaign.getEndWeek());
+            ti.setSemesterId(campaign.getSemesterId());
+            teachInfoMapper.insert(ti);
+
+            // 2. 创建 selection_class
+            SelectionClass selectionClass = new SelectionClass();
+            selectionClass.setCampaignId(campaignId);
+            selectionClass.setClassNo(classNo);
+            selectionClass.setStudentCount(chunk.size());
+            selectionClass.setTeachInfoId(ti.getId());
+            selectionClassMapper.insert(selectionClass);
+
+            for (SelectionRecord r : chunk) {
+                SelectionClassMember member = new SelectionClassMember();
+                member.setClassId(selectionClass.getId());
+                member.setStudentId(r.getStudentId());
+                member.setRecordId(r.getId());
+                selectionClassMemberMapper.insert(member);
             }
 
-            int capacity = sc.getCapacity() == null || sc.getCapacity() <= 0
-                    ? Integer.MAX_VALUE : sc.getCapacity();
-            int classNo = 1;
-            int idx = 0;
-            while (idx < records.size()) {
-                int end = Math.min(idx + capacity, records.size());
-                List<SelectionRecord> chunk = records.subList(idx, end);
-
-                // 1. 创建 teach_info 记录（courseId 用 selection_course 衍生的 course.id）
-                TeachInfo ti = new TeachInfo();
-                ti.setCourseId(sc.getCourseId());
-                ti.setTeacherId(null);
-                ti.setClassName(campaign.getName() + "-" + sc.getCourseName() + "-" + classNo);
-                ti.setTimeId(null);
-                ti.setLocalId(null);
-                ti.setDayOfWeek(null);
-                ti.setStartWeek(campaign.getStartWeek());
-                ti.setEndWeek(campaign.getEndWeek());
-                ti.setSemesterId(campaign.getSemesterId());
-                teachInfoMapper.insert(ti);
-
-                // 2. 创建 selection_class 并反向关联 teach_info
-                SelectionClass selectionClass = new SelectionClass();
-                selectionClass.setCampaignId(campaignId);
-                selectionClass.setSelectionCourseId(sc.getId());
-                selectionClass.setClassNo(classNo);
-                selectionClass.setStudentCount(chunk.size());
-                selectionClass.setTeachInfoId(ti.getId());
-                selectionClassMapper.insert(selectionClass);
-
-                for (SelectionRecord r : chunk) {
-                    SelectionClassMember member = new SelectionClassMember();
-                    member.setClassId(selectionClass.getId());
-                    member.setStudentId(r.getStudentId());
-                    member.setRecordId(r.getId());
-                    selectionClassMemberMapper.insert(member);
-                }
-
-                idx = end;
-                classNo++;
-            }
+            idx = end;
+            classNo++;
         }
     }
 
@@ -139,9 +131,8 @@ public class SelectionClassServiceImpl implements SelectionClassService {
             return List.of();
         }
 
-        List<Long> scIds = classes.stream().map(SelectionClass::getSelectionCourseId).distinct().toList();
-        Map<Long, SelectionCourse> scMap = selectionCourseMapper.selectByIds(scIds).stream()
-                .collect(Collectors.toMap(SelectionCourse::getId, c -> c));
+        SelectionCampaign campaign = selectionCampaignMapper.selectById(campaignId);
+        String courseName = campaign != null ? campaign.getName() : null;
 
         List<Long> classIds = classes.stream().map(SelectionClass::getId).toList();
         List<SelectionClassMember> allMembers = selectionClassMemberMapper.selectList(
@@ -165,9 +156,7 @@ public class SelectionClassServiceImpl implements SelectionClassService {
         return classes.stream().map(c -> {
             SelectionClassResponse resp = new SelectionClassResponse();
             resp.setClassId(c.getId());
-            resp.setSelectionCourseId(c.getSelectionCourseId());
-            SelectionCourse sc = scMap.get(c.getSelectionCourseId());
-            resp.setCourseName(sc != null ? sc.getCourseName() : null);
+            resp.setCourseName(courseName);
             resp.setClassNo(c.getClassNo());
             resp.setStudentCount(c.getStudentCount());
 
