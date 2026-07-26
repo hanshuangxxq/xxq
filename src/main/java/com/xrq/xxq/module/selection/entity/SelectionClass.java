@@ -14,7 +14,6 @@ public class SelectionClass {
     @TableId(type = IdType.AUTO)
     private Long id;
     private Long campaignId;
-    private Long selectionCourseId;
     private Integer classNo;
     private Integer studentCount;
     private Long teachInfoId;
