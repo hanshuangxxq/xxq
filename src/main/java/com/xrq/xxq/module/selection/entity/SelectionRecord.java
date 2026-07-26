@@ -17,7 +17,6 @@ public class SelectionRecord {
     private Long id;
     private Long campaignId;
     private Long studentId;
-    private Long selectionCourseId;
     private RecordStatusEnum status;
     private LocalDateTime selectTime;
     private LocalDateTime dropTime;
