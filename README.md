@@ -127,10 +127,10 @@ accessToken 由登录接口返回，默认有效期 30 分钟。过期后调用�
 | POST | `/api/semester` | 新增学期 | 是 | 9 |
 | PUT | `/api/semester/{id}` | 修改学期 | 是 | 9 |
 | DELETE | `/api/semester/{id}` | 删除学期 | 是 | 9 |
-| POST | `/api/selection/campaigns` | 新建选课活动 | 是 | 10.2.1 |
+| POST | `/api/selection/campaigns` | 新建选课活动（含课程字段） | 是 | 10.2.1 |
 | GET | `/api/selection/campaigns` | 查询全部选课活动 | 是 | 10.2.2 |
 | GET | `/api/selection/campaigns/{id}` | 查询选课活动详情 | 是 | 10.2.3 |
-| PUT | `/api/selection/campaigns/{id}` | 修改选课活动 | 是 | 10.2.4 |
+| PUT | `/api/selection/campaigns/{id}` | 修改选课活动（含课程字段） | 是 | 10.2.4 |
 | DELETE | `/api/selection/campaigns/{id}` | 删除选课活动 | 是 | 10.2.5 |
 | POST | `/api/selection/campaigns/{id}/open` | 开启选课 | 是 | 10.2.6 |
 | POST | `/api/selection/campaigns/{id}/close` | 关闭选课 | 是 | 10.2.7 |
@@ -140,15 +140,12 @@ accessToken 由登录接口返回，默认有效期 30 分钟。过期后调用�
 | GET | `/api/selection/groups/{groupId}` | 查询选课组详情 | 是 | 10.3.3 |
 | PUT | `/api/selection/groups/{groupId}` | 修改选课组 | 是 | 10.3.4 |
 | DELETE | `/api/selection/groups/{groupId}` | 删除选课组 | 是 | 10.3.5 |
-| POST | `/api/selection/campaigns/{campaignId}/courses` | 添加可选课程 | 是 | 10.4.1 |
-| GET | `/api/selection/campaigns/{campaignId}/courses` | 查询可选课程 | 是 | 10.4.2 |
-| DELETE | `/api/selection/campaigns/{campaignId}/courses/{courseId}` | 移除可选课程 | 是 | 10.4.3 |
-| GET | `/api/selection/campaigns/{campaignId}/classes` | 查询分班结果 | 是 | 10.5 |
-| GET | `/api/selection/student/campaigns` | 学生查询可选课活动 | 是 | 10.6.1 |
-| GET | `/api/selection/student/campaigns/{campaignId}/courses` | 学生查询可选课程 | 是 | 10.6.2 |
-| POST | `/api/selection/student/records` | 选课 | 是 | 10.6.3 |
-| DELETE | `/api/selection/student/records/{recordId}` | 退选 | 是 | 10.6.4 |
-| GET | `/api/selection/student/records` | 查询我的选课记录 | 是 | 10.6.5 |
+| GET | `/api/selection/campaigns/{campaignId}/classes` | 查询分班结果 | 是 | 10.4 |
+| GET | `/api/selection/student/campaigns` | 学生查询可选课活动 | 是 | 10.5.1 |
+| GET | `/api/selection/student/campaigns/{campaignId}` | 学生查询活动详情 | 是 | 10.5.2 |
+| POST | `/api/selection/student/records` | 选课 | 是 | 10.5.3 |
+| DELETE | `/api/selection/student/records/{recordId}` | 退选 | 是 | 10.5.4 |
+| GET | `/api/selection/student/records` | 查询我的选课记录 | 是 | 10.5.5 |
 
 ---
 
@@ -2058,7 +2055,9 @@ Authorization: Bearer <accessToken>
 
 ## 10. 选课模块
 
-学生选课采用"活动驱动"模式：教务管理员创建选课活动 -> 配置可选课程 -> 开放选课 -> 学生抢选 -> 关闭 -> 分班。选课容量通过 Redis + Lua 脚本原子控制，避免超选。
+学生选课采用"活动即课程"模式：教务管理员创建选课活动（同时录入课程信息）-> 绑定选课组 -> 开放选课 -> 学生抢选 -> 关闭 -> 分班。选课容量通过 Redis + Lua 脚本原子控制，避免超选。
+
+> **设计要点**：一个选课活动本身就是一门可选课程，`selection_campaign` 表直接携带课程字段（courseCode/credit/courseHour/description/courseType/allowedGradeIds/allowedMajors/capacity）。**活动名称 `name` 同时作为课程名称**（单一字段，不再单独存 courseName）。创建活动时自动在 `course` 表写一条衍生记录（`source=SELECTION_CAMPAIGN`，courseName = 活动名）供排课/teach_info 关联。不再有独立的 `selection_course` 表。
 
 ### 10.1 状态流转与角色权限
 
@@ -2070,7 +2069,7 @@ DRAFT --open()--> OPEN --close()--> CLOSED --finalize()--> FINALIZED
 
 | 状态 | 含义 | 允许的操作 |
 |------|------|-----------|
-| DRAFT | 草稿 | 修改活动、配置/移除可选课程、删除活动、开启 |
+| DRAFT | 草稿 | 修改活动（含课程字段）、绑定/解绑选课组、删除活动、开启 |
 | OPEN | 开放选课 | 学生选课/退选、关闭 |
 | CLOSED | 关闭 | 分班 |
 | FINALIZED | 已分班 | 终态，仅可查询分班结果 |
@@ -2081,11 +2080,11 @@ DRAFT --open()--> OPEN --close()--> CLOSED --finalize()--> FINALIZED
 
 | 角色 | 权限 |
 |------|------|
-| academic_admin | 增删改查选课组、绑定/解绑活动与选课组、增删改查活动、配置可选课程、开启/关闭/分班、查看分班结果 |
-| student | 查询 OPEN 活动、查询可选课程、选课/退选、查询本人选课记录 |
+| academic_admin | 增删改查选课组、绑定/解绑活动与选课组、增删改查活动（含课程字段）、开启/关闭/分班、查看分班结果 |
+| student | 查询 OPEN 活动（含课程信息）、选课/退选、查询本人选课记录 |
 | teacher / department | 无任何选课接口权限 |
 
-> 管理端接口（10.2 / 10.3 / 10.4 / 10.5）仅 `academic_admin` 可调用，其他角色返回 `403 仅教务管理员可...`；学生端接口（10.6）仅 `student` 可调用，其他角色返回 `403 仅学生可操作选课记录`。教师与院系管理者无法调用任何选课接口。
+> 管理端接口（10.2 / 10.3 / 10.4）仅 `academic_admin` 可调用；学生端接口（10.5）仅 `student` 可调用。教师与院系管理者无法调用任何选课接口。
 
 **Redis 容量控制**
 
@@ -2093,7 +2092,7 @@ DRAFT --open()--> OPEN --close()--> CLOSED --finalize()--> FINALIZED
 
 | 项目 | 说明 |
 |------|------|
-| Redis Key | `selection:count:{campaignId}:{courseId}` |
+| Redis Key | `selection:count:{campaignId}` |
 | 原子逻辑 | `INCR` 后若超过 capacity 则 `DECR` 并返回 -1；选课记录插入失败时回滚 `DECR` |
 | 生命周期 | 活动进入 CLOSED/FINALIZED 后键不再使用，未自动清理 |
 
@@ -2131,19 +2130,37 @@ Content-Type: application/json
 | endTime | LocalDateTime | 是 | 选课结束时间（需晚于 startTime） |
 | startWeek | Integer | 否 | 排课起始周，默认 1 |
 | endWeek | Integer | 否 | 排课结束周，默认 16 |
-| groupId | Long | 否 | 选课组 ID；非空时在创建活动的同时绑定到该组 |
+| groupId | Long | 否 | 选课组 ID；非空时在创建活动的同时绑定到该组（直接写入 campaign.group_id） |
+| courseCode | String | 是 | 课程编号（学期内唯一） |
+| credit | Integer | 是 | 学分（>= 0） |
+| courseHour | Integer | 否 | 课程学时 |
+| description | String | 否 | 课程描述 |
+| courseType | Integer | 否 | 课程类型: 1必修 2选修 3公选 4实践 |
+| allowedGradeIds | List\<Long\> | 否 | 允许的年级 ID 列表；空表示不限 |
+| allowedMajors | List\<Long\> | 否 | 允许的专业 ID 列表；空表示不限 |
+| timeRestrictionIds | List\<Long\> | 否 | RESERVED 类型时段限制 ID 列表（排课备选时段） |
+| capacity | Integer | 是 | 选课容量上限（必须 > 0） |
+
+> **说明**：`name` 字段同时作为活动名称与课程名称，无需额外传 `courseName`。
 
 **请求示例**
 
 ```json
 {
-  "name": "2026秋季选课",
+  "name": "2026秋季选课-高等数学",
   "semesterId": 1,
   "startTime": "2026-09-01T08:00:00",
   "endTime": "2026-09-07T22:00:00",
   "startWeek": 1,
   "endWeek": 16,
-  "groupId": 1
+  "groupId": 1,
+  "courseCode": "MATH101",
+  "credit": 4,
+  "courseHour": 64,
+  "courseType": 1,
+  "allowedGradeIds": [2024, 2025],
+  "allowedMajors": [1, 2],
+  "capacity": 30
 }
 ```
 
@@ -2155,7 +2172,7 @@ Content-Type: application/json
   "message": "success",
   "data": {
     "id": 1,
-    "name": "2026秋季选课",
+    "name": "2026秋季选课-高等数学",
     "semesterId": 1,
     "semesterName": "2026-2027学年第一学期",
     "courseId": 42,
@@ -2164,8 +2181,18 @@ Content-Type: application/json
     "startTime": "2026-09-01T08:00:00",
     "endTime": "2026-09-07T22:00:00",
     "status": "DRAFT",
-    "createTime": "2026-08-20T10:00:00",
-    "selectedCourseCount": 0
+    "courseCode": "MATH101",
+    "credit": 4,
+    "courseHour": 64,
+    "description": null,
+    "courseType": "必修",
+    "allowedGradeIds": [2024, 2025],
+    "allowedMajors": [1, 2],
+    "timeRestrictionIds": [],
+    "capacity": 30,
+    "groupId": 1,
+    "groupName": "公共选修课组",
+    "createTime": "2026-08-20T10:00:00"
   }
 }
 ```
@@ -2175,7 +2202,7 @@ Content-Type: application/json
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | id | Long | 活动 ID |
-| name | String | 活动名称 |
+| name | String | 活动名称（= 课程名称） |
 | semesterId | Long | 学期 ID |
 | semesterName | String | 学期名称（冗余） |
 | courseId | Long | 关联 course.id（衍生记录，source=SELECTION_CAMPAIGN） |
@@ -2184,8 +2211,19 @@ Content-Type: application/json
 | startTime | LocalDateTime | 选课开始时间 |
 | endTime | LocalDateTime | 选课结束时间 |
 | status | String | DRAFT / OPEN / CLOSED / FINALIZED |
+| courseCode | String | 课程编号 |
+| credit | Integer | 学分 |
+| courseHour | Integer | 课程学时 |
+| description | String | 课程描述 |
+| courseType | String | 课程类型描述（必修/选修/公选/实践） |
+| allowedGradeIds | List\<Long\> | 允许年级 ID 列表 |
+| allowedMajors | List\<Long\> | 允许专业 ID 列表 |
+| timeRestrictionIds | List\<Long\> | 绑定的时段限制 ID 列表 |
+| capacity | Integer | 容量上限 |
+| groupId | Long | 绑定的选课组 ID（未绑定为 null） |
+| groupName | String | 绑定的选课组名称（未绑定为 null） |
 | createTime | LocalDateTime | 创建时间 |
-| selectedCourseCount | Integer | 已配置可选课程数 |
+| boundGroupId | Long | 仅 `listBindableForGroup` 场景填充，标识当前活动是否已绑定到该组 |
 
 **错误场景**
 
@@ -2193,8 +2231,15 @@ Content-Type: application/json
 |---------|
 | 学期不存在 |
 | 结束时间不能早于开始时间 |
+| 活动名称不能为空 |
+| 课程编号不能为空 |
+| 学分必须 >= 0 |
+| 容量必须大于0 |
+| 该课程编号已在本学期中存在 |
 | 选课组不存在 |
-| 该活动已绑定其它选课组 |
+| 时段限制 {id} 不存在 |
+| 时段限制 {id} 必须为 RESERVED 类型 |
+| 时段限制 {id} 已预留给其他课程 |
 
 #### 10.2.2 查询全部活动
 
@@ -2238,13 +2283,23 @@ Content-Type: application/json
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| name | String | 否 | 活动名称 |
+| name | String | 否 | 活动名称（= 课程名称，变更时同步更新衍生 course.courseName） |
 | semesterId | Long | 否 | 学期 ID |
 | startTime | LocalDateTime | 否 | 选课开始时间 |
 | endTime | LocalDateTime | 否 | 选课结束时间 |
 | startWeek | Integer | 否 | 排课起始周 |
 | endWeek | Integer | 否 | 排课结束周 |
-| groupId | Long | 否 | 选课组 ID；非空且与当前绑定不同时触发换绑（要求 DRAFT 状态；原组内不得仍有课程） |
+| groupId | Long | 否 | 选课组 ID；非空且与当前绑定不同时触发换绑（要求 DRAFT 状态） |
+| unbindGroup | Boolean | 否 | 是否解绑当前选课组，默认 false。为 true 时清除 campaign.group_id（要求 DRAFT 状态）。与 groupId 互斥 |
+| courseCode | String | 否 | 课程编号（学期内唯一，同步更新衍生 course） |
+| credit | Integer | 否 | 学分 |
+| courseHour | Integer | 否 | 课程学时 |
+| description | String | 否 | 课程描述 |
+| courseType | Integer | 否 | 课程类型 |
+| allowedGradeIds | List\<Long\> | 否 | 允许年级 ID 列表 |
+| allowedMajors | List\<Long\> | 否 | 允许专业 ID 列表 |
+| timeRestrictionIds | List\<Long\> | 否 | 重绑时段限制（先清理旧关联与衍生 course 的 RESERVED 时段限制，再按新列表绑定） |
+| capacity | Integer | 否 | 容量上限（必须 > 0） |
 
 **错误场景**
 
@@ -2254,12 +2309,20 @@ Content-Type: application/json
 | 仅草稿状态的活动可修改 |
 | 学期不存在 |
 | 结束时间不能早于开始时间 |
+| 活动名称不能为空 |
+| 课程编号不能为空 |
+| 学分必须 >= 0 |
+| 容量必须大于0 |
+| 该课程编号已在本学期中存在 |
 | 选课组不存在 |
-| 原选课组内仍有课程，无法换绑 |
+| groupId 与 unbindGroup=true 不可同时传入 |
+| 时段限制 {id} 不存在 |
+| 时段限制 {id} 必须为 RESERVED 类型 |
+| 时段限制 {id} 已预留给其他课程 |
 
 #### 10.2.5 删除活动
 
-仅 DRAFT 状态可删除，级联删除活动下的可选课程记录。
+仅 DRAFT 状态可删除，级联清理：选课班成员 -> 选课班 -> 选课记录 -> 时段限制关联 -> 衍生 course 的 RESERVED 时段限制 -> 衍生 course -> 活动。
 
 ```
 DELETE /api/selection/campaigns/{id}
@@ -2282,12 +2345,17 @@ POST /api/selection/campaigns/{id}/open
 Authorization: Bearer <accessToken>
 ```
 
+> **校验**：开启前会检查 `name` / `courseCode` / `capacity` 必须有值，否则返回 400「活动名称不能为空」等错误。
+
 **错误场景**
 
 | message |
 |---------|
 | 选课活动不存在 |
 | 仅草稿状态的活动可开启 |
+| 活动名称不能为空 |
+| 课程编号不能为空 |
+| 容量必须大于0 |
 
 #### 10.2.7 关闭选课
 
@@ -2316,9 +2384,9 @@ Authorization: Bearer <accessToken>
 
 **分班规则**：
 
-- 每门课程独立分班
-- 按 `selectTime` 升序排列已选记录
-- 每班最多容纳 `selection_course.capacity` 名学生，超出则新建下一个班（classNo 从 1 递增）
+- 一个活动即一门课，按 `selectTime` 升序排列已选记录
+- 每班最多容纳 `selection_campaign.capacity` 名学生，超出则新建下一个班（classNo 从 1 递增）
+- 每个班对应一条 `teach_info`（courseId 指向衍生 course，className = `{活动名}-{classNo}`）
 - 已有分班数据会先清理后重建（幂等）
 
 **错误场景**
@@ -2330,11 +2398,11 @@ Authorization: Bearer <accessToken>
 
 ### 10.3 选课组管理（教务管理员）
 
-选课组是独立实体，可被多个选课活动复用；但一个选课活动只能绑定一个选课组（该约束在服务层强制，不在数据库层加唯一约束）。每个选课组定义组内学生选课数上限（`maxCourses`），通过 `selection_campaign_group` 关联表与选课活动建立绑定关系。
+选课组是独立实体，可被多个选课活动复用；一个选课活动只能绑定一个选课组（通过 `selection_campaign.group_id` 字段直接存储）。每个选课组定义组内学生选课数上限（`maxCourses`）。
 
 > **组内选课上限的统计范围**：`maxCourses` 是组级别约束，**跨所有绑定该组的活动共用**——即一个学生在该组下、跨所有活动已选课程总数不能超过 `maxCourses`。不同选课组之间独立计数，互不影响。
 
-**典型流程**：教务管理员先通过 `/api/selection/groups` 创建/复用选课组，再通过 `/api/selection/campaigns`（POST 创建或 PUT 修改，携带 `groupId` 字段，见 10.2）把选课组绑定到具体活动，最后通过 `/api/selection/campaigns/{campaignId}/courses`（见 10.4）向已绑定的组添加可选课程。
+**典型流程**：教务管理员先通过 `/api/selection/groups` 创建/复用选课组，再通过 `/api/selection/campaigns`（POST 创建或 PUT 修改，携带 `groupId` 字段，见 10.2）把选课组绑定到具体活动。
 
 ```
 POST   /api/selection/groups                                   # 新建选课组
@@ -2382,8 +2450,7 @@ Content-Type: application/json
     "id": 1,
     "name": "公共选修课组",
     "maxCourses": 2,
-    "courseCount": 0,
-    "boundCampaignCount": 0,
+    "campaignCount": 0,
     "createTime": "2026-07-25T20:50:00"
   }
 }
@@ -2403,7 +2470,7 @@ GET /api/selection/groups
 Authorization: Bearer <accessToken>
 ```
 
-返回系统中所有独立选课组，按 `id` 升序排列。每项含跨活动合计的课程数与绑定的活动数。
+返回系统中所有独立选课组，按 `id` 升序排列。每项含绑定到该组的选课活动数（一个活动即一门课程，故也是组内课程数）。
 
 **响应示例**
 
@@ -2416,8 +2483,7 @@ Authorization: Bearer <accessToken>
       "id": 1,
       "name": "公共选修课组",
       "maxCourses": 2,
-      "courseCount": 5,
-      "boundCampaignCount": 3,
+      "campaignCount": 3,
       "createTime": "2026-07-25T20:50:00"
     }
   ]
@@ -2437,7 +2503,7 @@ Authorization: Bearer <accessToken>
 |------|------|------|------|
 | groupId | Long | 是 | 选课组 ID |
 
-**响应字段**：同 [10.3.1](#1031-新建选课组) 响应，`courseCount` 与 `boundCampaignCount` 均填充。
+**响应字段**：同 [10.3.1](#1031-新建选课组) 响应，`campaignCount` 填充实际绑定活动数。
 
 **错误场景**
 
@@ -2486,14 +2552,14 @@ DELETE /api/selection/groups/{groupId}
 Authorization: Bearer <accessToken>
 ```
 
-**约束**：仅当该组未被任何活动绑定时可删除。已绑定的组需先在所有绑定该组的活动中清除 `groupId` 绑定（通过 [10.2.4](#1024-修改活动) 修改活动接口）。
+**约束**：仅当该组未被任何活动绑定时可删除。已绑定的组需先在所有绑定该组的活动中清除 `groupId` 绑定（通过 [10.2.4](#1024-修改活动) 修改活动接口，传入 `unbindGroup=true` 解绑，或换绑到其它组）。
 
 **错误场景**
 
 | message |
 |---------|
 | 选课组不存在 |
-| 请先从所有活动中清除选课组绑定后再删除 |
+| 请先清除绑定到本组的活动后再删除 |
 
 **SelectionGroupResponse 字段说明**
 
@@ -2502,149 +2568,10 @@ Authorization: Bearer <accessToken>
 | id | Long | 选课组 ID |
 | name | String | 组名称 |
 | maxCourses | Integer | 本组学生最多选课门数 |
-| courseCount | Integer | 课程数（跨所有活动合计） |
-| boundCampaignCount | Integer | 绑定的活动数 |
+| campaignCount | Integer | 绑定到该组的选课活动数（也是组内课程数，因为一个活动即一门课） |
 | createTime | LocalDateTime | 选课组创建时间 |
 
-### 10.4 可选课程管理（教务管理员）
-
-```
-POST   /api/selection/campaigns/{campaignId}/courses            # 添加可选课程
-GET    /api/selection/campaigns/{campaignId}/courses            # 查询可选课程列表
-DELETE /api/selection/campaigns/{campaignId}/courses/{courseId} # 移除可选课程
-Authorization: Bearer <accessToken>
-```
-
-**权限**：仅 `academic_admin` 可调用，其他角色返回 403；且仅 DRAFT 状态可配置。
-
-#### 10.4.1 添加可选课程
-
-```
-POST /api/selection/campaigns/{campaignId}/courses
-Authorization: Bearer <accessToken>
-Content-Type: application/json
-```
-
-**路径参数**
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| campaignId | Long | 是 | 活动 ID |
-
-**请求体**
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| courseId | Long | 是 | 课程 ID |
-| capacity | Integer | 是 | 选课容量上限（必须 > 0） |
-
-**请求示例**
-
-```json
-{
-  "courseId": 3,
-  "capacity": 30
-}
-```
-
-**响应示例**
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "id": 1,
-    "campaignId": 1,
-    "courseId": 3,
-    "capacity": 30
-  }
-}
-```
-
-**错误场景**
-
-| message |
-|---------|
-| 选课活动不存在 |
-| 仅草稿状态可配置可选课程 |
-| 课程不存在 |
-| 容量必须大于0 |
-| 该课程已在活动中 |
-
-#### 10.4.2 查询可选课程列表
-
-```
-GET /api/selection/campaigns/{campaignId}/courses
-Authorization: Bearer <accessToken>
-```
-
-返回活动下配置的全部可选课程。
-
-**响应示例**
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": [
-    {
-      "id": 1,
-      "campaignId": 1,
-      "courseId": 3,
-      "courseName": "高等数学",
-      "courseCode": "MATH101",
-      "credit": 4,
-      "courseType": "必修",
-      "capacity": 30,
-      "selectedCount": 0,
-      "remaining": 30,
-      "selectedByMe": false
-    }
-  ]
-}
-```
-
-> **说明**：管理端列表的 `selectedCount`/`remaining`/`selectedByMe` 为占位值（0/capacity/false），不反映实时选课统计。实时统计请使用学生端接口 [10.6.2](#1062-查询可选课程)。
-
-**SelectionCourseResponse 字段说明**
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | Long | selection_course 记录 ID |
-| campaignId | Long | 活动 ID |
-| courseId | Long | 课程 ID |
-| courseName | String | 课程名称 |
-| courseCode | String | 课程编号 |
-| credit | Integer | 学分 |
-| courseType | String | 课程类型描述（必修/选修/公选/实践） |
-| capacity | Integer | 容量上限 |
-| selectedCount | Integer | 已选人数（管理端列表为占位 0，学生端为实时值） |
-| remaining | Integer | 剩余容量（管理端为 capacity，学生端为实时值） |
-| selectedByMe | Boolean | 当前学生是否已选（管理端固定 false） |
-
-#### 10.4.3 移除可选课程
-
-```
-DELETE /api/selection/campaigns/{campaignId}/courses/{courseId}
-Authorization: Bearer <accessToken>
-```
-
-**路径参数**
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| campaignId | Long | 是 | 活动 ID |
-| courseId | Long | 是 | 课程 ID |
-
-**错误场景**
-
-| message |
-|---------|
-| 选课活动不存在 |
-| 仅草稿状态可移除可选课程 |
-
-### 10.5 分班结果查询（教务管理员）
+### 10.4 分班结果查询（教务管理员）
 
 ```
 GET /api/selection/campaigns/{campaignId}/classes
@@ -2662,7 +2589,6 @@ Authorization: Bearer <accessToken>
   "data": [
     {
       "classId": 1,
-      "courseId": 3,
       "courseName": "高等数学",
       "classNo": 1,
       "studentCount": 30,
@@ -2683,7 +2609,6 @@ Authorization: Bearer <accessToken>
     },
     {
       "classId": 2,
-      "courseId": 3,
       "courseName": "高等数学",
       "classNo": 2,
       "studentCount": 5,
@@ -2698,8 +2623,7 @@ Authorization: Bearer <accessToken>
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | classId | Long | 选课班 ID |
-| courseId | Long | 课程 ID |
-| courseName | String | 课程名称 |
+| courseName | String | 课程名称（来自 campaign.name） |
 | classNo | Integer | 班号（从 1 开始） |
 | studentCount | Integer | 班级人数 |
 | members | List\<StudentSelectionDto\> | 成员列表 |
@@ -2713,11 +2637,11 @@ Authorization: Bearer <accessToken>
 | studentNo | String | 学号 |
 | className | String | 班级名称 |
 
-### 10.6 学生选课
+### 10.5 学生选课
 
 ```
-GET    /api/selection/student/campaigns                        # 查询可选课活动（OPEN）
-GET    /api/selection/student/campaigns/{campaignId}/courses   # 查询可选课程（含实时容量/已选标记）
+GET    /api/selection/student/campaigns                        # 查询可选课活动（OPEN，含课程信息+组上下文+选课状态）
+GET    /api/selection/student/campaigns/{campaignId}           # 查询活动详情（含课程信息+组上下文+选课状态）
 POST   /api/selection/student/records                          # 选课
 DELETE /api/selection/student/records/{recordId}               # 退选
 GET    /api/selection/student/records?campaignId=<campaignId>  # 查询我的选课记录
@@ -2726,51 +2650,83 @@ Authorization: Bearer <accessToken>
 
 **权限**：全部接口仅 `student` 可调用，其他角色（含 academic_admin / teacher / department）返回 403。
 
-#### 10.6.1 查询可选课活动
+#### 10.5.1 查询可选课活动
 
 ```
 GET /api/selection/student/campaigns
 Authorization: Bearer <accessToken>
 ```
 
-返回当前处于 OPEN 状态的活动列表，每项字段同 [10.2.1](#1021-新建选课活动) 响应。
+返回当前处于 OPEN 状态的活动列表，每项为 `StudentCampaignResponse`（含课程信息、组上下文、实时选课统计、本人是否已选）。
 
-#### 10.6.2 查询可选课程
+#### 10.5.2 查询活动详情
 
 ```
-GET /api/selection/student/campaigns/{campaignId}/courses
+GET /api/selection/student/campaigns/{campaignId}
 Authorization: Bearer <accessToken>
 ```
 
-返回该活动下学生可选的全部课程，含实时已选人数、剩余容量、本人是否已选。
+返回单个活动详情，响应字段同 [10.5.1](#1051-查询可选课活动)。
 
-**响应示例**
+**响应示例（StudentCampaignResponse）**
 
 ```json
 {
   "code": 200,
   "message": "success",
-  "data": [
-    {
-      "id": 1,
-      "campaignId": 1,
-      "courseId": 3,
-      "courseName": "高等数学",
-      "courseCode": "MATH101",
-      "credit": 4,
-      "courseType": "必修",
-      "capacity": 30,
-      "selectedCount": 18,
-      "remaining": 12,
-      "selectedByMe": false
-    }
-  ]
+  "data": {
+    "id": 1,
+    "name": "2026秋季选课-高等数学",
+    "semesterId": 1,
+    "semesterName": "2026-2027学年第一学期",
+    "startWeek": 1,
+    "endWeek": 16,
+    "startTime": "2026-09-01T08:00:00",
+    "endTime": "2026-09-07T22:00:00",
+    "status": "OPEN",
+    "courseId": 42,
+    "courseCode": "MATH101",
+    "credit": 4,
+    "courseHour": 64,
+    "description": null,
+    "courseType": "必修",
+    "allowedGradeIds": [2024, 2025],
+    "allowedMajors": [1, 2],
+    "timeRestrictionIds": [],
+    "capacity": 30,
+    "groupId": 1,
+    "groupName": "公共选修课组",
+    "groupMax": 2,
+    "selectedInGroup": 1,
+    "selectedCount": 18,
+    "remaining": 12,
+    "selectedByMe": false
+  }
 }
 ```
 
-> 此接口的 `selectedCount`/`remaining`/`selectedByMe` 为实时值，与管理端列表不同。
+**StudentCampaignResponse 字段说明**
 
-#### 10.6.3 选课
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | Long | 活动 ID |
+| name | String | 活动名称（= 课程名称） |
+| semesterId / semesterName | Long / String | 学期信息 |
+| startWeek / endWeek | Integer | 排课周次 |
+| startTime / endTime | LocalDateTime | 选课时间窗口 |
+| status | String | 活动状态（学生端见到的应为 OPEN） |
+| courseId | Long | 衍生 course.id |
+| courseCode / credit / courseHour / description / courseType | - | 课程字段 |
+| allowedGradeIds / allowedMajors | List\<Long\> | 允许的年级/专业 ID 列表 |
+| timeRestrictionIds | List\<Long\> | 绑定的时段限制 ID |
+| capacity | Integer | 容量上限 |
+| groupId / groupName / groupMax | Long / String / Integer | 所属选课组信息 |
+| selectedInGroup | Integer | 学生当前在该组下已选课程数（跨活动合计） |
+| selectedCount | Integer | 该活动当前已选人数（实时） |
+| remaining | Integer | 剩余容量（实时） |
+| selectedByMe | Boolean | 当前学生是否已选该活动 |
+
+#### 10.5.3 选课
 
 ```
 POST /api/selection/student/records
@@ -2782,15 +2738,13 @@ Content-Type: application/json
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| campaignId | Long | 是 | 活动 ID |
-| courseId | Long | 是 | 课程 ID |
+| campaignId | Long | 是 | 活动 ID（一个活动即一门课） |
 
 **请求示例**
 
 ```json
 {
-  "campaignId": 1,
-  "courseId": 3
+  "campaignId": 1
 }
 ```
 
@@ -2803,7 +2757,6 @@ Content-Type: application/json
   "data": {
     "id": 101,
     "campaignId": 1,
-    "courseId": 3,
     "courseName": "高等数学",
     "courseCode": "MATH101",
     "credit": 4,
@@ -2821,8 +2774,7 @@ Content-Type: application/json
 |------|------|------|
 | id | Long | 选课记录 ID（退选时用作路径参数） |
 | campaignId | Long | 活动 ID |
-| courseId | Long | 课程 ID |
-| courseName | String | 课程名称 |
+| courseName | String | 课程名称（来自 campaign.name） |
 | courseCode | String | 课程编号 |
 | credit | Integer | 学分 |
 | courseType | String | 课程类型描述 |
@@ -2837,14 +2789,15 @@ Content-Type: application/json
 | 1. 活动存在 | 选课活动不存在 |
 | 2. 活动状态为 OPEN | 活动未开放 |
 | 3. 当前时间在选课时间窗口内 | 不在选课时间窗口内 |
-| 4. 课程在活动可选列表中 | 该课程不在可选列表中 |
-| 5. 未超过每人选课上限 | 超过每人选课上限 N 门 |
-| 6. 未重复选同一门课 | 已选该课程 |
-| 7. Redis 容量未满 | 课程已满 |
+| 4. 学生信息存在 | 学生信息不存在 |
+| 5. 年级/专业允许 | 本课程不对您的年级或专业开放 |
+| 6. 未超过组内选课上限 | 超过本组选课上限 N 门 |
+| 7. 未重复选同一活动 | 已选该课程 |
+| 8. Redis 容量未满 | 课程已满 |
 
 > 选课记录插入失败时（如数据库异常），会回滚 Redis 计数，保证一致性。
 
-#### 10.6.4 退选
+#### 10.5.4 退选
 
 ```
 DELETE /api/selection/student/records/{recordId}
@@ -2870,7 +2823,7 @@ Authorization: Bearer <accessToken>
 | 活动未开放，不可退选 |
 | 不在选课时间窗口内 |
 
-#### 10.6.5 查询我的选课记录
+#### 10.5.5 查询我的选课记录
 
 ```
 GET /api/selection/student/records?campaignId=<campaignId>
@@ -2883,7 +2836,7 @@ Authorization: Bearer <accessToken>
 |------|------|------|------|
 | campaignId | Long | 是 | 活动 ID |
 
-返回当前学生在指定活动下的全部选课记录（含已退选），按选课时间倒序排列，字段同 [10.6.3](#1063-选课) 响应。
+返回当前学生在指定活动下的全部选课记录（含已退选），按选课时间倒序排列，字段同 [10.5.3](#1053-选课) 响应。
 
 ---
 
