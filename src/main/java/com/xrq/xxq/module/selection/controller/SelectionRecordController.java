@@ -14,12 +14,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.xrq.xxq.common.Result;
-import com.xrq.xxq.module.selection.dto.CampaignResponse;
 import com.xrq.xxq.module.selection.dto.SelectionRecordRequest;
 import com.xrq.xxq.module.selection.dto.SelectionRecordResponse;
-import com.xrq.xxq.module.selection.dto.StudentCourseGroupResponse;
-import com.xrq.xxq.module.selection.entity.CampaignStatusEnum;
-import com.xrq.xxq.module.selection.service.SelectionCampaignService;
+import com.xrq.xxq.module.selection.dto.StudentCampaignResponse;
 import com.xrq.xxq.module.selection.service.SelectionRecordService;
 import com.xrq.xxq.util.auth.AuthFacade;
 
@@ -36,23 +33,19 @@ import lombok.RequiredArgsConstructor;
 public class SelectionRecordController {
 
     private final SelectionRecordService selectionRecordService;
-    private final SelectionCampaignService campaignService;
     private final AuthFacade authFacade;
 
     @GetMapping("/campaigns")
-    public Result<List<CampaignResponse>> listOpenCampaigns(HttpServletRequest request) {
-        authFacade.requireStudent(request);
-        List<CampaignResponse> open = campaignService.listAll().stream()
-                .filter(c -> c.getStatus() == CampaignStatusEnum.OPEN)
-                .toList();
-        return Result.ok(open);
+    public Result<List<StudentCampaignResponse>> listOpenCampaigns(HttpServletRequest request) {
+        Long studentUserId = authFacade.requireStudentUserId(request);
+        return Result.ok(selectionRecordService.listOpenCampaignsForStudent(studentUserId));
     }
 
-    @GetMapping("/campaigns/{campaignId}/courses")
-    public Result<List<StudentCourseGroupResponse>> listCourses(HttpServletRequest request,
-                                                                @PathVariable Long campaignId) {
+    @GetMapping("/campaigns/{campaignId}")
+    public Result<StudentCampaignResponse> getCampaign(HttpServletRequest request,
+                                                       @PathVariable Long campaignId) {
         Long studentUserId = authFacade.requireStudentUserId(request);
-        return Result.ok(selectionRecordService.listCampaignCoursesForStudent(campaignId, studentUserId));
+        return Result.ok(selectionRecordService.getCampaignForStudent(campaignId, studentUserId));
     }
 
     @PostMapping("/records")
