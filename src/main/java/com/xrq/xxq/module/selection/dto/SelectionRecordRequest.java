@@ -8,6 +8,4 @@ import lombok.Data;
 public class SelectionRecordRequest {
     @NonNull
     private Long campaignId;
-    @NonNull
-    private Long selectionCourseId;
 }
