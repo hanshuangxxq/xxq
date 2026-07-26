@@ -10,6 +10,6 @@ public class UpdateStudentRequest {
     private String studentNo;
     private String className;
     private String majorName;
-    private Long gradeId;
+    private String gradeName;
     private Integer enrollmentYear;
 }
