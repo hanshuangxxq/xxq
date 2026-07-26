@@ -7,7 +7,6 @@ import lombok.Data;
 @Data
 public class SelectionClassResponse {
     private Long classId;
-    private Long selectionCourseId;
     private String courseName;
     private Integer classNo;
     private Integer studentCount;
