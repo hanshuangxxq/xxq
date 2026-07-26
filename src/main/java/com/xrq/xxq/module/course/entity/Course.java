@@ -24,6 +24,6 @@ public class Course {
     private String description;         // 课程描述
     private Integer courseHour;         // 课程学时
     private CurseEnum courseType;       // 课程类型（例如：必修、选修、公选、实践等 ）
-    private String source;              // 来源：MANUAL/SELECTION_CAMPAIGN/SELECTION_COURSE
+    private String source;              // 来源：MANUAL/SELECTION_CAMPAIGN
 
 }
