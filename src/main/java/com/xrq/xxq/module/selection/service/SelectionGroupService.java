@@ -11,8 +11,8 @@ import com.xrq.xxq.module.selection.entity.SelectionGroup;
 /**
  * 选课组服务：管理独立的选课组实体。
  * <p>
- * 选课活动与选课组的绑定关系已合并到 {@link com.xrq.xxq.module.selection.service.SelectionCampaignService}
- * 的 create/update 接口中，本服务不再单独提供绑定管理方法。
+ * 选课活动与选课组的绑定关系通过 {@link com.xrq.xxq.module.selection.service.SelectionCampaignService}
+ * 的 create/update 接口携带 {@code groupId} 字段完成，本服务不再单独提供绑定管理方法。
  * <p>
  * 组内选课上限（{@code maxCourses}）跨所有绑定该组的活动共用：学生在该组下、跨所有活动
  * 已选课程总数不能超过 {@code maxCourses}。不同选课组之间独立计数。
