@@ -1,6 +1,6 @@
 package com.xrq.xxq.module.scheduling.constraint;
 
-import java.util.List;
+import java.util.Set;
 
 import ai.timefold.solver.core.api.score.HardSoftScore;
 import ai.timefold.solver.core.api.score.stream.Constraint;
@@ -8,7 +8,6 @@ import ai.timefold.solver.core.api.score.stream.ConstraintFactory;
 import ai.timefold.solver.core.api.score.stream.ConstraintProvider;
 import ai.timefold.solver.core.api.score.stream.Joiners;
 import com.xrq.xxq.module.scheduling.domain.Lesson;
-import com.xrq.xxq.module.scheduling.domain.StudentGroup;
 
 /**
  * 排课约束定义。
@@ -69,7 +68,7 @@ public class CourseScheduleConstraintProvider implements ConstraintProvider {
                 .join(Lesson.class,
                         Joiners.equal(Lesson::getTimeslot),
                         Joiners.lessThan(Lesson::getId))
-                .filter((l1, l2) -> sameSemester(l1, l2) && weeksOverlap(l1, l2) && sharesAnyStudentGroup(l1, l2))
+                .filter((l1, l2) -> sameSemester(l1, l2) && weeksOverlap(l1, l2) && sharesAnyStudent(l1, l2))
                 .penalize(HardSoftScore.ONE_HARD)
                 .asConstraint("Class conflict");
     }
@@ -94,30 +93,22 @@ public class CourseScheduleConstraintProvider implements ConstraintProvider {
         return factory.forEach(Lesson.class)
                 .filter(lesson -> lesson.getRoom().getCapacity() > 0
                         && lesson.getRoom().getCapacity() < Integer.MAX_VALUE)
-                .filter(lesson -> sumStudentCount(lesson) > lesson.getRoom().getCapacity())
+                .filter(lesson -> lesson.getStudentCount() > lesson.getRoom().getCapacity())
                 .penalize(HardSoftScore.ONE_HARD)
                 .asConstraint("Room capacity");
     }
 
-    private static int sumStudentCount(Lesson lesson) {
-        List<StudentGroup> groups = lesson.getStudentGroups();
-        if (groups == null || groups.isEmpty()) {
-            return 0;
-        }
-        return groups.stream().mapToInt(StudentGroup::getStudentCount).sum();
-    }
-
-    private static boolean sharesAnyStudentGroup(Lesson a, Lesson b) {
-        List<StudentGroup> groups = a.getStudentGroups();
-        if (groups == null || groups.isEmpty()) {
+    private static boolean sharesAnyStudent(Lesson a, Lesson b) {
+        Set<Long> aIds = a.getStudentIds();
+        if (aIds == null || aIds.isEmpty()) {
             return false;
         }
-        List<StudentGroup> otherGroups = b.getStudentGroups();
-        if (otherGroups == null || otherGroups.isEmpty()) {
+        Set<Long> bIds = b.getStudentIds();
+        if (bIds == null || bIds.isEmpty()) {
             return false;
         }
-        for (StudentGroup g : groups) {
-            if (otherGroups.contains(g)) {
+        for (Long id : aIds) {
+            if (bIds.contains(id)) {
                 return true;
             }
         }
