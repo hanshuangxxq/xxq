@@ -257,7 +257,31 @@ public class SelectionCampaignServiceImpl
         if (campaign.getStatus() != CampaignStatusEnum.DRAFT) {
             throw new BusinessException(409, "仅草稿状态的活动可删除");
         }
-        // 级联清理：选课班成员 -> 选课班 -> 选课记录 -> 时段限制关联 -> 时段限制(RESERVED) -> 衍生 course -> 活动
+        doCascadeDelete(campaign, true);
+    }
+
+    @Override
+    @Transactional
+    public void deleteByCourseId(Long courseId) {
+        if (courseId == null) {
+            return;
+        }
+        SelectionCampaign campaign = baseMapper.selectOne(
+                new LambdaQueryWrapper<SelectionCampaign>()
+                        .eq(SelectionCampaign::getCourseId, courseId));
+        if (campaign == null) {
+            return;
+        }
+        doCascadeDelete(campaign, false);
+    }
+
+    /**
+     * 级联清理：选课班成员 -> 选课班 -> 选课记录 -> 时段限制关联 -> 时段限制(RESERVED) -> 活动（-> 衍生 course）。
+     *
+     * @param deleteCourse 是否删除衍生 Course；delete() 传 true，deleteByCourseId() 传 false（由调用方删 Course）
+     */
+    private void doCascadeDelete(SelectionCampaign campaign, boolean deleteCourse) {
+        Long id = campaign.getId();
         List<SelectionClass> classes = selectionClassMapper.selectList(
                 new LambdaQueryWrapper<SelectionClass>().eq(SelectionClass::getCampaignId, id));
         if (!classes.isEmpty()) {
@@ -277,7 +301,7 @@ public class SelectionCampaignServiceImpl
         }
         Long campaignCourseId = campaign.getCourseId();
         removeById(id);
-        if (campaignCourseId != null) {
+        if (deleteCourse && campaignCourseId != null) {
             courseMapper.deleteById(campaignCourseId);
         }
     }
@@ -423,13 +447,13 @@ public class SelectionCampaignServiceImpl
         if (ids.isEmpty()) {
             return Map.of();
         }
-        return selectionGroupMapper.selectBatchIds(ids).stream()
+        return selectionGroupMapper.selectByIds(ids).stream()
                 .collect(Collectors.toMap(SelectionGroup::getId, SelectionGroup::getName));
     }
 
     private CampaignResponse toResponse(SelectionCampaign campaign, Semester semester, boolean loadGroup) {
         Map<Long, String> groupNameMap = loadGroup && campaign.getGroupId() != null
-                ? selectionGroupMapper.selectBatchIds(List.of(campaign.getGroupId())).stream()
+                ? selectionGroupMapper.selectByIds(List.of(campaign.getGroupId())).stream()
                         .collect(Collectors.toMap(SelectionGroup::getId, SelectionGroup::getName))
                 : Map.of();
         return toResponse(campaign, semester, groupNameMap);
