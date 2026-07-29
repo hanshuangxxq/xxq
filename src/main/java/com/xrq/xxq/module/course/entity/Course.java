@@ -16,6 +16,9 @@ import lombok.Data;
 @Data
 @TableName("course")
 public class Course {
+    public static final String SOURCE_MANUAL = "MANUAL";
+    public static final String SOURCE_SELECTION_CAMPAIGN = "SELECTION_CAMPAIGN";
+
     @TableId(type = IdType.AUTO)
     private Long id;                    // 主键ID
     private String courseName;          // 课程名称
