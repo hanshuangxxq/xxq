@@ -7,6 +7,7 @@ import io.jsonwebtoken.security.Keys;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.Date;
 
@@ -23,16 +24,16 @@ public class JwtUtils {
     }
 
     public String generateAccessToken(Long userId, String userType, String role, String tokenId) {
-        Date now = new Date();
-        Date expiration = new Date(now.getTime() + config.getAccessTokenExpiration().toMillis());
+        Instant now = Instant.now();
+        Instant expiration = now.plus(config.getAccessTokenExpiration());
 
         return Jwts.builder()
                 .subject(userId.toString())
                 .claim("userType", userType)
                 .claim("role", role)
                 .claim("tokenId", tokenId)
-                .issuedAt(now)
-                .expiration(expiration)
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(expiration))
                 .signWith(key)
                 .compact();
     }
