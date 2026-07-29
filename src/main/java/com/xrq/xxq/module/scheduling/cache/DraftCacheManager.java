@@ -228,6 +228,28 @@ public class DraftCacheManager {
         }
     }
 
+    /**
+     * 更新草稿中指定 TeachInfo 的任课教师（用于选课分班后补录教师）。
+     * 选课分班产生的草稿 id 与 TeachInfo.id 一一对应，按 id 精确匹配；
+     * 若草稿不存在（已被排课消费）则静默跳过。
+     */
+    public void updateTeacher(Long teachInfoId, Long newTeacherId, String newTeacherName) {
+        if (teachInfoId == null) {
+            return;
+        }
+        synchronized (drafts) {
+            for (DraftItem d : drafts) {
+                if (teachInfoId.equals(d.getId())) {
+                    d.setTeacherId(newTeacherId);
+                    d.setTeacherName(newTeacherName != null && !newTeacherName.isBlank()
+                            ? newTeacherName
+                            : "未知教师");
+                }
+            }
+        }
+        saveToRedis();
+    }
+
     /** 是否有草稿。 */
     public boolean isEmpty() {
         return drafts.isEmpty();
@@ -332,7 +354,7 @@ public class DraftCacheManager {
         if (courseIds.isEmpty()) {
             return Map.of();
         }
-        return courseMapper.selectBatchIds(courseIds).stream()
+        return courseMapper.selectByIds(courseIds).stream()
                 .collect(Collectors.toMap(Course::getId, Course::getCourseName, (a, b) -> a));
     }
 
@@ -345,14 +367,14 @@ public class DraftCacheManager {
             return Map.of();
         }
 
-        List<Teacher> teachers = teacherMapper.selectBatchIds(teacherIds);
+        List<Teacher> teachers = teacherMapper.selectByIds(teacherIds);
         Set<Long> userIds = teachers.stream()
                 .map(Teacher::getUserId)
                 .filter(id -> id != null)
                 .collect(Collectors.toSet());
         Map<Long, String> userIdToName = userIds.isEmpty()
                 ? Map.of()
-                : userMapper.selectBatchIds(userIds).stream()
+                : userMapper.selectByIds(userIds).stream()
                         .collect(Collectors.toMap(User::getId, User::getName, (a, b) -> a));
 
         return teachers.stream()
