@@ -11,6 +11,10 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.course.entity.Course;
 import com.xrq.xxq.module.semester.entity.Semester;
+import com.xrq.xxq.module.selection.entity.SelectionClass;
+import com.xrq.xxq.module.selection.entity.SelectionClassMember;
+import com.xrq.xxq.module.selection.mapper.SelectionClassMapper;
+import com.xrq.xxq.module.selection.mapper.SelectionClassMemberMapper;
 import com.xrq.xxq.module.teachinfo.entity.TeachInfo;
 import com.xrq.xxq.module.time.entity.Time;
 import com.xrq.xxq.module.time.entity.TimeRestriction;
@@ -22,6 +26,7 @@ import com.xrq.xxq.module.time.mapper.TimeMapper;
 import com.xrq.xxq.module.time.mapper.TimeRestrictionMapper;
 import com.xrq.xxq.module.semester.service.SemesterService;
 import com.xrq.xxq.module.teachinfo.service.TeachInfoService;
+import com.xrq.xxq.module.teachinfo.cache.ClassScheduleCacheManager;
 import com.xrq.xxq.module.scheduling.cache.DraftCacheManager;
 import com.xrq.xxq.module.scheduling.cache.DraftItem;
 import com.xrq.xxq.module.scheduling.domain.CourseSchedule;
@@ -68,6 +73,7 @@ public class SchedulingServiceImpl implements SchedulingService {
     private final TeachInfoService teachInfoService;
     private final SemesterService semesterService;
     private final DraftCacheManager draftCacheManager;
+    private final ClassScheduleCacheManager classScheduleCacheManager;
 
     private final TeachInfoMapper teachInfoMapper;
     private final TimeMapper timeMapper;
@@ -78,6 +84,8 @@ public class SchedulingServiceImpl implements SchedulingService {
     private final StudentMapper studentMapper;
     private final ClassNameMapper classNameMapper;
     private final TimeRestrictionMapper timeRestrictionMapper;
+    private final SelectionClassMapper selectionClassMapper;
+    private final SelectionClassMemberMapper selectionClassMemberMapper;
 
     private final Map<Long, CourseSchedule> solutionCache = new ConcurrentHashMap<>();
 
@@ -87,6 +95,9 @@ public class SchedulingServiceImpl implements SchedulingService {
         if (drafts.isEmpty()) {
             throw new BusinessException(400, "没有待排课的授课草稿");
         }
+
+        // 排课会改写 teach_info 的时段/教室，先清空课表缓存避免脏读
+        classScheduleCacheManager.clearAll();
 
         Semester semester;
         if (semesterId != null) {
@@ -115,6 +126,7 @@ public class SchedulingServiceImpl implements SchedulingService {
         }
 
         // 保存草稿并收集 DB 生成的 ID，确保后续查询一致
+        // 选课分班产生的草稿已入库（id 不为 null），用 updateById 避免主键冲突；新草稿用 save 分配 id
         List<TeachInfo> saved = new ArrayList<>();
         for (DraftItem draft : drafts) {
             TeachInfo ti = draft.toTeachInfo();
@@ -131,7 +143,11 @@ public class SchedulingServiceImpl implements SchedulingService {
                 throw new BusinessException(400,
                         "课程周次范围超出学期范围（" + semester.getStartWeek() + "-" + semester.getEndWeek() + "周）");
             }
-            teachInfoService.save(ti);
+            if (ti.getId() != null && teachInfoMapper.selectById(ti.getId()) != null) {
+                teachInfoService.updateById(ti);
+            } else {
+                teachInfoService.save(ti);
+            }
             saved.add(ti);
         }
         List<Long> savedIds = saved.stream().map(TeachInfo::getId).toList();
@@ -165,8 +181,12 @@ public class SchedulingServiceImpl implements SchedulingService {
 
         SolverStatus status = solverManager.getSolverStatus(scheduleId);
         if (status == SolverStatus.NOT_SOLVING) {
-            solution.setSolverStatus("FINISHED");
-            solutionManager.update(solution, SolutionUpdatePolicy.UPDATE_SCORE_ONLY);
+            // 首次检测到求解结束：更新分数、清空课表缓存（排课结果已写回 teach_info）
+            if (!"FINISHED".equals(solution.getSolverStatus())) {
+                solution.setSolverStatus("FINISHED");
+                solutionManager.update(solution, SolutionUpdatePolicy.UPDATE_SCORE_ONLY);
+                classScheduleCacheManager.clearAll();
+            }
             if (solution.getScore() != null && !solution.getScore().isFeasible()) {
                 throw new BusinessException(500, "无法完成排课：当前时间限制下无法为所有课程分配合适的时间段，请调整时间限制或减少课程数量");
             }
@@ -190,30 +210,6 @@ public class SchedulingServiceImpl implements SchedulingService {
         Map<String, StudentGroup> classGroups = buildStudentGroups(teachInfos);
         Map<Long, String> courseNames = loadCourseNames();
         Map<Long, String> teacherNames = loadTeacherNames();
-
-        CourseSchedule schedule = new CourseSchedule();
-        schedule.setId(scheduleId);
-        schedule.setTimeslotList(timeslots);
-        schedule.setRoomList(rooms);
-        schedule.setStudentGroupList(new ArrayList<>(classGroups.values()));
-        schedule.setLessonList(buildLessons(teachInfos, courseNames, teacherNames, classGroups, timeslots, rooms));
-        schedule.setSolverStatus("NOT_SOLVING");
-        return schedule;
-    }
-
-    /**
-     * 从草稿直接构建排课问题（草稿已含课程名和教师名，无需查库）。
-     */
-    private CourseSchedule buildProblemFromDrafts(Long scheduleId, List<DraftItem> drafts) {
-        List<TeachInfo> teachInfos = drafts.stream().map(DraftItem::toTeachInfo).toList();
-        List<Timeslot> timeslots = buildTimeslots();
-        List<Room> rooms = buildRooms();
-        Map<String, StudentGroup> classGroups = buildStudentGroups(teachInfos);
-
-        Map<Long, String> courseNames = drafts.stream()
-                .collect(Collectors.toMap(DraftItem::getCourseId, DraftItem::getCourseName, (a, b) -> a));
-        Map<Long, String> teacherNames = drafts.stream()
-                .collect(Collectors.toMap(DraftItem::getTeacherId, DraftItem::getTeacherName, (a, b) -> a));
 
         CourseSchedule schedule = new CourseSchedule();
         schedule.setId(scheduleId);
@@ -278,7 +274,8 @@ public class SchedulingServiceImpl implements SchedulingService {
 
     /**
      * 从授课草稿中提取所有唯一班级名称，构建 StudentGroup。
-     * 通过 student 表统计每个班级的学生人数，用于教室容量约束。
+     * 真实班级通过 student 表统计人数；选课班（className 在 class_name 表不存在）
+     * 通过 SelectionClass.teachInfoId 反查 studentCount，避免 count=0 导致容量约束失效。
      */
     private Map<String, StudentGroup> buildStudentGroups(List<TeachInfo> teachInfos) {
         Map<Long, Long> classStudentCount = studentMapper.selectList(null).stream()
@@ -296,6 +293,25 @@ public class SchedulingServiceImpl implements SchedulingService {
                         cn -> cn.getCollege() != null ? cn.getCollege() : "",
                         (a, b) -> a));
 
+        // 选课班：teachInfoId -> SelectionClass.studentCount
+        Map<Long, Integer> selectionClassStudentCount = selectionClassMapper.selectList(null).stream()
+                .filter(sc -> sc.getTeachInfoId() != null)
+                .collect(Collectors.toMap(
+                        SelectionClass::getTeachInfoId,
+                        sc -> sc.getStudentCount() != null ? sc.getStudentCount() : 0,
+                        (a, b) -> a));
+
+        // 选课班 className -> teachInfoId（选课班 className 是 "活动名-N"，唯一）
+        Map<String, Long> selectionClassNameToTeachInfoId = new HashMap<>();
+        for (TeachInfo ti : teachInfos) {
+            String name = ti.getClassName();
+            if (name == null || name.isBlank() || ti.getId() == null) continue;
+            String stripped = name.strip();
+            if (!classNameToClassId.containsKey(stripped)) {
+                selectionClassNameToTeachInfoId.putIfAbsent(stripped, ti.getId());
+            }
+        }
+
         Map<String, StudentGroup> groups = new LinkedHashMap<>();
         long id = 1;
         for (TeachInfo ti : teachInfos) {
@@ -305,9 +321,13 @@ public class SchedulingServiceImpl implements SchedulingService {
                 name = name.strip();
                 if (!name.isEmpty() && !groups.containsKey(name)) {
                     Long classId = classNameToClassId.get(name);
-                    int count = classId != null
-                            ? classStudentCount.getOrDefault(classId, 0L).intValue()
-                            : 0;
+                    int count;
+                    if (classId != null) {
+                        count = classStudentCount.getOrDefault(classId, 0L).intValue();
+                    } else {
+                        Long tiId = selectionClassNameToTeachInfoId.get(name);
+                        count = tiId != null ? selectionClassStudentCount.getOrDefault(tiId, 0) : 0;
+                    }
                     String college = classNameToCollege.getOrDefault(name, "");
                     groups.put(name, new StudentGroup(id++, name, college, count));
                 }
@@ -327,6 +347,29 @@ public class SchedulingServiceImpl implements SchedulingService {
                 .collect(Collectors.toMap(Timeslot::getId, t -> t, (a, b) -> a));
         Map<Long, Room> roomById = rooms.stream()
                 .collect(Collectors.toMap(Room::getId, r -> r, (a, b) -> a));
+
+        // 选课班数据：teachInfoId -> SelectionClass，selectionClassId -> 成员列表
+        Map<Long, SelectionClass> selectionClassByTeachInfoId = selectionClassMapper.selectList(null).stream()
+                .filter(sc -> sc.getTeachInfoId() != null)
+                .collect(Collectors.toMap(SelectionClass::getTeachInfoId, sc -> sc, (a, b) -> a));
+        List<Long> selectionClassIds = selectionClassByTeachInfoId.values().stream()
+                .map(SelectionClass::getId).toList();
+        Map<Long, List<SelectionClassMember>> membersBySelectionClassId =
+                selectionClassIds.isEmpty() ? Map.of()
+                        : selectionClassMemberMapper.selectList(
+                                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<SelectionClassMember>()
+                                        .in(SelectionClassMember::getClassId, selectionClassIds))
+                                .stream()
+                                .collect(Collectors.groupingBy(SelectionClassMember::getClassId));
+
+        // 真实班级数据：classId -> List<userId>，className -> classId
+        Map<Long, List<Long>> classIdToStudentUserIds = studentMapper.selectList(null).stream()
+                .filter(s -> s.getClassId() != null && s.getUserId() != null)
+                .collect(Collectors.groupingBy(
+                        Student::getClassId,
+                        Collectors.mapping(Student::getUserId, Collectors.toList())));
+        Map<String, Long> classNameToClassId = classNameMapper.selectList(null).stream()
+                .collect(Collectors.toMap(ClassName::getClassName, ClassName::getId, (a, b) -> a));
 
         List<Lesson> lessons = new ArrayList<>(teachInfos.size());
         for (TeachInfo ti : teachInfos) {
@@ -350,6 +393,34 @@ public class SchedulingServiceImpl implements SchedulingService {
                 }
             }
 
+            // studentIds：选课班取成员 userId；必修课/合班取班级学生 userId
+            Set<Long> studentIds = new LinkedHashSet<>();
+            int studentCount;
+            SelectionClass selectionClass = selectionClassByTeachInfoId.get(ti.getId());
+            if (selectionClass != null) {
+                List<SelectionClassMember> members = membersBySelectionClassId.getOrDefault(
+                        selectionClass.getId(), List.of());
+                for (SelectionClassMember m : members) {
+                    if (m.getStudentId() != null) {
+                        studentIds.add(m.getStudentId());
+                    }
+                }
+                studentCount = selectionClass.getStudentCount() != null ? selectionClass.getStudentCount() : 0;
+            } else {
+                if (raw != null && !raw.isBlank()) {
+                    for (String name : raw.split(",")) {
+                        String stripped = name.strip();
+                        if (stripped.isEmpty()) continue;
+                        Long classId = classNameToClassId.get(stripped);
+                        if (classId != null) {
+                            List<Long> userIds = classIdToStudentUserIds.getOrDefault(classId, List.of());
+                            studentIds.addAll(userIds);
+                        }
+                    }
+                }
+                studentCount = groups.stream().mapToInt(StudentGroup::getStudentCount).sum();
+            }
+
             lessons.add(new Lesson(
                     ti.getId(),
                     ti.getCourseId(),
@@ -357,6 +428,8 @@ public class SchedulingServiceImpl implements SchedulingService {
                     ti.getTeacherId(),
                     teacherNames.getOrDefault(ti.getTeacherId(), "未知教师"),
                     groups,
+                    studentIds,
+                    studentCount,
                     ti.getStartWeek(),
                     ti.getEndWeek(),
                     ti.getSemesterId(),
