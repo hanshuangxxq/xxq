@@ -1,8 +1,10 @@
 package com.xrq.xxq.module.scheduling.domain;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 import ai.timefold.solver.core.api.domain.entity.PlanningEntity;
 import ai.timefold.solver.core.api.domain.common.PlanningId;
@@ -46,6 +48,12 @@ public class Lesson {
 
     /** 上课学生所属的班级集合（支持合班/重修场景，一个课堂可能有多个班级的学生） */
     private List<StudentGroup> studentGroups = new ArrayList<>();
+
+    /** 上课学生的 userId 集合（用于精确的学生维度冲突检测，覆盖选课班跨班级场景） */
+    private Set<Long> studentIds = new HashSet<>();
+
+    /** 课堂实际学生人数（用于教室容量约束；选课班取 SelectionClass.studentCount，避免 sum 误算） */
+    private int studentCount;
 
     /** 起始教学周 */
     private Integer startWeek;
