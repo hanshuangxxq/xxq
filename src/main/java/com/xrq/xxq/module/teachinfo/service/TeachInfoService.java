@@ -17,5 +17,5 @@ public interface TeachInfoService extends IService<TeachInfo> {
 
     List<ClassCourseDto> listClassCourses(Long userId);
 
-    WeekScheduleDto getWeekSchedule(String className, Integer week);
+    WeekScheduleDto getWeekSchedule(Long userId, Integer week);
 }
