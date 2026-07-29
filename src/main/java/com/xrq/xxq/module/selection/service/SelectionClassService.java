@@ -11,4 +11,10 @@ public interface SelectionClassService {
 
     /** 查询分班结果。 */
     List<SelectionClassResponse> listByCampaign(Long campaignId);
+
+    /**
+     * 为指定选课班分配（或取消分配）任课教师。
+     * teacherId 为 null 表示取消已分配的教师。
+     */
+    SelectionClassResponse assignTeacher(Long campaignId, Long classId, Long teacherId);
 }
