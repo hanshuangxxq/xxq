@@ -28,6 +28,13 @@ public interface SelectionCampaignService extends IService<SelectionCampaign> {
 
     void delete(Long id);
 
+    /**
+     * 按 courseId 级联删除对应的选课活动。
+     * 用于删除 course 表记录时联动清理：不校验 DRAFT 状态，不删除衍生 Course（由调用方删除）。
+     * 若无对应活动，静默返回。
+     */
+    void deleteByCourseId(Long courseId);
+
     void open(Long id);
 
     void close(Long id);
