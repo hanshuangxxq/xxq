@@ -10,6 +10,10 @@ import com.xrq.xxq.module.course.dto.WeekScheduleDto;
 import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.course.entity.Course;
 import com.xrq.xxq.module.local.entity.Local;
+import com.xrq.xxq.module.selection.entity.SelectionClass;
+import com.xrq.xxq.module.selection.entity.SelectionClassMember;
+import com.xrq.xxq.module.selection.mapper.SelectionClassMapper;
+import com.xrq.xxq.module.selection.mapper.SelectionClassMemberMapper;
 import com.xrq.xxq.module.semester.entity.Semester;
 import com.xrq.xxq.module.teachinfo.entity.TeachInfo;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
@@ -34,6 +38,7 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static java.util.function.Function.identity;
@@ -52,6 +57,8 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
     private final LocalMapper localMapper;
     private final ClassScheduleCacheManager cacheManager;
     private final SemesterService semesterService;
+    private final SelectionClassMapper selectionClassMapper;
+    private final SelectionClassMemberMapper selectionClassMemberMapper;
 
     @Override
     public CourseDto getDetailById(Long id, Long userId, String userType) {
@@ -130,21 +137,10 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
     }
 
     @Override
-    public WeekScheduleDto getWeekSchedule(String className, Integer week) {
-        List<CourseDto> cached = cacheManager.get(className, week);
-        if (cached != null) {
-            return buildWeekSchedule(week, mondayOfWeek(week), cached);
-        }
-
-        List<TeachInfo> list = teachInfoMapper.selectList(
-                new LambdaQueryWrapper<TeachInfo>()
-                        .apply("FIND_IN_SET({0}, class_name) > 0", className)
-                        .le(TeachInfo::getStartWeek, week)
-                        .ge(TeachInfo::getEndWeek, week));
-
-        List<CourseDto> courses = assembleDto(list, "student");
-        cacheManager.put(className, week, courses);
-        return buildWeekSchedule(week, mondayOfWeek(week), courses);
+    public WeekScheduleDto getWeekSchedule(Long userId, Integer week) {
+        // 复用 listByUserScope 的查询逻辑（已合并选课班课程），按周次过滤后按星期分组
+        UserCourseDto userCourse = listByUserScope(userId, "student", null, null, week);
+        return buildWeekSchedule(week, userCourse.getMondayDate(), userCourse.getCourses());
     }
 
     // ── 增/改/删时淘汰相关缓存 ──
@@ -212,7 +208,15 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
                 if (cls == null) {
                     return null;
                 }
-                wrapper.apply("FIND_IN_SET({0}, class_name) > 0", cls.getClassName());
+                // 学生加入的选课班对应的 teachInfoId（选课班 className 是虚拟名，FIND_IN_SET 查不到）
+                List<Long> selectionTeachInfoIds = listSelectionTeachInfoIds(userId);
+                if (selectionTeachInfoIds.isEmpty()) {
+                    wrapper.apply("FIND_IN_SET({0}, class_name) > 0", cls.getClassName());
+                } else {
+                    wrapper.and(w -> w
+                            .apply("FIND_IN_SET({0}, class_name) > 0", cls.getClassName())
+                            .or().in(TeachInfo::getId, selectionTeachInfoIds));
+                }
             }
             case "teacher" -> {
                 Teacher teacher = teacherMapper.selectOne(
@@ -263,6 +267,27 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
         }
         scope.eq(TeachInfo::getId, info.getId());
         return teachInfoMapper.selectCount(scope) > 0;
+    }
+
+    /** 查询学生加入的选课班对应的 teachInfoId 列表。 */
+    private List<Long> listSelectionTeachInfoIds(Long studentUserId) {
+        List<SelectionClassMember> members = selectionClassMemberMapper.selectList(
+                new LambdaQueryWrapper<SelectionClassMember>()
+                        .eq(SelectionClassMember::getStudentId, studentUserId));
+        if (members.isEmpty()) {
+            return List.of();
+        }
+        List<Long> selectionClassIds = members.stream()
+                .map(SelectionClassMember::getClassId)
+                .distinct()
+                .toList();
+        return selectionClassMapper.selectList(
+                        new LambdaQueryWrapper<SelectionClass>()
+                                .in(SelectionClass::getId, selectionClassIds))
+                .stream()
+                .map(SelectionClass::getTeachInfoId)
+                .filter(Objects::nonNull)
+                .toList();
     }
 
     private List<CourseDto> assembleDto(List<TeachInfo> list, String userType) {
