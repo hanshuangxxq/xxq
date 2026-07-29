@@ -80,24 +80,12 @@ public class TeachInfoController {
         return Result.ok(teachInfoService.listClassCourses(userId));
     }
 
-    /** 学生查询指定周次的班级课表（走 Redis 缓存）。 */
+    /** 学生查询指定周次的个人课表（含必修课 + 选课班，走 Redis 缓存）。 */
     @GetMapping("/week-schedule")
     public Result<WeekScheduleDto> getWeekSchedule(HttpServletRequest request,
                                                     @RequestParam Integer week) {
         Long userId = authFacade.requireStudentUserId(request);
-
-        Student student = studentMapper.selectOne(
-                new LambdaQueryWrapper<Student>().eq(Student::getUserId, userId));
-        if (student == null || student.getClassId() == null) {
-            return Result.fail(404, "未找到您的班级信息");
-        }
-
-        ClassName cls = classNameMapper.selectById(student.getClassId());
-        if (cls == null) {
-            return Result.fail(404, "未找到您的班级信息");
-        }
-
-        return Result.ok(teachInfoService.getWeekSchedule(cls.getClassName(), week));
+        return Result.ok(teachInfoService.getWeekSchedule(userId, week));
     }
 
     /** 新增授课安排。合班时 className 用逗号分隔：如 "计科2201,计科2101"。 */
