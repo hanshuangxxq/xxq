@@ -10,5 +10,7 @@ public class SelectionClassResponse {
     private String courseName;
     private Integer classNo;
     private Integer studentCount;
+    private Long teacherId;
+    private String teacherName;
     private List<StudentSelectionDto> members;
 }
