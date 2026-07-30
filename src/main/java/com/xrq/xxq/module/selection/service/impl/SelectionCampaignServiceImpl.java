@@ -36,8 +36,16 @@ import com.xrq.xxq.module.selection.service.SelectionClassService;
 import com.xrq.xxq.module.time.entity.TimeRestriction;
 import com.xrq.xxq.module.time.mapper.TimeRestrictionMapper;
 
-import lombok.RequiredArgsConstructor;
+import java.time.format.DateTimeFormatter;
 
+import com.xrq.xxq.module.notification.entity.NotificationTargetEnum;
+import com.xrq.xxq.module.notification.entity.NotificationTypeEnum;
+import com.xrq.xxq.module.notification.service.NotificationService;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class SelectionCampaignServiceImpl
@@ -57,6 +65,7 @@ public class SelectionCampaignServiceImpl
     private final SemesterService semesterService;
     private final SelectionClassService selectionClassService;
     private final CourseMapper courseMapper;
+    private final NotificationService notificationService;
 
     @Override
     @Transactional
@@ -311,7 +320,7 @@ public class SelectionCampaignServiceImpl
     }
 
     @Override
-    public void open(Long id) {
+    public void open(Long id, Long senderId) {
         SelectionCampaign campaign = getById(id);
         if (campaign == null) {
             throw new BusinessException(404, "选课活动不存在");
@@ -323,6 +332,23 @@ public class SelectionCampaignServiceImpl
                 campaign.getCredit(), campaign.getCapacity());
         campaign.setStatus(CampaignStatusEnum.OPEN);
         updateById(campaign);
+
+        // 全局通知所有学生：广播仅落库 1 条，在线学生实时推送，离线学生上线补推
+        try {
+            String endTimeText = campaign.getEndTime() != null
+                    ? campaign.getEndTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+                    : "详见系统";
+            notificationService.broadcast(
+                    NotificationTypeEnum.SELECTION,
+                    NotificationTargetEnum.STUDENT,
+                    "选课开始通知",
+                    "选课活动《" + campaign.getName() + "》已开放，截止时间 " + endTimeText
+                            + "，请及时登录系统完成选课。",
+                    senderId);
+        } catch (Exception e) {
+            // 通知失败不影响开课主流程
+            log.warn("选课开始广播通知失败: campaignId={}", id, e);
+        }
     }
 
     @Override
