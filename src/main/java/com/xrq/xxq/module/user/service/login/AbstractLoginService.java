@@ -134,7 +134,7 @@ public abstract class AbstractLoginService implements LoginService {
         user.setLastLoginTime(LocalDateTime.now());
         userMapper.updateById(user);
 
-        sessionStore.put(tokenId, session);
+        sessionStore.login(user.getId(), tokenId, session);
         return session;
     }
 
