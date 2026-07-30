@@ -35,7 +35,7 @@ public interface SelectionCampaignService extends IService<SelectionCampaign> {
      */
     void deleteByCourseId(Long courseId);
 
-    void open(Long id);
+    void open(Long id, Long senderId);
 
     void close(Long id);
 
