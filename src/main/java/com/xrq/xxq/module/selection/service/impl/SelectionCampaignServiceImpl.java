@@ -84,7 +84,11 @@ public class SelectionCampaignServiceImpl
         // 1. 在 course 表插入衍生记录（source = SELECTION_CAMPAIGN，courseName = 活动名）
         Course derivedCourse = new Course();
         derivedCourse.setCourseName(request.getName());
-        derivedCourse.setCourseCode("SEL-CAMP-" + request.getSemesterId() + "-" + System.currentTimeMillis());
+        if (request.getCourseCode() != null){
+            derivedCourse.setCourseCode(request.getCourseCode());
+        }else {
+            derivedCourse.setCourseCode("SEL-CAMP-" + request.getSemesterId() + "-" + System.currentTimeMillis());
+        }
         derivedCourse.setCredit(request.getCredit());
         derivedCourse.setCourseHour(request.getCourseHour());
         derivedCourse.setDescription(request.getDescription());
