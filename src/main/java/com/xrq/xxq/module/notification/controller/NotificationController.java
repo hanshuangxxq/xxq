@@ -26,7 +26,7 @@ import lombok.RequiredArgsConstructor;
 /**
  * 站内消息提醒接口。
  * <p>
- * 查询/已读/删除：任意登录用户操作本人消息；发送：仅教务管理员/院系管理员。
+ * 查询/已读/删除：任意登录用户操作本人消息（单点 + 广播合并视图）；发送：仅教务管理员/院系管理员。
  */
 @RestController
 @RequestMapping("/api/notification")
@@ -39,27 +39,39 @@ public class NotificationController {
     @GetMapping("/unread-count")
     public Result<UnreadCountResponse> unreadCount(HttpServletRequest request) {
         Long userId = authFacade.currentUserId(request);
-        return Result.ok(new UnreadCountResponse(notificationService.unreadCount(userId)));
+        String userType = authFacade.currentUserType(request);
+        return Result.ok(new UnreadCountResponse(notificationService.unreadCount(userId, userType)));
     }
 
     @GetMapping("/list")
     public Result<List<NotificationResponse>> list(HttpServletRequest request,
                                                    @RequestParam(required = false) String status) {
         Long userId = authFacade.currentUserId(request);
-        return Result.ok(notificationService.listByUser(userId, status));
+        String userType = authFacade.currentUserType(request);
+        return Result.ok(notificationService.listByUser(userId, userType, status));
     }
 
     @PutMapping("/{id}/read")
     public Result<Void> markRead(HttpServletRequest request, @PathVariable Long id) {
         Long userId = authFacade.currentUserId(request);
-        notificationService.markRead(userId, id);
+        String userType = authFacade.currentUserType(request);
+        notificationService.markRead(userId, userType, id);
+        return Result.ok();
+    }
+
+    @PutMapping("/broadcast/{id}/read")
+    public Result<Void> markBroadcastRead(HttpServletRequest request, @PathVariable Long id) {
+        Long userId = authFacade.currentUserId(request);
+        String userType = authFacade.currentUserType(request);
+        notificationService.markBroadcastRead(userId, userType, id);
         return Result.ok();
     }
 
     @PutMapping("/read-all")
     public Result<Void> markAllRead(HttpServletRequest request) {
         Long userId = authFacade.currentUserId(request);
-        notificationService.markAllRead(userId);
+        String userType = authFacade.currentUserType(request);
+        notificationService.markAllRead(userId, userType);
         return Result.ok();
     }
 
