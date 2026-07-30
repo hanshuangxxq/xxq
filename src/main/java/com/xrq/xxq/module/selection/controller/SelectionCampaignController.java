@@ -75,7 +75,7 @@ public class SelectionCampaignController {
     public Result<Void> open(HttpServletRequest request,
                              @PathVariable Long id) {
         authFacade.requireAcademicAdmin(request);
-        campaignService.open(id);
+        campaignService.open(id, authFacade.currentUserId(request));
         return Result.ok();
     }
 
