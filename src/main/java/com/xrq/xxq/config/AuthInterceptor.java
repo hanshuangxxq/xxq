@@ -42,10 +42,13 @@ public class AuthInterceptor implements HandlerInterceptor {
 
             String tokenId = claims.get("tokenId", String.class);
             if (sessionStore.get(tokenId) == null) {
-                response.setContentType("application/json;charset=UTF-8");
-                response.setStatus(401);
-                response.getWriter().write("{\"code\":401,\"message\":\"token已注销\"}");
-                return false;
+                // token 仍有效但 Redis 无会话（如后端/Redis 重启致数据丢失）：
+                // 基于 claims 重建最小会话并放行，避免前端被迫重新登录。
+                // 安全权衡：登出后在此 token 有效期内（默认 30m）仍可被重建访问。
+                sessionStore.rebuildIfNeeded(tokenId,
+                        Long.valueOf(claims.getSubject()),
+                        claims.get("userType", String.class),
+                        claims.get("role", String.class));
             }
         } catch (ExpiredJwtException e) {
             response.setContentType("application/json;charset=UTF-8");
