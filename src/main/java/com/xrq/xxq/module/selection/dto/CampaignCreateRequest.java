@@ -26,7 +26,6 @@ public class CampaignCreateRequest {
      */
     private Long groupId;
     // 课程字段（活动即课程，name 同时作为活动名与课程名）
-    @NonNull
     private String courseCode;
     @NonNull
     private Integer credit;
