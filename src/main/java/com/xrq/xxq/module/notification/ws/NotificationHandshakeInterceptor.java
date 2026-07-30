@@ -29,6 +29,7 @@ import java.util.Map;
 public class NotificationHandshakeInterceptor implements HandshakeInterceptor {
 
     public static final String ATTR_USER_ID = "userId";
+    public static final String ATTR_USER_TYPE = "userType";
 
     private final JwtUtils jwtUtils;
     private final LoginSessionStore sessionStore;
@@ -59,6 +60,7 @@ public class NotificationHandshakeInterceptor implements HandshakeInterceptor {
             }
             Long userId = Long.valueOf(claims.getSubject());
             attributes.put(ATTR_USER_ID, userId);
+            attributes.put(ATTR_USER_TYPE, claims.get("userType", String.class));
             return true;
         } catch (JwtException e) {
             log.warn("通知 WebSocket 握手失败: token 无效 - {}", e.getMessage());
