@@ -25,14 +25,15 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
         Long userId = (Long) session.getAttributes().get(NotificationHandshakeInterceptor.ATTR_USER_ID);
+        String userType = (String) session.getAttributes().get(NotificationHandshakeInterceptor.ATTR_USER_TYPE);
         if (userId == null) {
             log.warn("通知连接缺少 userId，关闭: {}", session.getId());
             closeQuietly(session);
             return;
         }
-        sessionManager.register(userId, session);
+        sessionManager.register(userId, userType, session);
         // 连接建立即推送当前未读数
-        notificationService.pushUnreadCount(userId);
+        notificationService.pushUnreadCount(userId, userType);
     }
 
     @Override
@@ -42,7 +43,8 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
             return;
         }
         if ("ping".equalsIgnoreCase(message.getPayload().trim())) {
-            notificationService.pushUnreadCount(userId);
+            String userType = (String) session.getAttributes().get(NotificationHandshakeInterceptor.ATTR_USER_TYPE);
+            notificationService.pushUnreadCount(userId, userType);
         }
     }
 
