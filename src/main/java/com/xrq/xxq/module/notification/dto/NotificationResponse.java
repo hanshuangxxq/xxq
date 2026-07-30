@@ -17,5 +17,6 @@ public class NotificationResponse {
     private String title;
     private String content;
     private Integer isRead;
+    private Boolean broadcast; // true:广播消息；null/false:单点消息
     private LocalDateTime createTime;
 }
