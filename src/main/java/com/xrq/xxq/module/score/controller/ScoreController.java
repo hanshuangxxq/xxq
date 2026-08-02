@@ -28,6 +28,7 @@ import com.xrq.xxq.module.score.entity.ScoreConfig;
 import com.xrq.xxq.module.score.service.ScoreConfigService;
 import com.xrq.xxq.module.score.service.ScoreExportService;
 import com.xrq.xxq.module.score.service.ScoreService;
+import com.xrq.xxq.module.semester.entity.Semester;
 import com.xrq.xxq.util.auth.AuthFacade;
 
 import lombok.RequiredArgsConstructor;
@@ -127,12 +128,19 @@ public class ScoreController {
         return Result.ok(scoreService.listByTeachInfo(teachInfoId, userId, userType));
     }
 
-    /** 学生查询自己的成绩（可按学期过滤）。 */
+    /** 学生查询自己的成绩：默认当前学期，传 semesterId 时查指定学期。 */
     @GetMapping("/my")
     public Result<List<ScoreView>> myScores(HttpServletRequest request,
                                             @RequestParam(required = false) Long semesterId) {
         Long studentUserId = authFacade.requireStudentUserId(request);
         return Result.ok(scoreService.listMyScores(studentUserId, semesterId));
+    }
+
+    /** 学生查询自己有成绩的学期列表（用于成绩页学期切换下拉）。 */
+    @GetMapping("/my/semesters")
+    public Result<List<Semester>> myScoreSemesters(HttpServletRequest request) {
+        Long studentUserId = authFacade.requireStudentUserId(request);
+        return Result.ok(scoreService.listMyScoreSemesters(studentUserId));
     }
 
     // ──────────────────────── 统计 ────────────────────────
