@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -42,6 +43,8 @@ import com.xrq.xxq.module.selection.entity.SelectionClass;
 import com.xrq.xxq.module.selection.entity.SelectionClassMember;
 import com.xrq.xxq.module.selection.mapper.SelectionClassMapper;
 import com.xrq.xxq.module.selection.mapper.SelectionClassMemberMapper;
+import com.xrq.xxq.module.semester.entity.Semester;
+import com.xrq.xxq.module.semester.service.SemesterService;
 import com.xrq.xxq.module.teachinfo.entity.TeachInfo;
 import com.xrq.xxq.module.teachinfo.mapper.TeachInfoMapper;
 import com.xrq.xxq.module.user.entity.User;
@@ -77,6 +80,7 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
     private final ScoreConfigMapper scoreConfigMapper;
     private final NotificationService notificationService;
     private final ExamMapper examMapper;
+    private final SemesterService semesterService;
 
     private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
 
@@ -342,15 +346,39 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
 
     @Override
     public List<ScoreView> listMyScores(Long studentUserId, Long semesterId) {
-        LambdaQueryWrapper<Score> w = new LambdaQueryWrapper<Score>()
-                .eq(Score::getStudentUserId, studentUserId)
-                .orderByDesc(Score::getSemesterId)
-                .orderByAsc(Score::getCourseId)
-                .orderByDesc(Score::getCreateTime);
-        if (semesterId != null) {
-            w.eq(Score::getSemesterId, semesterId);
+        // 默认查当前学期；前端需查其它学期时显式传 semesterId
+        Long effectiveSemesterId = semesterId;
+        if (effectiveSemesterId == null) {
+            Semester current = semesterService.getCurrent();
+            if (current == null) {
+                return List.of();
+            }
+            effectiveSemesterId = current.getId();
         }
-        return toViews(baseMapper.selectList(w));
+        List<Score> grades = baseMapper.selectList(new LambdaQueryWrapper<Score>()
+                .eq(Score::getStudentUserId, studentUserId)
+                .eq(Score::getSemesterId, effectiveSemesterId)
+                .orderByAsc(Score::getCourseId)
+                .orderByDesc(Score::getCreateTime));
+        return toViews(grades);
+    }
+
+    @Override
+    public List<Semester> listMyScoreSemesters(Long studentUserId) {
+        // 仅返回该学生有成绩记录的学期（去重），按学期 id 倒序
+        List<Score> scores = baseMapper.selectList(new LambdaQueryWrapper<Score>()
+                .select(Score::getSemesterId)
+                .eq(Score::getStudentUserId, studentUserId));
+        Set<Long> semesterIds = scores.stream()
+                .map(Score::getSemesterId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (semesterIds.isEmpty()) {
+            return List.of();
+        }
+        return semesterService.listByIds(semesterIds).stream()
+                .sorted(Comparator.comparing(Semester::getId).reversed())
+                .toList();
     }
 
     @Override
