@@ -10,6 +10,7 @@ import com.xrq.xxq.module.score.dto.ScoreRosterDto;
 import com.xrq.xxq.module.score.dto.ScoreStatisticsDto;
 import com.xrq.xxq.module.score.dto.ScoreView;
 import com.xrq.xxq.module.score.entity.Score;
+import com.xrq.xxq.module.semester.entity.Semester;
 
 /**
  * 成绩服务：录入（录入即生效 + 不及格自动通知）、查询、名单。
@@ -37,8 +38,11 @@ public interface ScoreService extends IService<Score> {
     /** 按授课安排查询成绩（教师本人/院系本院/教务全部）。 */
     List<ScoreView> listByTeachInfo(Long teachInfoId, Long userId, String userType);
 
-    /** 学生查询自己的成绩（可按学期过滤）。 */
+    /** 学生查询自己的成绩：默认当前学期，传 semesterId 时查指定学期。 */
     List<ScoreView> listMyScores(Long studentUserId, Long semesterId);
+
+    /** 学生查询自己有成绩的学期列表（按学期 id 倒序），用于成绩页学期切换下拉。 */
+    List<Semester> listMyScoreSemesters(Long studentUserId);
 
     /**
      * 成绩统计：按课程聚合分布（优/良/中/及格/不及格、平均/最高/最低/及格率）。
