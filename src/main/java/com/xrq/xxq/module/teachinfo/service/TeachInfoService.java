@@ -18,4 +18,10 @@ public interface TeachInfoService extends IService<TeachInfo> {
     List<ClassCourseDto> listClassCourses(Long userId);
 
     WeekScheduleDto getWeekSchedule(Long userId, Integer week);
+
+    /**
+     * 学生可见的授课安排 ID 列表（常规班 + 公选课班），供考试查询等场景复用。
+     * <p>常规班按学生所在班级名 FIND_IN_SET；公选课班按选课成员 -> 选课班 -> teachInfoId。
+     */
+    List<Long> listMyTeachInfoIds(Long studentUserId);
 }
