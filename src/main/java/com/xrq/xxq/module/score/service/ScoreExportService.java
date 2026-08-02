@@ -5,8 +5,16 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.List;
 
+import org.apache.poi.ss.usermodel.BorderStyle;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.FillPatternType;
+import org.apache.poi.ss.usermodel.HorizontalAlignment;
+import org.apache.poi.ss.usermodel.IndexedColors;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.VerticalAlignment;
+import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
 
@@ -34,29 +42,181 @@ public class ScoreExportService {
     public byte[] exportExcel(List<ScoreView> grades, String sheetName) {
         try (XSSFWorkbook wb = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Sheet sheet = wb.createSheet(safeSheetName(sheetName));
-            Row header = sheet.createRow(0);
+
+            CellStyle titleStyle = buildTitleStyle(wb);
+            CellStyle headerStyle = buildHeaderStyle(wb);
+            CellStyle dataStyle = buildDataStyle(wb);
+
+            // 标题行：跨所有列合并居中显示
+            Row titleRow = sheet.createRow(0);
+            Cell titleCell = titleRow.createCell(0);
+            titleCell.setCellValue(sheetName);
+            titleCell.setCellStyle(titleStyle);
+            sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, COLUMNS.length - 1));
+
+            // 表头行
+            Row header = sheet.createRow(1);
             for (int i = 0; i < COLUMNS.length; i++) {
-                header.createCell(i).setCellValue(COLUMNS[i]);
+                Cell c = header.createCell(i);
+                c.setCellValue(COLUMNS[i]);
+                c.setCellStyle(headerStyle);
             }
-            int r = 1;
+
+            // 数据行
+            int r = 2;
             for (ScoreView g : grades) {
                 Row row = sheet.createRow(r++);
-                row.createCell(0).setCellValue(str(g.getStudentNo()));
-                row.createCell(1).setCellValue(str(g.getStudentName()));
-                row.createCell(2).setCellValue(num(g.getRegularScore()));
-                row.createCell(3).setCellValue(num(g.getFinalScore()));
-                row.createCell(4).setCellValue(g.getRegularRatio() != null ? g.getRegularRatio() : 0);
-                row.createCell(5).setCellValue(num(g.getTotalScore()));
-                row.createCell(6).setCellValue(str(g.getScoreLevel()));
+                textCell(row, 0, str(g.getStudentNo()), dataStyle);
+                textCell(row, 1, str(g.getStudentName()), dataStyle);
+                numCell(row, 2, num(g.getRegularScore()), dataStyle);
+                numCell(row, 3, num(g.getFinalScore()), dataStyle);
+                numCell(row, 4, g.getRegularRatio() != null ? g.getRegularRatio() : 0, dataStyle);
+                numCell(row, 5, num(g.getTotalScore()), dataStyle);
+                textCell(row, 6, str(g.getScoreLevel()), dataStyle);
             }
-            for (int i = 0; i < COLUMNS.length; i++) {
-                sheet.autoSizeColumn(i);
-            }
+
+            // 自适应列宽：POI 原生 autoSizeColumn 对中文估宽偏窄会截断表头，这里按 CJK 字符宽度手动计算
+            autoSizeColumns(sheet, COLUMNS.length);
+            // 冻结标题+表头，滚动时常驻可见
+            sheet.createFreezePane(0, 2);
+
             wb.write(out);
             return out.toByteArray();
         } catch (IOException e) {
             throw new BusinessException(500, "导出 Excel 失败");
         }
+    }
+
+    private CellStyle buildTitleStyle(XSSFWorkbook wb) {
+        CellStyle style = wb.createCellStyle();
+        org.apache.poi.ss.usermodel.Font font = wb.createFont();
+        font.setBold(true);
+        font.setFontHeightInPoints((short) 14);
+        style.setFont(font);
+        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        return style;
+    }
+
+    private CellStyle buildHeaderStyle(XSSFWorkbook wb) {
+        CellStyle style = wb.createCellStyle();
+        org.apache.poi.ss.usermodel.Font font = wb.createFont();
+        font.setBold(true);
+        style.setFont(font);
+        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        style.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        applyBorders(style);
+        return style;
+    }
+
+    private CellStyle buildDataStyle(XSSFWorkbook wb) {
+        CellStyle style = wb.createCellStyle();
+        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        applyBorders(style);
+        return style;
+    }
+
+    private void applyBorders(CellStyle style) {
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+    }
+
+    private void textCell(Row row, int col, String value, CellStyle style) {
+        Cell cell = row.createCell(col);
+        cell.setCellValue(value);
+        cell.setCellStyle(style);
+    }
+
+    private void numCell(Row row, int col, double value, CellStyle style) {
+        Cell cell = row.createCell(col);
+        cell.setCellValue(value);
+        cell.setCellStyle(style);
+    }
+
+    /**
+     * 按表头与数据内容自适应列宽，中文/CJK 字符按 2 个字符宽度估算，规避
+     * POI {@link Sheet#autoSizeColumn(int)} 对中文估宽偏窄导致表头被截断的问题。
+     * 跨列合并的单元格（如标题行）不计入单列宽度。
+     */
+    private void autoSizeColumns(Sheet sheet, int colCount) {
+        for (int col = 0; col < colCount; col++) {
+            int maxDisplay = 0;
+            for (int rowIdx = 0; rowIdx <= sheet.getLastRowNum(); rowIdx++) {
+                Row row = sheet.getRow(rowIdx);
+                if (row == null) {
+                    continue;
+                }
+                Cell cell = row.getCell(col);
+                if (cell == null || inMergedRegion(sheet, rowIdx, col)) {
+                    continue;
+                }
+                String text = cellText(cell);
+                if (text == null || text.isEmpty()) {
+                    continue;
+                }
+                int w = displayWidth(text);
+                if (w > maxDisplay) {
+                    maxDisplay = w;
+                }
+            }
+            // POI 列宽单位 = 1/256 字符宽；+2 留出留白，上限 255 字符
+            int width = Math.min((maxDisplay + 2) * 256, 255 * 256);
+            sheet.setColumnWidth(col, width);
+        }
+    }
+
+    private boolean inMergedRegion(Sheet sheet, int rowIdx, int col) {
+        for (int i = 0; i < sheet.getNumMergedRegions(); i++) {
+            if (sheet.getMergedRegion(i).isInRange(rowIdx, col)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String cellText(Cell cell) {
+        switch (cell.getCellType()) {
+            case STRING:
+                return cell.getStringCellValue();
+            case NUMERIC:
+                return String.valueOf(cell.getNumericCellValue());
+            case BOOLEAN:
+                return String.valueOf(cell.getBooleanCellValue());
+            case FORMULA:
+                return cell.getCellFormula();
+            default:
+                return "";
+        }
+    }
+
+    /** 估算字符串在 Excel 中的显示宽度：CJK/全角字符计 2，其余计 1。 */
+    private int displayWidth(String s) {
+        int width = 0;
+        for (int i = 0; i < s.length(); i++) {
+            width += isWideChar(s.charAt(i)) ? 2 : 1;
+        }
+        return width;
+    }
+
+    private boolean isWideChar(char c) {
+        if (c >= 0x1100 && c <= 0x115F) return true;   // Hangul Jamo
+        if (c >= 0x2E80 && c <= 0x303E) return true;   // CJK 部首/标点
+        if (c >= 0x3040 && c <= 0x33BF) return true;   // 假名/CJK/全角符号
+        if (c >= 0x3400 && c <= 0x4DBF) return true;   // CJK 扩展 A
+        if (c >= 0x4E00 && c <= 0x9FFF) return true;   // CJK 统一汉字
+        if (c >= 0xA000 && c <= 0xA4CF) return true;   // 彝文
+        if (c >= 0xAC00 && c <= 0xD7A3) return true;   // 韩文音节
+        if (c >= 0xF900 && c <= 0xFAFF) return true;   // CJK 兼容汉字
+        if (c >= 0xFE30 && c <= 0xFE4F) return true;   // CJK 兼容形式
+        if (c >= 0xFF00 && c <= 0xFF60) return true;   // 全角字符
+        if (c >= 0xFFE0 && c <= 0xFFE6) return true;   // 全角符号
+        if (c >= 0x20000 && c <= 0x2FFFD) return true; // CJK 扩展 B+
+        return false;
     }
 
     /** 导出 PDF，使用 STSong-Light 渲染中文。 */
