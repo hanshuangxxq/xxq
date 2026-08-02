@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import java.math.BigDecimal;
@@ -188,6 +189,15 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements Ex
             return List.of();
         }
 
+        // 排除已为该班级设置过考试的课程：同一授课(teachInfoId)对同一班级只允许建一次常规考试；
+        // 合班课不同班级可各建一次（Exam.className 存单班级名，天然区分），已取消的考试不占用名额。
+        List<Long> teachInfoIds = list.stream().map(TeachInfo::getId).toList();
+        Set<Long> examinedTeachInfoIds = baseMapper.selectList(new LambdaQueryWrapper<Exam>()
+                        .in(Exam::getTeachInfoId, teachInfoIds)
+                        .eq(Exam::getClassName, cls.getClassName())
+                        .ne(Exam::getStatus, ExamStatusEnum.CANCELED))
+                .stream().map(Exam::getTeachInfoId).collect(Collectors.toSet());
+
         List<Long> courseIds = list.stream().map(TeachInfo::getCourseId).filter(Objects::nonNull).distinct().toList();
         List<Long> teacherIds = list.stream().map(TeachInfo::getTeacherId).filter(Objects::nonNull).distinct().toList();
         List<Long> semesterIds = list.stream().map(TeachInfo::getSemesterId).filter(Objects::nonNull).distinct().toList();
@@ -207,20 +217,22 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements Ex
                 : userMapper.selectByIds(teacherUserIds).stream()
                         .collect(Collectors.toMap(User::getId, User::getName, (a, b) -> a));
 
-        return list.stream().map(info -> {
-            ClassCourseOptionDto dto = new ClassCourseOptionDto();
-            dto.setTeachInfoId(info.getId());
-            dto.setCourseId(info.getCourseId());
-            dto.setCourseName(courseNameMap.get(info.getCourseId()));
-            Teacher t = teacherMap.get(info.getTeacherId());
-            if (t != null) {
-                dto.setTeacherName(userNameMap.get(t.getUserId()));
-            }
-            dto.setClassName(info.getClassName());
-            dto.setSemesterId(info.getSemesterId());
-            dto.setSemesterName(semesterNameMap.get(info.getSemesterId()));
-            return dto;
-        }).toList();
+        return list.stream()
+                .filter(info -> !examinedTeachInfoIds.contains(info.getId()))
+                .map(info -> {
+                    ClassCourseOptionDto dto = new ClassCourseOptionDto();
+                    dto.setTeachInfoId(info.getId());
+                    dto.setCourseId(info.getCourseId());
+                    dto.setCourseName(courseNameMap.get(info.getCourseId()));
+                    Teacher t = teacherMap.get(info.getTeacherId());
+                    if (t != null) {
+                        dto.setTeacherName(userNameMap.get(t.getUserId()));
+                    }
+                    dto.setClassName(info.getClassName());
+                    dto.setSemesterId(info.getSemesterId());
+                    dto.setSemesterName(semesterNameMap.get(info.getSemesterId()));
+                    return dto;
+                }).toList();
     }
 
     // ==================== 补考/重修 ====================
