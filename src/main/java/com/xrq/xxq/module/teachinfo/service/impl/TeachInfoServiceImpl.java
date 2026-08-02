@@ -16,6 +16,8 @@ import com.xrq.xxq.module.selection.mapper.SelectionClassMapper;
 import com.xrq.xxq.module.selection.mapper.SelectionClassMemberMapper;
 import com.xrq.xxq.module.semester.entity.Semester;
 import com.xrq.xxq.module.teachinfo.entity.TeachInfo;
+import com.xrq.xxq.module.time.entity.Time;
+import com.xrq.xxq.module.time.mapper.TimeMapper;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
 import com.xrq.xxq.module.course.mapper.CourseMapper;
 import com.xrq.xxq.module.local.mapper.LocalMapper;
@@ -55,6 +57,7 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
     private final StudentMapper studentMapper;
     private final DepartmentMapper departmentMapper;
     private final LocalMapper localMapper;
+    private final TimeMapper timeMapper;
     private final ClassScheduleCacheManager cacheManager;
     private final SemesterService semesterService;
     private final SelectionClassMapper selectionClassMapper;
@@ -69,7 +72,7 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
         if (!isInScope(info, userId, userType)) {
             return null;
         }
-        return assembleDto(List.of(info), userType).getFirst();
+        return assembleDto(List.of(info)).getFirst();
     }
 
     @Override
@@ -96,7 +99,7 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
         }
 
         List<TeachInfo> list = teachInfoMapper.selectList(wrapper);
-        List<CourseDto> courses = assembleDto(list, userType);
+        List<CourseDto> courses = assembleDto(list);
         cacheManager.putUserScope(userType, userId, teacherId, courseId, week, courses);
         return new UserCourseDto(mondayOfWeek(week), courses);
     }
@@ -269,6 +272,26 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
         return teachInfoMapper.selectCount(scope) > 0;
     }
 
+    @Override
+    public List<Long> listMyTeachInfoIds(Long studentUserId) {
+        java.util.List<Long> regular = new java.util.ArrayList<>();
+        Student student = studentMapper.selectOne(
+                new LambdaQueryWrapper<Student>().eq(Student::getUserId, studentUserId));
+        if (student != null && student.getClassId() != null) {
+            ClassName cls = classNameMapper.selectById(student.getClassId());
+            if (cls != null) {
+                teachInfoMapper.selectList(new LambdaQueryWrapper<TeachInfo>()
+                                .apply("FIND_IN_SET({0}, class_name) > 0", cls.getClassName()))
+                        .forEach(t -> regular.add(t.getId()));
+            }
+        }
+        java.util.List<Long> selection = listSelectionTeachInfoIds(studentUserId);
+        java.util.List<Long> all = new java.util.ArrayList<>(regular.size() + selection.size());
+        all.addAll(regular);
+        all.addAll(selection);
+        return all.stream().distinct().toList();
+    }
+
     /** 查询学生加入的选课班对应的 teachInfoId 列表。 */
     private List<Long> listSelectionTeachInfoIds(Long studentUserId) {
         List<SelectionClassMember> members = selectionClassMemberMapper.selectList(
@@ -290,7 +313,7 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
                 .toList();
     }
 
-    private List<CourseDto> assembleDto(List<TeachInfo> list, String userType) {
+    private List<CourseDto> assembleDto(List<TeachInfo> list) {
         if (list.isEmpty()) {
             return List.of();
         }
@@ -305,6 +328,7 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
                 .distinct()
                 .toList();
         List<Long> localIds = list.stream().map(TeachInfo::getLocalId).distinct().toList();
+        List<Long> timeIds = list.stream().map(TeachInfo::getTimeId).filter(Objects::nonNull).distinct().toList();
 
         Map<Long, Course> courseMap = courseMapper.selectByIds(courseIds).stream()
                 .collect(Collectors.toMap(Course::getId, identity(), (a, b) -> a));
@@ -316,6 +340,10 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
                 .collect(Collectors.toMap(ClassName::getClassName, identity(), (a, b) -> a));
         Map<Long, Local> localMap = localMapper.selectByIds(localIds).stream()
                 .collect(Collectors.toMap(Local::getId, identity(), (a, b) -> a));
+        Map<Long, Time> timeMap = timeIds.isEmpty()
+                ? Map.of()
+                : timeMapper.selectByIds(timeIds).stream()
+                        .collect(Collectors.toMap(Time::getId, identity(), (a, b) -> a));
 
         List<Long> userIds = teacherMap.values().stream().map(Teacher::getUserId).toList();
         Map<Long, User> userMap = userIds.isEmpty()
@@ -325,6 +353,7 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
 
         return list.stream().map(info -> {
             CourseDto resp = new CourseDto();
+            resp.setId(info.getId());
 
             Course course = courseMap.get(info.getCourseId());
             if (course != null) {
@@ -346,17 +375,21 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
             resp.setClassName(info.getClassName());
             resp.setCollege(resolveCollege(info.getClassName(), classMap));
 
-            if (!"teacher".equals(userType)) {
-                resp.setDayOfWeek(info.getDayOfWeek());
-                resp.setStartWeek(info.getStartWeek());
-                resp.setEndWeek(info.getEndWeek());
-                resp.setTimeId(info.getTimeId());
+            resp.setDayOfWeek(info.getDayOfWeek());
+            resp.setStartWeek(info.getStartWeek());
+            resp.setEndWeek(info.getEndWeek());
+            resp.setTimeId(info.getTimeId());
 
-                Local local = localMap.get(info.getLocalId());
-                if (local != null) {
-                    resp.setBuilding(local.getBuilding());
-                    resp.setClassroom(local.getClassRoom());
-                }
+            Time time = timeMap.get(info.getTimeId());
+            if (time != null) {
+                resp.setStartPeriod(time.getStartPeriod());
+                resp.setEndPeriod(time.getEndPeriod());
+            }
+
+            Local local = localMap.get(info.getLocalId());
+            if (local != null) {
+                resp.setBuilding(local.getBuilding());
+                resp.setClassroom(local.getClassRoom());
             }
 
             return resp;
