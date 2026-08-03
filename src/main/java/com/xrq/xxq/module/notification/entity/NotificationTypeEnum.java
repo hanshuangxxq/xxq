@@ -18,7 +18,9 @@ public enum NotificationTypeEnum {
     SELECTION("SELECTION", "选课消息"),
     SCHEDULE("SCHEDULE", "排课消息"),
     COURSE("COURSE", "课程消息"),
-    GRADE("GRADE", "成绩消息");
+    GRADE("GRADE", "成绩消息"),
+    WARNING("WARNING", "学业预警"),
+    TEACHING_EVAL("TEACHING_EVAL", "评教消息");
 
     @EnumValue
     private final String code;
