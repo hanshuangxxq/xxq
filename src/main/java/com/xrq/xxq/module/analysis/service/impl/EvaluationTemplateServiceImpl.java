@@ -104,12 +104,10 @@ public class EvaluationTemplateServiceImpl implements EvaluationTemplateService 
         }
         templateMapper.updateById(t);
 
-        // items 传入则整体替换模板指标
+        // items 传入则增量更新模板指标（按 itemId diff，避免全删全插）
         if (req.getItems() != null) {
             List<EvaluationItem> items = validateItems(req.getItems());
-            templateItemMapper.delete(new LambdaQueryWrapper<EvaluationTemplateItem>()
-                    .eq(EvaluationTemplateItem::getTemplateId, id));
-            bindItems(id, req.getItems(), items);
+            rebindTemplateItems(id, req.getItems(), items);
         }
         return toResponse(templateMapper.selectById(id));
     }
@@ -278,11 +276,46 @@ public class EvaluationTemplateServiceImpl implements EvaluationTemplateService 
             EvaluationTemplateItem rel = new EvaluationTemplateItem();
             rel.setTemplateId(templateId);
             rel.setItemId(it.getId());
-            rel.setItemName(it.getName());
-            rel.setMaxScore(it.getMaxScore());
             rel.setSortOrder(dto.getSortOrder() != null ? dto.getSortOrder() : order);
             rel.setRequired(dto.getRequired() == null ? 1 : dto.getRequired());
             templateItemMapper.insert(rel);
+            order++;
+        }
+    }
+
+    /**
+     * 增量更新模板指标：按 itemId diff，删除移除项、新增新项、更新保留项的 sortOrder/required。
+     */
+    private void rebindTemplateItems(Long templateId, List<TemplateItemDto> items, List<EvaluationItem> entities) {
+        List<EvaluationTemplateItem> existing = templateItemMapper.selectList(
+                new LambdaQueryWrapper<EvaluationTemplateItem>()
+                        .eq(EvaluationTemplateItem::getTemplateId, templateId));
+        Map<Long, EvaluationTemplateItem> existingByItemId = existing.stream()
+                .collect(Collectors.toMap(EvaluationTemplateItem::getItemId, t -> t, (a, b) -> a));
+        Set<Long> newItemIds = items.stream().map(TemplateItemDto::getItemId).collect(Collectors.toSet());
+
+        // 删除：现有 - 新
+        for (EvaluationTemplateItem rel : existing) {
+            if (!newItemIds.contains(rel.getItemId())) {
+                templateItemMapper.deleteById(rel.getId());
+            }
+        }
+        // 新增/更新
+        int order = 1;
+        for (TemplateItemDto dto : items) {
+            EvaluationTemplateItem existingRel = existingByItemId.get(dto.getItemId());
+            if (existingRel == null) {
+                EvaluationTemplateItem rel = new EvaluationTemplateItem();
+                rel.setTemplateId(templateId);
+                rel.setItemId(dto.getItemId());
+                rel.setSortOrder(dto.getSortOrder() != null ? dto.getSortOrder() : order);
+                rel.setRequired(dto.getRequired() == null ? 1 : dto.getRequired());
+                templateItemMapper.insert(rel);
+            } else {
+                existingRel.setSortOrder(dto.getSortOrder() != null ? dto.getSortOrder() : order);
+                existingRel.setRequired(dto.getRequired() == null ? 1 : dto.getRequired());
+                templateItemMapper.updateById(existingRel);
+            }
             order++;
         }
     }
@@ -303,13 +336,23 @@ public class EvaluationTemplateServiceImpl implements EvaluationTemplateService 
     }
 
     private List<TemplateItemDto> loadItemDtos(Long templateId) {
-        return templateItemMapper.selectList(new LambdaQueryWrapper<EvaluationTemplateItem>()
-                        .eq(EvaluationTemplateItem::getTemplateId, templateId)
-                        .orderByAsc(EvaluationTemplateItem::getSortOrder)).stream()
-                .map(rel -> {
+        List<EvaluationTemplateItem> rels = templateItemMapper.selectList(
+                        new LambdaQueryWrapper<EvaluationTemplateItem>()
+                                .eq(EvaluationTemplateItem::getTemplateId, templateId)
+                                .orderByAsc(EvaluationTemplateItem::getSortOrder));
+        if (rels.isEmpty()) {
+            return List.of();
+        }
+        List<Long> itemIds = rels.stream().map(EvaluationTemplateItem::getItemId).distinct().toList();
+        Map<Long, EvaluationItem> itemMap = itemMapper.selectByIds(itemIds).stream()
+                .collect(Collectors.toMap(EvaluationItem::getId, i -> i));
+        return rels.stream().map(rel -> {
                     TemplateItemDto d = new TemplateItemDto(rel.getItemId());
-                    d.setItemName(rel.getItemName());
-                    d.setMaxScore(rel.getMaxScore());
+                    EvaluationItem item = itemMap.get(rel.getItemId());
+                    if (item != null) {
+                        d.setItemName(item.getName());
+                        d.setMaxScore(item.getMaxScore());
+                    }
                     d.setSortOrder(rel.getSortOrder());
                     d.setRequired(rel.getRequired());
                     return d;
