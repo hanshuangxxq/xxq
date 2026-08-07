@@ -22,8 +22,8 @@ import com.xrq.xxq.module.analysis.service.ProgressService;
 import com.xrq.xxq.module.analysis.util.StudentScopeResolver;
 import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
-import com.xrq.xxq.module.course.entity.Course;
 import com.xrq.xxq.module.course.mapper.CourseMapper;
+import com.xrq.xxq.module.course.service.CourseInfoResolver;
 import com.xrq.xxq.module.exam.entity.Exam;
 import com.xrq.xxq.module.exam.entity.ExamStatusEnum;
 import com.xrq.xxq.module.exam.mapper.ExamMapper;
@@ -64,6 +64,7 @@ public class ProgressServiceImpl implements ProgressService {
     private final ClassNameMapper classNameMapper;
     private final TeachInfoMapper teachInfoMapper;
     private final CourseMapper courseMapper;
+    private final CourseInfoResolver courseInfoResolver;
     private final TeacherMapper teacherMapper;
     private final ExamMapper examMapper;
     private final ScoreMapper scoreMapper;
@@ -103,9 +104,9 @@ public class ProgressServiceImpl implements ProgressService {
         }
 
         List<Long> courseIds = infos.stream().map(TeachInfo::getCourseId).filter(Objects::nonNull).distinct().toList();
-        Map<Long, String> courseNameMap = courseIds.isEmpty() ? Map.of()
-                : courseMapper.selectByIds(courseIds).stream()
-                        .collect(Collectors.toMap(Course::getId, Course::getCourseName, (a, b) -> a));
+        List<Long> campaignIds = infos.stream().map(TeachInfo::getCampaignId).filter(Objects::nonNull).distinct().toList();
+        Map<Long, CourseInfoResolver.CourseInfo> byCourse = courseInfoResolver.resolveCourses(courseIds);
+        Map<Long, CourseInfoResolver.CourseInfo> byCampaign = courseInfoResolver.resolveCampaigns(campaignIds);
         List<Long> teacherIds = infos.stream().map(TeachInfo::getTeacherId).filter(Objects::nonNull).distinct().toList();
         Map<Long, Long> teacherUserId = teacherIds.isEmpty() ? Map.of()
                 : teacherMapper.selectByIds(teacherIds).stream()
@@ -131,7 +132,10 @@ public class ProgressServiceImpl implements ProgressService {
             CourseProgress cp = new CourseProgress();
             cp.setTeachInfoId(info.getId());
             cp.setCourseId(info.getCourseId());
-            cp.setCourseName(courseNameMap.get(info.getCourseId()));
+            CourseInfoResolver.CourseInfo ci = info.getCampaignId() != null
+                    ? byCampaign.get(info.getCampaignId())
+                    : byCourse.get(info.getCourseId());
+            cp.setCourseName(ci != null ? ci.getCourseName() : null);
             Long tuid = teacherUserId.get(info.getTeacherId());
             cp.setTeacherName(tuid != null ? userNameMap.get(tuid) : null);
             cp.setStartWeek(info.getStartWeek());
