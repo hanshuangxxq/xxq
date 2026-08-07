@@ -38,11 +38,13 @@ import com.xrq.xxq.module.score.entity.Score;
 import com.xrq.xxq.module.score.entity.ScoreTypeEnum;
 import com.xrq.xxq.module.score.mapper.ScoreMapper;
 import com.xrq.xxq.module.semester.entity.Semester;
+import com.xrq.xxq.module.semester.mapper.SemesterMapper;
 import com.xrq.xxq.module.semester.service.SemesterService;
 import com.xrq.xxq.module.user.entity.User;
 import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.module.user.mapper.UserMapper;
+import com.xrq.xxq.util.ReferenceValidator;
 import com.xrq.xxq.util.auth.AuthFacade;
 
 import lombok.RequiredArgsConstructor;
@@ -68,8 +70,10 @@ public class WarningServiceImpl implements WarningService {
     private final UserMapper userMapper;
     private final ClassNameMapper classNameMapper;
     private final SemesterService semesterService;
+    private final SemesterMapper semesterMapper;
     private final ApplicationEventPublisher eventPublisher;
     private final StudentScopeResolver scopeResolver;
+    private final ReferenceValidator referenceValidator;
 
     // ==================== 配置 ====================
 
@@ -95,6 +99,11 @@ public class WarningServiceImpl implements WarningService {
             if (exist == null) {
                 throw new BusinessException(404, "预警级别 " + dto.getLevel() + " 配置不存在");
             }
+            if (warningConfigMapper.selectCount(new LambdaQueryWrapper<WarningConfig>()
+                    .eq(WarningConfig::getLevel, dto.getLevel())
+                    .ne(WarningConfig::getId, exist.getId())) > 0) {
+                throw new BusinessException(409, "预警级别已存在");
+            }
             exist.setGpaThreshold(dto.getGpaThreshold());
             exist.setFailCountThreshold(dto.getFailCountThreshold());
             exist.setSemesterFailThreshold(dto.getSemesterFailThreshold());
@@ -113,6 +122,7 @@ public class WarningServiceImpl implements WarningService {
             throw new BusinessException(400, "无当前学期，无法扫描");
         }
         Long semesterId = current.getId();
+        referenceValidator.requireExists(semesterMapper, semesterId, "学期");
 
         // 启用的阈值配置，按严重程度降序（红>橙>黄）
         List<WarningConfig> configs = warningConfigMapper.selectList(new LambdaQueryWrapper<WarningConfig>()
@@ -243,6 +253,7 @@ public class WarningServiceImpl implements WarningService {
         targetRec.setSemesterFailCount(m.semesterFailCount());
         targetRec.setStatus(WarningStatusEnum.ACTIVE);
         if (targetRec.getId() == null) {
+            referenceValidator.requireExists(userMapper, studentUserId, "用户");
             warningRecordMapper.insert(targetRec);
         } else {
             warningRecordMapper.updateById(targetRec);
