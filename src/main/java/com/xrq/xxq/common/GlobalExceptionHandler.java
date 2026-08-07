@@ -23,6 +23,6 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public Result<Void> handleException(Exception e) {
         log.error("服务器内部错误 — message={}", e.getMessage());
-        return Result.fail(500, "服务器内部错误");
+        return Result.fail(500, "服务器内部错误，请联系管理员");
     }
 }
