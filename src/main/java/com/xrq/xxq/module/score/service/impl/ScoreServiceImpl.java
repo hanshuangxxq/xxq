@@ -22,6 +22,7 @@ import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
 import com.xrq.xxq.module.course.entity.Course;
 import com.xrq.xxq.module.course.mapper.CourseMapper;
+import com.xrq.xxq.module.course.service.CourseInfoResolver;
 import com.xrq.xxq.module.exam.dto.MakeupScoreEntryRequest;
 import com.xrq.xxq.module.exam.entity.Exam;
 import com.xrq.xxq.module.exam.entity.ExamTypeEnum;
@@ -37,8 +38,8 @@ import com.xrq.xxq.module.score.entity.ScoreTypeEnum;
 import com.xrq.xxq.module.score.mapper.ScoreConfigMapper;
 import com.xrq.xxq.module.score.mapper.ScoreMapper;
 import com.xrq.xxq.module.score.service.ScoreService;
-import com.xrq.xxq.module.notification.entity.NotificationTypeEnum;
-import com.xrq.xxq.module.notification.service.NotificationService;
+import org.springframework.context.ApplicationEventPublisher;
+import com.xrq.xxq.common.event.GradeFailedEvent;
 import com.xrq.xxq.module.selection.entity.SelectionClass;
 import com.xrq.xxq.module.selection.entity.SelectionClassMember;
 import com.xrq.xxq.module.selection.mapper.SelectionClassMapper;
@@ -70,6 +71,7 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
 
     private final TeachInfoMapper teachInfoMapper;
     private final CourseMapper courseMapper;
+    private final CourseInfoResolver courseInfoResolver;
     private final StudentMapper studentMapper;
     private final ClassNameMapper classNameMapper;
     private final UserMapper userMapper;
@@ -78,7 +80,7 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
     private final SelectionClassMapper selectionClassMapper;
     private final SelectionClassMemberMapper selectionClassMemberMapper;
     private final ScoreConfigMapper scoreConfigMapper;
-    private final NotificationService notificationService;
+    private final ApplicationEventPublisher eventPublisher;
     private final ExamMapper examMapper;
     private final SemesterService semesterService;
 
@@ -241,8 +243,10 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
             throw new BusinessException(400, "请先设置平时分占比");
         }
         int ratio = config.getRegularRatio();
-        Course course = courseMapper.selectById(info.getCourseId());
-        String courseName = course != null ? course.getCourseName() : "未知课程";
+        CourseInfoResolver.CourseInfo courseInfo = courseInfoResolver.resolveOne(
+                info.getCourseId(), info.getCampaignId());
+        String courseName = courseInfo != null && courseInfo.getCourseName() != null
+                ? courseInfo.getCourseName() : "未知课程";
 
         List<Score> saved = new ArrayList<>();
         for (ScoreEntryRequest e : request.getEntries()) {
@@ -268,6 +272,7 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
             Score g = isNew ? new Score() : exist;
             g.setTeachInfoId(teachInfoId);
             g.setCourseId(info.getCourseId());
+            g.setCampaignId(info.getCampaignId());
             g.setTeacherId(info.getTeacherId());
             g.setStudentUserId(e.getStudentUserId());
             g.setSemesterId(info.getSemesterId());
@@ -285,16 +290,10 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
             }
             saved.add(g);
 
-            // 录入即生效：新建且不及格者即时发送站内消息（失败不阻断录入）
+            // 录入即生效：新建且不及格者发布事件，由通知监听器 AFTER_COMMIT 异步发送
             if (isNew && total != null && total.doubleValue() < 60) {
-                try {
-                    notificationService.sendToUser(e.getStudentUserId(), NotificationTypeEnum.GRADE,
-                            "成绩通知",
-                            "您的《" + courseName + "》总评成绩为 " + total.stripTrailingZeros().toPlainString()
-                                    + " 分，未及格，请关注后续补考安排。");
-                } catch (Exception ex) {
-                    log.warn("不及格通知发送失败: studentUserId={}, teachInfoId={}", e.getStudentUserId(), teachInfoId, ex);
-                }
+                eventPublisher.publishEvent(new GradeFailedEvent(
+                        e.getStudentUserId(), courseName, total.stripTrailingZeros().toPlainString()));
             }
         }
         return toViews(saved);
@@ -395,7 +394,7 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
         if (exam.getExamType() != ExamTypeEnum.MAKEUP && exam.getExamType() != ExamTypeEnum.RETAKE) {
             throw new BusinessException(400, "仅补考/重修考试可录入补考成绩");
         }
-        assertCanEnterCourse(exam.getCourseId(), enterUserId, userType);
+        assertCanEnterCourse(exam.getCourseId(), exam.getCampaignId(), enterUserId, userType);
         ScoreTypeEnum gt = exam.getExamType() == ExamTypeEnum.MAKEUP ? ScoreTypeEnum.MAKEUP : ScoreTypeEnum.RETAKE;
 
         List<Score> saved = new ArrayList<>();
@@ -405,11 +404,16 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
             }
             validateScore(e.getScore());
             // 查原不及格 REGULAR 成绩，确定 teachInfoId/teacherId 并关联
-            Score original = baseMapper.selectOne(new LambdaQueryWrapper<Score>()
+            // 公选课按 campaignId 关联（courseId 为 null）
+            LambdaQueryWrapper<Score> ow = new LambdaQueryWrapper<Score>()
                     .eq(Score::getStudentUserId, e.getStudentUserId())
-                    .eq(Score::getCourseId, exam.getCourseId())
-                    .eq(Score::getScoreType, ScoreTypeEnum.REGULAR)
-                    .orderByDesc(Score::getCreateTime).last("LIMIT 1"));
+                    .eq(Score::getScoreType, ScoreTypeEnum.REGULAR);
+            if (exam.getCampaignId() != null) {
+                ow.eq(Score::getCampaignId, exam.getCampaignId());
+            } else {
+                ow.eq(Score::getCourseId, exam.getCourseId());
+            }
+            Score original = baseMapper.selectOne(ow.orderByDesc(Score::getCreateTime).last("LIMIT 1"));
             if (original == null) {
                 throw new BusinessException(404, "未找到学生 userId=" + e.getStudentUserId() + " 的原成绩记录");
             }
@@ -420,6 +424,7 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
             Score g = exist != null ? exist : new Score();
             g.setTeachInfoId(original.getTeachInfoId());
             g.setCourseId(exam.getCourseId());
+            g.setCampaignId(exam.getCampaignId());
             g.setTeacherId(original.getTeacherId());
             g.setStudentUserId(e.getStudentUserId());
             g.setSemesterId(exam.getSemesterId());
@@ -442,7 +447,7 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
     }
 
     /** 校验当前用户是否可录入该课程的成绩（教务或该课程的任课教师）。 */
-    private void assertCanEnterCourse(Long courseId, Long userId, String userType) {
+    private void assertCanEnterCourse(Long courseId, Long campaignId, Long userId, String userType) {
         if (AuthFacade.USER_TYPE_ACADEMIC_ADMIN.equals(userType)) {
             return;
         }
@@ -452,8 +457,14 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
             if (t == null) {
                 throw new BusinessException(403, "权限不足");
             }
-            Long count = teachInfoMapper.selectCount(new LambdaQueryWrapper<TeachInfo>()
-                    .eq(TeachInfo::getTeacherId, t.getId()).eq(TeachInfo::getCourseId, courseId));
+            LambdaQueryWrapper<TeachInfo> w = new LambdaQueryWrapper<TeachInfo>()
+                    .eq(TeachInfo::getTeacherId, t.getId());
+            if (campaignId != null) {
+                w.eq(TeachInfo::getCampaignId, campaignId);
+            } else {
+                w.eq(TeachInfo::getCourseId, courseId);
+            }
+            Long count = teachInfoMapper.selectCount(w);
             if (count == null || count == 0) {
                 throw new BusinessException(403, "权限不足");
             }
@@ -465,13 +476,18 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
     // ==================== 统计 ====================
 
     @Override
-    public List<ScoreStatisticsDto> statistics(Long courseId, String className, Long semesterId,
+    public List<ScoreStatisticsDto> statistics(Long courseId, String source, String className, Long semesterId,
                                                Long userId, String userType) {
         List<Long> studentUserIds = resolveScopedStudentUserIds(userType, userId, className);
         LambdaQueryWrapper<Score> w = new LambdaQueryWrapper<Score>()
                 .eq(Score::getScoreType, ScoreTypeEnum.REGULAR);
         if (courseId != null) {
-            w.eq(Score::getCourseId, courseId);
+            // source=SELECTION_CAMPAIGN 表示 courseId 实为公选课 campaignId，按 campaign_id 过滤
+            if (Course.SOURCE_SELECTION_CAMPAIGN.equals(source)) {
+                w.eq(Score::getCampaignId, courseId);
+            } else {
+                w.eq(Score::getCourseId, courseId);
+            }
         }
         if (semesterId != null) {
             w.eq(Score::getSemesterId, semesterId);
@@ -486,12 +502,31 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
         if (grades.isEmpty()) {
             return List.of();
         }
-        Map<Long, List<Score>> byCourse = grades.stream().collect(Collectors.groupingBy(Score::getCourseId));
-        Map<Long, String> courseNameMap = courseMapper.selectByIds(byCourse.keySet()).stream()
-                .collect(Collectors.toMap(Course::getId, Course::getCourseName, (a, b) -> a));
+        // 分组键加前缀避免 course.id 与 campaign.id 数值空间重叠：公选课按 campaignId 分组
+        Map<String, List<Score>> byKey = grades.stream().collect(Collectors.groupingBy(
+                g -> g.getCampaignId() != null ? "C" + g.getCampaignId() : "K" + g.getCourseId()));
+        Map<Long, String> courseNameByCourse = courseInfoResolver.resolveCourses(
+                grades.stream().map(Score::getCourseId).filter(Objects::nonNull).distinct().toList())
+                .entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getCourseName(), (a, b) -> a));
+        Map<Long, String> courseNameByCampaign = courseInfoResolver.resolveCampaigns(
+                grades.stream().map(Score::getCampaignId).filter(Objects::nonNull).distinct().toList())
+                .entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getCourseName(), (a, b) -> a));
         List<ScoreStatisticsDto> result = new ArrayList<>();
-        for (Map.Entry<Long, List<Score>> e : byCourse.entrySet()) {
-            result.add(buildStats(e.getKey(), courseNameMap.get(e.getKey()), e.getValue()));
+        for (Map.Entry<String, List<Score>> e : byKey.entrySet()) {
+            List<Score> groupScores = e.getValue();
+            Score sample = groupScores.get(0);
+            Long statCourseId;
+            String courseName;
+            if (sample.getCampaignId() != null) {
+                statCourseId = sample.getCampaignId();
+                courseName = courseNameByCampaign.get(sample.getCampaignId());
+            } else {
+                statCourseId = sample.getCourseId();
+                courseName = courseNameByCourse.get(sample.getCourseId());
+            }
+            result.add(buildStats(statCourseId, courseName, groupScores));
         }
         return result;
     }
@@ -580,12 +615,15 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
             return List.of();
         }
         List<Long> courseIds = grades.stream().map(Score::getCourseId).filter(Objects::nonNull).distinct().toList();
+        List<Long> campaignIds = grades.stream().map(Score::getCampaignId).filter(Objects::nonNull).distinct().toList();
         List<Long> teacherIds = grades.stream().map(Score::getTeacherId).filter(Objects::nonNull).distinct().toList();
         List<Long> studentUserIds = grades.stream().map(Score::getStudentUserId).distinct().toList();
 
-        Map<Long, String> courseNameMap = courseIds.isEmpty() ? Map.of()
-                : courseMapper.selectByIds(courseIds).stream()
-                        .collect(Collectors.toMap(Course::getId, Course::getCourseName, (a, b) -> a));
+        // 课程名：常规课走 course 表，公选课走 selection_campaign
+        Map<Long, String> courseNameByCourse = courseInfoResolver.resolveCourses(courseIds).entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getCourseName(), (a, b) -> a));
+        Map<Long, String> courseNameByCampaign = courseInfoResolver.resolveCampaigns(campaignIds).entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getCourseName(), (a, b) -> a));
 
         Map<Long, Long> teacherIdToUserId = teacherIds.isEmpty() ? Map.of()
                 : teacherMapper.selectByIds(teacherIds).stream()
@@ -606,7 +644,9 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
             v.setId(g.getId());
             v.setTeachInfoId(g.getTeachInfoId());
             v.setCourseId(g.getCourseId());
-            v.setCourseName(courseNameMap.get(g.getCourseId()));
+            v.setCourseName(g.getCampaignId() != null
+                    ? courseNameByCampaign.get(g.getCampaignId())
+                    : courseNameByCourse.get(g.getCourseId()));
             v.setTeacherId(g.getTeacherId());
             Long tuid = teacherIdToUserId.get(g.getTeacherId());
             v.setTeacherName(tuid != null ? userNameMap.get(tuid) : null);
