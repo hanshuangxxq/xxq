@@ -74,13 +74,18 @@ public class CourseScheduleConstraintProvider implements ConstraintProvider {
     }
 
     /**
-     * 硬约束：被标记为 RESERVED 的时间段仅供对应课程使用。
-     * 若某节课占用了预留给其他课程的时段，则产生硬约束惩罚。
+     * 硬约束：被标记为 RESERVED 的时间段仅供对应课程/公选课活动使用。
+     * 常规课按 reservedCourseId 匹配 lesson.courseId，公选课按 reservedCampaignId 匹配 lesson.campaignId。
      */
     private Constraint timeRestriction(ConstraintFactory factory) {
         return factory.forEach(Lesson.class)
-                .filter(lesson -> lesson.getTimeslot().getReservedCourseId() != null
-                        && !lesson.getTimeslot().getReservedCourseId().equals(lesson.getCourseId()))
+                .filter(lesson -> {
+                    Long rc = lesson.getTimeslot().getReservedCourseId();
+                    Long rca = lesson.getTimeslot().getReservedCampaignId();
+                    boolean courseViolation = rc != null && !rc.equals(lesson.getCourseId());
+                    boolean campaignViolation = rca != null && !rca.equals(lesson.getCampaignId());
+                    return courseViolation || campaignViolation;
+                })
                 .penalize(HardSoftScore.ONE_HARD)
                 .asConstraint("Time restriction");
     }
