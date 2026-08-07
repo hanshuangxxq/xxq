@@ -17,6 +17,8 @@ import com.xrq.xxq.module.analysis.entity.EvaluationTemplateItem;
 import com.xrq.xxq.module.analysis.mapper.EvaluationItemMapper;
 import com.xrq.xxq.module.analysis.mapper.EvaluationTemplateItemMapper;
 import com.xrq.xxq.module.analysis.service.EvaluationItemService;
+import com.xrq.xxq.module.user.mapper.UserMapper;
+import com.xrq.xxq.util.ReferenceValidator;
 
 import lombok.RequiredArgsConstructor;
 
@@ -33,6 +35,8 @@ public class EvaluationItemServiceImpl implements EvaluationItemService {
 
     private final EvaluationItemMapper itemMapper;
     private final EvaluationTemplateItemMapper templateItemMapper;
+    private final UserMapper userMapper;
+    private final ReferenceValidator referenceValidator;
 
     @Override
     @Transactional
@@ -49,6 +53,7 @@ public class EvaluationItemServiceImpl implements EvaluationItemService {
         item.setName(req.getName());
         item.setDescription(req.getDescription());
         item.setMaxScore(maxScore);
+        referenceValidator.requireExists(userMapper, userId, "用户");
         item.setCreateUserId(userId);
         itemMapper.insert(item);
         return toResponse(item, 0);
