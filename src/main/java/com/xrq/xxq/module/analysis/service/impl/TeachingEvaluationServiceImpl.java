@@ -42,8 +42,8 @@ import com.xrq.xxq.module.analysis.service.ProgressService;
 import com.xrq.xxq.module.analysis.service.TeachingEvaluationService;
 import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
-import com.xrq.xxq.module.course.entity.Course;
 import com.xrq.xxq.module.course.mapper.CourseMapper;
+import com.xrq.xxq.module.course.service.CourseInfoResolver;
 import com.xrq.xxq.module.score.entity.Score;
 import com.xrq.xxq.module.score.entity.ScoreTypeEnum;
 import com.xrq.xxq.module.score.mapper.ScoreMapper;
@@ -87,6 +87,7 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
     private final EvaluationTemplateService evaluationTemplateService;
     private final TeachInfoMapper teachInfoMapper;
     private final CourseMapper courseMapper;
+    private final CourseInfoResolver courseInfoResolver;
     private final TeacherMapper teacherMapper;
     private final StudentMapper studentMapper;
     private final UserMapper userMapper;
@@ -162,6 +163,7 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
         ev.setTeachInfoId(info.getId());
         ev.setTeacherId(info.getTeacherId());
         ev.setCourseId(info.getCourseId());
+        ev.setCampaignId(info.getCampaignId());
         ev.setSemesterId(info.getSemesterId());
         ev.setStudentUserId(studentUserId);
         ev.setTemplateId(form.getTemplateId());
@@ -174,18 +176,37 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
             evaluationMapper.updateById(ev);
         }
 
-        // 重写得分明细（快照指标名/满分）
-        scoreDetailMapper.delete(new LambdaQueryWrapper<TeachingEvaluationScore>()
-                .eq(TeachingEvaluationScore::getEvaluationId, ev.getId()));
+        // 增量更新得分明细（按 itemId diff，避免全删全插；快照指标名/满分）
+        List<TeachingEvaluationScore> existingDetails = scoreDetailMapper.selectList(
+                new LambdaQueryWrapper<TeachingEvaluationScore>()
+                        .eq(TeachingEvaluationScore::getEvaluationId, ev.getId()));
+        Map<Long, TeachingEvaluationScore> existingByItemId = existingDetails.stream()
+                .collect(Collectors.toMap(TeachingEvaluationScore::getItemId, d -> d, (a, b) -> a));
+        Set<Long> newItemIds = req.getScores().stream().map(ScoreItemDto::getItemId).collect(Collectors.toSet());
+        // 删除：现有 - 新
+        for (TeachingEvaluationScore d : existingDetails) {
+            if (!newItemIds.contains(d.getItemId())) {
+                scoreDetailMapper.deleteById(d.getId());
+            }
+        }
+        // 新增/更新
         for (ScoreItemDto s : req.getScores()) {
             TemplateItemDto item = itemMap.get(s.getItemId());
-            TeachingEvaluationScore detail = new TeachingEvaluationScore();
-            detail.setEvaluationId(ev.getId());
-            detail.setItemId(s.getItemId());
-            detail.setItemName(item.getItemName());
-            detail.setMaxScore(item.getMaxScore());
-            detail.setScore(s.getScore());
-            scoreDetailMapper.insert(detail);
+            TeachingEvaluationScore existing = existingByItemId.get(s.getItemId());
+            if (existing == null) {
+                TeachingEvaluationScore detail = new TeachingEvaluationScore();
+                detail.setEvaluationId(ev.getId());
+                detail.setItemId(s.getItemId());
+                detail.setItemName(item.getItemName());
+                detail.setMaxScore(item.getMaxScore());
+                detail.setScore(s.getScore());
+                scoreDetailMapper.insert(detail);
+            } else {
+                existing.setItemName(item.getItemName());
+                existing.setMaxScore(item.getMaxScore());
+                existing.setScore(s.getScore());
+                scoreDetailMapper.updateById(existing);
+            }
         }
         return toView(ev, loadNameMaps(List.of(ev)));
     }
@@ -547,8 +568,10 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
     }
 
     private NameMaps loadNameMaps(List<TeachingEvaluation> evals) {
-        Set<Long> courseIds = evals.stream().map(TeachingEvaluation::getCourseId)
-                .filter(Objects::nonNull).collect(Collectors.toSet());
+        List<Long> courseIds = evals.stream().map(TeachingEvaluation::getCourseId)
+                .filter(Objects::nonNull).distinct().toList();
+        List<Long> campaignIds = evals.stream().map(TeachingEvaluation::getCampaignId)
+                .filter(Objects::nonNull).distinct().toList();
         Set<Long> teacherIds = evals.stream().map(TeachingEvaluation::getTeacherId)
                 .filter(Objects::nonNull).collect(Collectors.toSet());
         Set<Long> semesterIds = evals.stream().map(TeachingEvaluation::getSemesterId)
@@ -556,9 +579,11 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
         Set<Long> templateIds = evals.stream().map(TeachingEvaluation::getTemplateId)
                 .filter(Objects::nonNull).collect(Collectors.toSet());
 
-        Map<Long, String> courseNames = courseIds.isEmpty() ? Map.of()
-                : courseMapper.selectByIds(courseIds).stream()
-                        .collect(Collectors.toMap(Course::getId, Course::getCourseName, (a, b) -> a));
+        Map<Long, String> courseNames = new HashMap<>();
+        courseInfoResolver.resolveCourses(courseIds)
+                .forEach((id, info) -> courseNames.put(id, info.getCourseName()));
+        courseInfoResolver.resolveCampaigns(campaignIds)
+                .forEach((id, info) -> courseNames.put(id, info.getCourseName()));
         Map<Long, Long> teacherUserId = teacherIds.isEmpty() ? Map.of()
                 : teacherMapper.selectByIds(teacherIds).stream()
                         .collect(Collectors.toMap(Teacher::getId, Teacher::getUserId, (a, b) -> a));
@@ -581,7 +606,9 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
         v.setId(e.getId());
         v.setTeachInfoId(e.getTeachInfoId());
         v.setCourseId(e.getCourseId());
-        v.setCourseName(names.courseNames().get(e.getCourseId()));
+        v.setCourseName(e.getCampaignId() != null
+                ? names.courseNames().get(e.getCampaignId())
+                : names.courseNames().get(e.getCourseId()));
         v.setTeacherId(e.getTeacherId());
         v.setTeacherName(names.teacherNames().get(e.getTeacherId()));
         v.setSemesterId(e.getSemesterId());
