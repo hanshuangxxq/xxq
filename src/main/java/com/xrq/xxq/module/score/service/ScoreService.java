@@ -48,5 +48,5 @@ public interface ScoreService extends IService<Score> {
      * 成绩统计：按课程聚合分布（优/良/中/及格/不及格、平均/最高/最低/及格率）。
      * 院系仅本院学生、教务全校；可按课程/班级/学期过滤。
      */
-    List<ScoreStatisticsDto> statistics(Long courseId, String className, Long semesterId, Long userId, String userType);
+    List<ScoreStatisticsDto> statistics(Long courseId, String source, String className, Long semesterId, Long userId, String userType);
 }
