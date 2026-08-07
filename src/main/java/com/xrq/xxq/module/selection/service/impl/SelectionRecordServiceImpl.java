@@ -3,7 +3,9 @@ package com.xrq.xxq.module.selection.service.impl;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 
+import jakarta.annotation.PostConstruct;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
@@ -11,6 +13,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.xrq.xxq.common.BusinessException;
+import com.xrq.xxq.module.course.entity.Course;
+import com.xrq.xxq.module.course.mapper.CourseMapper;
 import com.xrq.xxq.module.selection.dto.SelectionRecordRequest;
 import com.xrq.xxq.module.selection.dto.SelectionRecordResponse;
 import com.xrq.xxq.module.selection.dto.StudentCampaignResponse;
@@ -50,8 +54,34 @@ public class SelectionRecordServiceImpl implements SelectionRecordService {
     private final SelectionGroupMapper selectionGroupMapper;
     private final SelectionCampaignTimeRestrictionMapper selectionCampaignTimeRestrictionMapper;
     private final StudentMapper studentMapper;
+    private final CourseMapper courseMapper;
     private final SemesterService semesterService;
     private final StringRedisTemplate redisTemplate;
+
+    /**
+     * 启动时校正 Redis 选课计数器与 DB 一致。
+     * 防止 Redis 崩溃丢数据或应用异常导致计数器与 selection_record 表不一致（脏计数引发超卖或误拒）。
+     */
+    @PostConstruct
+    public void reconcileCounters() {
+        Set<String> keys = redisTemplate.keys(COUNT_KEY_PREFIX + "*");
+        if (keys == null || keys.isEmpty()) {
+            return;
+        }
+        for (String key : keys) {
+            try {
+                Long campaignId = Long.valueOf(key.substring(COUNT_KEY_PREFIX.length()));
+                Long dbCount = selectionRecordMapper.selectCount(new LambdaQueryWrapper<SelectionRecord>()
+                        .eq(SelectionRecord::getCampaignId, campaignId)
+                        .eq(SelectionRecord::getStatus, RecordStatusEnum.SELECTED));
+                if (dbCount != null) {
+                    redisTemplate.opsForValue().set(key, String.valueOf(dbCount));
+                }
+            } catch (NumberFormatException ignore) {
+                // 非数字 campaignId 的 key，跳过
+            }
+        }
+    }
 
     @Override
     @Transactional
@@ -198,7 +228,7 @@ public class SelectionRecordServiceImpl implements SelectionRecordService {
     private StudentCampaignResponse toStudentResponse(SelectionCampaign campaign, Long studentUserId) {
         StudentCampaignResponse resp = new StudentCampaignResponse();
         resp.setId(campaign.getId());
-        resp.setName(campaign.getName());
+        resp.setName(campaign.getCourseName());
         resp.setSemesterId(campaign.getSemesterId());
         Semester semester = semesterService.getById(campaign.getSemesterId());
         resp.setSemesterName(semester != null ? semester.getName() : null);
@@ -208,7 +238,7 @@ public class SelectionRecordServiceImpl implements SelectionRecordService {
         resp.setEndTime(campaign.getEndTime());
         resp.setStatus(campaign.getStatus());
 
-        resp.setCourseId(campaign.getCourseId());
+        resp.setCourseId(null); // 公选课不再关联 course 表
         resp.setCourseCode(campaign.getCourseCode());
         resp.setCredit(campaign.getCredit());
         resp.setCourseHour(campaign.getCourseHour());
@@ -267,7 +297,7 @@ public class SelectionRecordServiceImpl implements SelectionRecordService {
         resp.setSelectTime(record.getSelectTime());
         resp.setDropTime(record.getDropTime());
         if (campaign != null) {
-            resp.setCourseName(campaign.getName());
+            resp.setCourseName(campaign.getCourseName());
             resp.setCourseCode(campaign.getCourseCode());
             resp.setCredit(campaign.getCredit());
             resp.setCourseType(campaign.getCourseType() != null ? campaign.getCourseType().getDescription() : null);
