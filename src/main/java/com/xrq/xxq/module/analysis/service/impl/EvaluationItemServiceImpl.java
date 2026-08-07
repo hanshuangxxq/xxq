@@ -22,8 +22,8 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * 评教指标库服务实现。
- * <p>更新指标时 {@code updateTemplates=true} 同步刷新引用该指标的 evaluation_template_item 快照；
- * 否则模板保留旧快照。已提交的 teaching_evaluation_score 快照永不受影响。
+ * <p>指标名/满分仅存于 evaluation_item 表，模板通过 item_id 关联实时读取，无快照同步。
+ * 已提交的 teaching_evaluation_score 快照永不受影响。
  */
 @Service
 @RequiredArgsConstructor
@@ -71,8 +71,6 @@ public class EvaluationItemServiceImpl implements EvaluationItemService {
         if (item == null) {
             throw new BusinessException(404, "指标不存在");
         }
-        boolean sync = Boolean.TRUE.equals(req.getUpdateTemplates());
-
         if (req.getName() != null) {
             if (req.getName().isBlank()) {
                 throw new BusinessException(400, "指标名称不能为空");
@@ -92,15 +90,6 @@ public class EvaluationItemServiceImpl implements EvaluationItemService {
             item.setMaxScore(normalizeMaxScore(req.getMaxScore()));
         }
         itemMapper.updateById(item);
-
-        // 可选同步：刷新引用本指标的模板快照（item_name/max_score）
-        if (sync) {
-            EvaluationTemplateItem patch = new EvaluationTemplateItem();
-            patch.setItemName(item.getName());
-            patch.setMaxScore(item.getMaxScore());
-            templateItemMapper.update(patch, new LambdaQueryWrapper<EvaluationTemplateItem>()
-                    .eq(EvaluationTemplateItem::getItemId, id));
-        }
 
         Long used = templateItemMapper.selectCount(new LambdaQueryWrapper<EvaluationTemplateItem>()
                 .eq(EvaluationTemplateItem::getItemId, id));
