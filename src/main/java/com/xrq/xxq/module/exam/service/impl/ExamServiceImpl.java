@@ -19,6 +19,7 @@ import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
 import com.xrq.xxq.module.course.entity.Course;
 import com.xrq.xxq.module.course.mapper.CourseMapper;
+import com.xrq.xxq.module.course.service.CourseInfoResolver;
 import com.xrq.xxq.module.exam.dto.ClassCourseOptionDto;
 import com.xrq.xxq.module.exam.dto.ExamCreateRequest;
 import com.xrq.xxq.module.exam.dto.ExamView;
@@ -59,6 +60,7 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements Ex
 
     private final ExamStudentMapper examStudentMapper;
     private final CourseMapper courseMapper;
+    private final CourseInfoResolver courseInfoResolver;
     private final LocalMapper localMapper;
     private final TeacherMapper teacherMapper;
     private final TeachInfoMapper teachInfoMapper;
@@ -118,13 +120,17 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements Ex
     // ==================== 查询 ====================
 
     @Override
-    public List<ExamView> list(Long semesterId, Long courseId, ExamTypeEnum examType) {
+    public List<ExamView> list(Long semesterId, Long courseId, String source, ExamTypeEnum examType) {
         LambdaQueryWrapper<Exam> w = new LambdaQueryWrapper<Exam>().orderByDesc(Exam::getExamDate);
         if (semesterId != null) {
             w.eq(Exam::getSemesterId, semesterId);
         }
         if (courseId != null) {
-            w.eq(Exam::getCourseId, courseId);
+            if (Course.SOURCE_SELECTION_CAMPAIGN.equals(source)) {
+                w.eq(Exam::getCampaignId, courseId);
+            } else {
+                w.eq(Exam::getCourseId, courseId);
+            }
         }
         if (examType != null) {
             w.eq(Exam::getExamType, examType);
@@ -139,14 +145,26 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements Ex
         if (t == null) {
             return List.of();
         }
-        List<Long> courseIds = teachInfoMapper.selectList(
-                        new LambdaQueryWrapper<TeachInfo>().eq(TeachInfo::getTeacherId, t.getId()))
-                .stream().map(TeachInfo::getCourseId).distinct().toList();
-        if (courseIds.isEmpty()) {
+        List<TeachInfo> tis = teachInfoMapper.selectList(
+                new LambdaQueryWrapper<TeachInfo>().eq(TeachInfo::getTeacherId, t.getId()));
+        List<Long> courseIds = tis.stream().map(TeachInfo::getCourseId).filter(Objects::nonNull).distinct().toList();
+        List<Long> campaignIds = tis.stream().map(TeachInfo::getCampaignId).filter(Objects::nonNull).distinct().toList();
+        if (courseIds.isEmpty() && campaignIds.isEmpty()) {
             return List.of();
         }
         return toViews(baseMapper.selectList(new LambdaQueryWrapper<Exam>()
-                .in(Exam::getCourseId, courseIds).orderByAsc(Exam::getExamDate)));
+                .and(w -> {
+                    if (!courseIds.isEmpty()) {
+                        w.in(Exam::getCourseId, courseIds);
+                    }
+                    if (!campaignIds.isEmpty()) {
+                        if (!courseIds.isEmpty()) {
+                            w.or();
+                        }
+                        w.in(Exam::getCampaignId, campaignIds);
+                    }
+                })
+                .orderByAsc(Exam::getExamDate)));
     }
 
     @Override
@@ -199,12 +217,14 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements Ex
                 .stream().map(Exam::getTeachInfoId).collect(Collectors.toSet());
 
         List<Long> courseIds = list.stream().map(TeachInfo::getCourseId).filter(Objects::nonNull).distinct().toList();
+        List<Long> campaignIds = list.stream().map(TeachInfo::getCampaignId).filter(Objects::nonNull).distinct().toList();
         List<Long> teacherIds = list.stream().map(TeachInfo::getTeacherId).filter(Objects::nonNull).distinct().toList();
         List<Long> semesterIds = list.stream().map(TeachInfo::getSemesterId).filter(Objects::nonNull).distinct().toList();
 
-        Map<Long, String> courseNameMap = courseIds.isEmpty() ? Map.of()
-                : courseMapper.selectByIds(courseIds).stream()
-                        .collect(Collectors.toMap(Course::getId, Course::getCourseName, (a, b) -> a));
+        Map<Long, String> courseNameByCourse = courseInfoResolver.resolveCourses(courseIds).entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getCourseName(), (a, b) -> a));
+        Map<Long, String> courseNameByCampaign = courseInfoResolver.resolveCampaigns(campaignIds).entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getCourseName(), (a, b) -> a));
         Map<Long, Teacher> teacherMap = teacherIds.isEmpty() ? Map.of()
                 : teacherMapper.selectByIds(teacherIds).stream()
                         .collect(Collectors.toMap(Teacher::getId, t -> t, (a, b) -> a));
@@ -223,7 +243,9 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements Ex
                     ClassCourseOptionDto dto = new ClassCourseOptionDto();
                     dto.setTeachInfoId(info.getId());
                     dto.setCourseId(info.getCourseId());
-                    dto.setCourseName(courseNameMap.get(info.getCourseId()));
+                    dto.setCourseName(info.getCampaignId() != null
+                            ? courseNameByCampaign.get(info.getCampaignId())
+                            : courseNameByCourse.get(info.getCourseId()));
                     Teacher t = teacherMap.get(info.getTeacherId());
                     if (t != null) {
                         dto.setTeacherName(userNameMap.get(t.getUserId()));
@@ -238,12 +260,18 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements Ex
     // ==================== 补考/重修 ====================
 
     @Override
-    public List<MakeupCandidateDto> listMakeupCandidates(Long courseId, Long semesterId) {
+    public List<MakeupCandidateDto> listMakeupCandidates(Long courseId, String source, Long semesterId) {
         LambdaQueryWrapper<Score> w = new LambdaQueryWrapper<Score>()
-                .eq(Score::getCourseId, courseId)
                 .eq(Score::getScoreType, ScoreTypeEnum.REGULAR)
                 .lt(Score::getTotalScore, BigDecimal.valueOf(60))
                 .orderByAsc(Score::getStudentUserId);
+        if (courseId != null) {
+            if (Course.SOURCE_SELECTION_CAMPAIGN.equals(source)) {
+                w.eq(Score::getCampaignId, courseId);
+            } else {
+                w.eq(Score::getCourseId, courseId);
+            }
+        }
         if (semesterId != null) {
             w.eq(Score::getSemesterId, semesterId);
         }
@@ -351,10 +379,12 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements Ex
             return List.of();
         }
         List<Long> courseIds = exams.stream().map(Exam::getCourseId).filter(Objects::nonNull).distinct().toList();
+        List<Long> campaignIds = exams.stream().map(Exam::getCampaignId).filter(Objects::nonNull).distinct().toList();
         List<Long> localIds = exams.stream().map(Exam::getLocalId).filter(Objects::nonNull).distinct().toList();
-        Map<Long, String> courseNameMap = courseIds.isEmpty() ? Map.of()
-                : courseMapper.selectByIds(courseIds).stream()
-                        .collect(Collectors.toMap(Course::getId, Course::getCourseName, (a, b) -> a));
+        Map<Long, String> courseNameByCourse = courseInfoResolver.resolveCourses(courseIds).entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getCourseName(), (a, b) -> a));
+        Map<Long, String> courseNameByCampaign = courseInfoResolver.resolveCampaigns(campaignIds).entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getCourseName(), (a, b) -> a));
         Map<Long, Local> localMap = localIds.isEmpty() ? Map.of()
                 : localMapper.selectByIds(localIds).stream()
                         .collect(Collectors.toMap(Local::getId, l -> l, (a, b) -> a));
@@ -363,7 +393,9 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements Ex
             v.setId(e.getId());
             v.setExamName(e.getExamName());
             v.setCourseId(e.getCourseId());
-            v.setCourseName(courseNameMap.get(e.getCourseId()));
+            v.setCourseName(e.getCampaignId() != null
+                    ? courseNameByCampaign.get(e.getCampaignId())
+                    : courseNameByCourse.get(e.getCourseId()));
             v.setTeachInfoId(e.getTeachInfoId());
             v.setClassName(e.getClassName());
             v.setExamType(e.getExamType());
