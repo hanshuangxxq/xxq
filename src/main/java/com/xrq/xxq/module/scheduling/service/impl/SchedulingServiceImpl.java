@@ -20,12 +20,12 @@ import com.xrq.xxq.module.time.entity.Time;
 import com.xrq.xxq.module.time.entity.TimeRestriction;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
 import com.xrq.xxq.module.course.mapper.CourseMapper;
+import com.xrq.xxq.module.course.service.CourseInfoResolver;
 import com.xrq.xxq.module.local.mapper.LocalMapper;
 import com.xrq.xxq.module.teachinfo.mapper.TeachInfoMapper;
 import com.xrq.xxq.module.time.mapper.TimeMapper;
 import com.xrq.xxq.module.time.mapper.TimeRestrictionMapper;
 import com.xrq.xxq.module.semester.service.SemesterService;
-import com.xrq.xxq.module.teachinfo.service.TeachInfoService;
 import com.xrq.xxq.module.teachinfo.cache.ClassScheduleCacheManager;
 import com.xrq.xxq.module.scheduling.cache.DraftCacheManager;
 import com.xrq.xxq.module.scheduling.cache.DraftItem;
@@ -70,7 +70,6 @@ public class SchedulingServiceImpl implements SchedulingService {
     private final SolverManager<CourseSchedule> solverManager;
     private final SolutionManager<CourseSchedule, HardSoftScore> solutionManager;
 
-    private final TeachInfoService teachInfoService;
     private final SemesterService semesterService;
     private final DraftCacheManager draftCacheManager;
     private final ClassScheduleCacheManager classScheduleCacheManager;
@@ -79,6 +78,7 @@ public class SchedulingServiceImpl implements SchedulingService {
     private final TimeMapper timeMapper;
     private final LocalMapper localMapper;
     private final CourseMapper courseMapper;
+    private final CourseInfoResolver courseInfoResolver;
     private final TeacherMapper teacherMapper;
     private final UserMapper userMapper;
     private final StudentMapper studentMapper;
@@ -126,7 +126,8 @@ public class SchedulingServiceImpl implements SchedulingService {
         }
 
         // 保存草稿并收集 DB 生成的 ID，确保后续查询一致
-        // 选课分班产生的草稿已入库（id 不为 null），用 updateById 避免主键冲突；新草稿用 save 分配 id
+        // 直接走 mapper 跳过 TeachInfoServiceImpl 重写的逐条缓存淘汰（开头已 clearAll，避免 N 次 evict）
+        // 选课分班产生的草稿已入库（id 不为 null），用 updateById 避免主键冲突；新草稿用 insert 分配 id
         List<TeachInfo> saved = new ArrayList<>();
         for (DraftItem draft : drafts) {
             TeachInfo ti = draft.toTeachInfo();
@@ -144,9 +145,9 @@ public class SchedulingServiceImpl implements SchedulingService {
                         "课程周次范围超出学期范围（" + semester.getStartWeek() + "-" + semester.getEndWeek() + "周）");
             }
             if (ti.getId() != null && teachInfoMapper.selectById(ti.getId()) != null) {
-                teachInfoService.updateById(ti);
+                teachInfoMapper.updateById(ti);
             } else {
-                teachInfoService.save(ti);
+                teachInfoMapper.insert(ti);
             }
             saved.add(ti);
         }
@@ -181,11 +182,10 @@ public class SchedulingServiceImpl implements SchedulingService {
 
         SolverStatus status = solverManager.getSolverStatus(scheduleId);
         if (status == SolverStatus.NOT_SOLVING) {
-            // 首次检测到求解结束：更新分数、清空课表缓存（排课结果已写回 teach_info）
+            // 首次检测到求解结束：更新分数（缓存已由 saveSolution 持续淘汰，此处无需再清）
             if (!"FINISHED".equals(solution.getSolverStatus())) {
                 solution.setSolverStatus("FINISHED");
                 solutionManager.update(solution, SolutionUpdatePolicy.UPDATE_SCORE_ONLY);
-                classScheduleCacheManager.clearAll();
             }
             if (solution.getScore() != null && !solution.getScore().isFeasible()) {
                 throw new BusinessException(500, "无法完成排课：当前时间限制下无法为所有课程分配合适的时间段，请调整时间限制或减少课程数量");
@@ -208,7 +208,13 @@ public class SchedulingServiceImpl implements SchedulingService {
         List<Timeslot> timeslots = buildTimeslots();
         List<Room> rooms = buildRooms();
         Map<String, StudentGroup> classGroups = buildStudentGroups(teachInfos);
-        Map<Long, String> courseNames = loadCourseNames();
+        // 课程名：常规课走 course 表，公选课走 selection_campaign
+        List<Long> courseIds = teachInfos.stream().map(TeachInfo::getCourseId).filter(Objects::nonNull).distinct().toList();
+        List<Long> campaignIds = teachInfos.stream().map(TeachInfo::getCampaignId).filter(Objects::nonNull).distinct().toList();
+        Map<Long, String> courseNameByCourse = courseInfoResolver.resolveCourses(courseIds).entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getCourseName()));
+        Map<Long, String> courseNameByCampaign = courseInfoResolver.resolveCampaigns(campaignIds).entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getCourseName()));
         Map<Long, String> teacherNames = loadTeacherNames();
 
         CourseSchedule schedule = new CourseSchedule();
@@ -216,7 +222,8 @@ public class SchedulingServiceImpl implements SchedulingService {
         schedule.setTimeslotList(timeslots);
         schedule.setRoomList(rooms);
         schedule.setStudentGroupList(new ArrayList<>(classGroups.values()));
-        schedule.setLessonList(buildLessons(teachInfos, courseNames, teacherNames, classGroups, timeslots, rooms));
+        schedule.setLessonList(buildLessons(teachInfos, courseNameByCourse, courseNameByCampaign,
+                teacherNames, classGroups, timeslots, rooms));
         schedule.setSolverStatus("NOT_SOLVING");
         return schedule;
     }
@@ -245,8 +252,10 @@ public class SchedulingServiceImpl implements SchedulingService {
                 }
 
                 Long reservedCourseId = null;
+                Long reservedCampaignId = null;
                 if (restriction != null && "RESERVED".equals(restriction.getRestrictionType())) {
                     reservedCourseId = restriction.getCourseId();
+                    reservedCampaignId = restriction.getCampaignId();
                 }
 
                 timeslots.add(new Timeslot(
@@ -254,7 +263,8 @@ public class SchedulingServiceImpl implements SchedulingService {
                         DayOfWeek.of(dow),
                         time.getStartPeriod(),
                         time.getEndPeriod(),
-                        reservedCourseId));
+                        reservedCourseId,
+                        reservedCampaignId));
             }
         }
         return timeslots;
@@ -338,7 +348,8 @@ public class SchedulingServiceImpl implements SchedulingService {
 
     /** 将授课草稿转换为 Lesson 规划实体。 */
     private List<Lesson> buildLessons(List<TeachInfo> teachInfos,
-                                       Map<Long, String> courseNames,
+                                       Map<Long, String> courseNameByCourse,
+                                       Map<Long, String> courseNameByCampaign,
                                        Map<Long, String> teacherNames,
                                        Map<String, StudentGroup> classGroups,
                                        List<Timeslot> timeslots,
@@ -421,10 +432,14 @@ public class SchedulingServiceImpl implements SchedulingService {
                 studentCount = groups.stream().mapToInt(StudentGroup::getStudentCount).sum();
             }
 
+            String lessonCourseName = ti.getCampaignId() != null
+                    ? courseNameByCampaign.getOrDefault(ti.getCampaignId(), "未知课程")
+                    : courseNameByCourse.getOrDefault(ti.getCourseId(), "未知课程");
             lessons.add(new Lesson(
                     ti.getId(),
                     ti.getCourseId(),
-                    courseNames.getOrDefault(ti.getCourseId(), "未知课程"),
+                    ti.getCampaignId(),
+                    lessonCourseName,
                     ti.getTeacherId(),
                     teacherNames.getOrDefault(ti.getTeacherId(), "未知教师"),
                     groups,
@@ -496,6 +511,8 @@ public class SchedulingServiceImpl implements SchedulingService {
             assignedCount++;
         }
 
+        // 每次更优解写回后立即清空课表缓存，避免求解期间查询读到旧缓存（消除脏读窗口）
+        classScheduleCacheManager.clearAll();
         log.debug("排课解已更新, scheduleId={}, score={}, assigned={}/{}",
                 scheduleId, solution.getScore(), assignedCount, solution.getLessonList().size());
     }
