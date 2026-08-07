@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -20,12 +21,13 @@ import com.xrq.xxq.module.analysis.dto.StudentProfileDto;
 import com.xrq.xxq.module.analysis.dto.StudentProfileDto.SemesterGpaTrend;
 import com.xrq.xxq.module.analysis.dto.StudentProfileDto.SubjectPerformance;
 import com.xrq.xxq.module.analysis.service.StudentProfileService;
+import com.xrq.xxq.module.analysis.util.CreditSource;
 import com.xrq.xxq.module.analysis.util.GpaCalculator;
 import com.xrq.xxq.module.analysis.util.StudentScopeResolver;
 import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
-import com.xrq.xxq.module.course.entity.Course;
 import com.xrq.xxq.module.course.mapper.CourseMapper;
+import com.xrq.xxq.module.course.service.CourseInfoResolver;
 import com.xrq.xxq.module.mojor.entity.Major;
 import com.xrq.xxq.module.mojor.mapper.MajorMapper;
 import com.xrq.xxq.module.score.entity.Score;
@@ -53,6 +55,7 @@ public class StudentProfileServiceImpl implements StudentProfileService {
     private final ClassNameMapper classNameMapper;
     private final MajorMapper majorMapper;
     private final CourseMapper courseMapper;
+    private final CourseInfoResolver courseInfoResolver;
     private final ScoreMapper scoreMapper;
     private final SemesterService semesterService;
     private final StudentScopeResolver scopeResolver;
@@ -74,7 +77,7 @@ public class StudentProfileServiceImpl implements StudentProfileService {
         List<Score> all = scoreMapper.selectList(new LambdaQueryWrapper<Score>()
                 .eq(Score::getStudentUserId, studentUserId)
                 .eq(Score::getScoreType, ScoreTypeEnum.REGULAR));
-        Map<Long, Integer> creditMap = loadCreditMap(all);
+        CreditSource creditSource = loadCreditSource(all);
 
         StudentProfileDto dto = new StudentProfileDto();
         dto.setStudentUserId(studentUserId);
@@ -91,20 +94,20 @@ public class StudentProfileServiceImpl implements StudentProfileService {
         }
 
         // 累计 / 本学期 GPA
-        dto.setCumulativeGpa(GpaCalculator.weightedGpa(all, creditMap));
+        dto.setCumulativeGpa(GpaCalculator.weightedGpa(all, creditSource));
         List<Score> semScores = current == null ? List.of()
                 : all.stream().filter(s -> Objects.equals(s.getSemesterId(), current.getId())).toList();
-        dto.setSemesterGpa(GpaCalculator.weightedGpa(semScores, creditMap));
+        dto.setSemesterGpa(GpaCalculator.weightedGpa(semScores, creditSource));
 
         // 学分与挂科
-        dto.setTotalCredits(sumCredits(all, creditMap, false));
-        dto.setEarnedCredits(sumCredits(all, creditMap, true));
+        dto.setTotalCredits(sumCredits(all, creditSource, false));
+        dto.setEarnedCredits(sumCredits(all, creditSource, true));
         dto.setFailCount((int) all.stream().filter(this::isFail).count());
         dto.setSemesterFailCount((int) semScores.stream().filter(this::isFail).count());
 
         dto.setLevelDistribution(levelDistribution(all));
-        dto.setSemesterTrend(buildTrend(all, creditMap));
-        dto.setSubjects(buildSubjects(semScores, creditMap));
+        dto.setSemesterTrend(buildTrend(all, creditSource));
+        dto.setSubjects(buildSubjects(semScores, creditSource));
         fillClassRank(dto, stu, all);
 
         return dto;
@@ -133,33 +136,39 @@ public class StudentProfileServiceImpl implements StudentProfileService {
 
     // ==================== 计算 ====================
 
-    private Map<Long, Integer> loadCreditMap(List<Score> scores) {
-        Set<Long> ids = scores.stream().map(Score::getCourseId).filter(Objects::nonNull).collect(Collectors.toSet());
-        return loadCreditMapByIds(ids);
-    }
-
-    private Map<Long, Integer> loadCreditMapByIds(Set<Long> courseIds) {
-        if (courseIds.isEmpty()) {
-            return Map.of();
-        }
-        return courseMapper.selectByIds(courseIds).stream()
-                .filter(c -> c.getCredit() != null)
-                .collect(Collectors.toMap(Course::getId, Course::getCredit, (a, b) -> a));
+    /** 学分来源：常规课/公选课分表解析，避免 id 空间重叠串台。 */
+    private CreditSource loadCreditSource(List<Score> scores) {
+        List<Long> courseIds = scores.stream().map(Score::getCourseId).filter(Objects::nonNull).distinct().toList();
+        List<Long> campaignIds = scores.stream().map(Score::getCampaignId).filter(Objects::nonNull).distinct().toList();
+        Map<Long, Integer> cc = new HashMap<>();
+        courseInfoResolver.resolveCourses(courseIds).forEach((id, info) -> {
+            if (info.getCredit() != null) {
+                cc.put(id, info.getCredit());
+            }
+        });
+        Map<Long, Integer> pc = new HashMap<>();
+        courseInfoResolver.resolveCampaigns(campaignIds).forEach((id, info) -> {
+            if (info.getCredit() != null) {
+                pc.put(id, info.getCredit());
+            }
+        });
+        return new CreditSource(cc, pc);
     }
 
     private boolean isFail(Score s) {
         return s.getTotalScore() != null && s.getTotalScore().doubleValue() < 60;
     }
 
-    /** 学分求和：按课程去重；passedOnly=true 时仅计及格课程。 */
-    private Integer sumCredits(List<Score> scores, Map<Long, Integer> creditMap, boolean passedOnly) {
+    /** 学分求和：按课程去重（碰撞安全键）；passedOnly=true 时仅计及格课程。 */
+    private Integer sumCredits(List<Score> scores, CreditSource creditSource, boolean passedOnly) {
         int sum = 0;
-        Set<Long> seen = new HashSet<>();
+        Set<String> seen = new HashSet<>();
         for (Score s : scores) {
-            if (s.getCourseId() == null || !seen.add(s.getCourseId())) {
+            String key = CreditSource.keyOf(s);
+            if (key == null || !seen.add(key)) {
                 continue;
             }
-            Integer c = creditMap.get(s.getCourseId());
+            Integer c = creditSource.creditOf(s);
             if (c == null) {
                 continue;
             }
@@ -187,7 +196,7 @@ public class StudentProfileServiceImpl implements StudentProfileService {
         return dist;
     }
 
-    private List<SemesterGpaTrend> buildTrend(List<Score> all, Map<Long, Integer> creditMap) {
+    private List<SemesterGpaTrend> buildTrend(List<Score> all, CreditSource creditSource) {
         Map<Long, List<Score>> bySem = all.stream()
                 .filter(s -> s.getSemesterId() != null)
                 .collect(Collectors.groupingBy(Score::getSemesterId));
@@ -202,7 +211,7 @@ public class StudentProfileServiceImpl implements StudentProfileService {
             t.setSemesterId(e.getKey());
             Semester sem = semMap.get(e.getKey());
             t.setSemesterName(sem != null ? sem.getName() : null);
-            t.setGpa(GpaCalculator.weightedGpa(e.getValue(), creditMap));
+            t.setGpa(GpaCalculator.weightedGpa(e.getValue(), creditSource));
             t.setAvgScore(avgOf(e.getValue()));
             t.setFailCount((int) e.getValue().stream().filter(this::isFail).count());
             trend.add(t);
@@ -211,21 +220,23 @@ public class StudentProfileServiceImpl implements StudentProfileService {
         return trend;
     }
 
-    private List<SubjectPerformance> buildSubjects(List<Score> semScores, Map<Long, Integer> creditMap) {
+    private List<SubjectPerformance> buildSubjects(List<Score> semScores, CreditSource creditSource) {
         if (semScores.isEmpty()) {
             return List.of();
         }
-        Set<Long> courseIds = semScores.stream().map(Score::getCourseId).filter(Objects::nonNull).collect(Collectors.toSet());
-        Map<Long, Course> courseMap = courseIds.isEmpty() ? Map.of()
-                : courseMapper.selectByIds(courseIds).stream()
-                        .collect(Collectors.toMap(Course::getId, c -> c, (a, b) -> a));
+        List<Long> courseIds = semScores.stream().map(Score::getCourseId).filter(Objects::nonNull).distinct().toList();
+        List<Long> campaignIds = semScores.stream().map(Score::getCampaignId).filter(Objects::nonNull).distinct().toList();
+        Map<Long, CourseInfoResolver.CourseInfo> byCourse = courseInfoResolver.resolveCourses(courseIds);
+        Map<Long, CourseInfoResolver.CourseInfo> byCampaign = courseInfoResolver.resolveCampaigns(campaignIds);
         return semScores.stream().map(s -> {
+            CourseInfoResolver.CourseInfo info = s.getCampaignId() != null
+                    ? byCampaign.get(s.getCampaignId())
+                    : byCourse.get(s.getCourseId());
             SubjectPerformance p = new SubjectPerformance();
             p.setCourseId(s.getCourseId());
-            Course c = courseMap.get(s.getCourseId());
-            p.setCourseName(c != null ? c.getCourseName() : null);
-            p.setCourseType(c != null && c.getCourseType() != null ? c.getCourseType().getDescription() : null);
-            p.setCredit(creditMap.get(s.getCourseId()));
+            p.setCourseName(info != null ? info.getCourseName() : null);
+            p.setCourseType(info != null ? info.courseTypeDesc() : null);
+            p.setCredit(creditSource.creditOf(s));
             p.setTotalScore(s.getTotalScore());
             p.setScoreLevel(s.getScoreLevel());
             p.setGradePoint(GpaCalculator.gradePoint(s.getTotalScore()));
@@ -252,15 +263,13 @@ public class StudentProfileServiceImpl implements StudentProfileService {
         List<Score> matesScores = scoreMapper.selectList(new LambdaQueryWrapper<Score>()
                 .in(Score::getStudentUserId, classmateUserIds)
                 .eq(Score::getScoreType, ScoreTypeEnum.REGULAR));
-        Set<Long> mateCourseIds = matesScores.stream().map(Score::getCourseId)
-                .filter(Objects::nonNull).collect(Collectors.toSet());
-        Map<Long, Integer> creditMap = loadCreditMapByIds(mateCourseIds);
+        CreditSource creditSource = loadCreditSource(matesScores);
         Map<Long, List<Score>> byMate = matesScores.stream()
                 .collect(Collectors.groupingBy(Score::getStudentUserId));
         int ahead = 0;
         int scoredMates = 0;
         for (List<Score> ms : byMate.values()) {
-            BigDecimal g = GpaCalculator.weightedGpa(ms, creditMap);
+            BigDecimal g = GpaCalculator.weightedGpa(ms, creditSource);
             if (g == null) {
                 continue;
             }
