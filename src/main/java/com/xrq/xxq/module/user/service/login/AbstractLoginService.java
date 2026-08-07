@@ -177,24 +177,52 @@ public abstract class AbstractLoginService implements LoginService {
         String identifier = request.getIdentifier();
         switch (request.getUserType()) {
             case "teacher" -> {
+                if (identifier != null && !identifier.isBlank()) {
+                    Long cnt = teacherMapper.selectCount(new LambdaQueryWrapper<Teacher>()
+                            .eq(Teacher::getTeacherNo, identifier));
+                    if (cnt != null && cnt > 0) {
+                        throw new BusinessException(409, "工号已存在");
+                    }
+                }
                 Teacher teacher = new Teacher();
                 teacher.setUserId(user.getId());
                 teacher.setTeacherNo(identifier);
                 teacherMapper.insert(teacher);
             }
             case "student" -> {
+                if (identifier != null && !identifier.isBlank()) {
+                    Long cnt = studentMapper.selectCount(new LambdaQueryWrapper<Student>()
+                            .eq(Student::getStudentNo, identifier));
+                    if (cnt != null && cnt > 0) {
+                        throw new BusinessException(409, "学号已存在");
+                    }
+                }
                 Student student = new Student();
                 student.setUserId(user.getId());
                 student.setStudentNo(identifier);
                 studentMapper.insert(student);
             }
             case "academic_admin" -> {
+                if (identifier != null && !identifier.isBlank()) {
+                    Long cnt = academicAdminMapper.selectCount(new LambdaQueryWrapper<AcademicAdmin>()
+                            .eq(AcademicAdmin::getDepartmentNo, identifier));
+                    if (cnt != null && cnt > 0) {
+                        throw new BusinessException(409, "部门编号已存在");
+                    }
+                }
                 AcademicAdmin admin = new AcademicAdmin();
                 admin.setUserId(user.getId());
                 admin.setDepartmentNo(identifier);
                 academicAdminMapper.insert(admin);
             }
             case "department" -> {
+                if (identifier != null && !identifier.isBlank()) {
+                    Long cnt = departmentMapper.selectCount(new LambdaQueryWrapper<Department>()
+                            .eq(Department::getDepartmentNo, identifier));
+                    if (cnt != null && cnt > 0) {
+                        throw new BusinessException(409, "部门编号已存在");
+                    }
+                }
                 Department dept = new Department();
                 dept.setUserId(user.getId());
                 dept.setDepartmentNo(identifier);
