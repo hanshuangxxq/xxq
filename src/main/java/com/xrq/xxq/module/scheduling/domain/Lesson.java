@@ -37,6 +37,9 @@ public class Lesson {
     /** 课程ID（FK → course.id） */
     private Long courseId;
 
+    /** 公选课活动ID（FK -> selection_campaign.id；常规课为 NULL） */
+    private Long campaignId;
+
     /** 课程名称（冗余，避免约束计算时查库） */
     private String courseName;
 
