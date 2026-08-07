@@ -10,32 +10,32 @@ import com.xrq.xxq.module.course.entity.CurseEnum;
 import lombok.Data;
 
 /**
- * 选课活动实体（= 一门可选课程）。
+ * 选课活动实体。
  * <p>
- * 活动本身就是一门课程，{@code name} 同时作为活动名称与课程名称（单一字段）。
- * 创建时自动在 course 表生成一条衍生记录（source = SELECTION_CAMPAIGN）用于排课系统
- * 识别并关联 TimeRestriction。{@code allowedGradeIds} / {@code allowedMajors}
- * 为空表示不限；非空时按 id 列表过滤。
+ * 活动对应一门公选课，课程信息（名称/编号/学分/学时/描述/类型）直接存在本表，
+ * 不再在 course 表生成衍生记录。下游表（teach_info/score/exam/time_restriction/
+ * teaching_evaluation）通过 {@code campaign_id} 引用本活动，富化时按 campaign_id
+ * 查本表获取课程字段。
+ * {@code allowedGradeIds} / {@code allowedMajors} 为空表示不限；非空时按 id 列表过滤。
  */
 @Data
 @TableName("selection_campaign")
 public class SelectionCampaign {
     @TableId(type = IdType.AUTO)
     private Long id;
-    private String name;
     private Long semesterId;
-    private Long courseId;
-    private Integer startWeek;
-    private Integer endWeek;
-    private LocalDateTime startTime;
-    private LocalDateTime endTime;
-    private CampaignStatusEnum status;
-    // 课程字段（name 即课程名，已包含在上方）
+    // 课程字段（活动即公选课，不再走 course 表）
+    private String courseName;
     private String courseCode;
     private Integer credit;
     private Integer courseHour;
     private String description;
     private CurseEnum courseType;
+    private Integer startWeek;
+    private Integer endWeek;
+    private LocalDateTime startTime;
+    private LocalDateTime endTime;
+    private CampaignStatusEnum status;
     private String allowedGradeIds;
     private String allowedMajors;
     private Integer capacity;
