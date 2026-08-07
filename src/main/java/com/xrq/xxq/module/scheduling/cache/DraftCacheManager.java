@@ -2,6 +2,7 @@ package com.xrq.xxq.module.scheduling.cache;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -17,6 +18,7 @@ import com.xrq.xxq.module.course.entity.Course;
 import com.xrq.xxq.module.teachinfo.entity.TeachInfo;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
 import com.xrq.xxq.module.course.mapper.CourseMapper;
+import com.xrq.xxq.module.course.service.CourseInfoResolver;
 import com.xrq.xxq.module.user.entity.User;
 import com.xrq.xxq.module.user.entity.user.Teacher;
 import com.xrq.xxq.module.user.mapper.TeacherMapper;
@@ -46,6 +48,7 @@ public class DraftCacheManager {
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
     private final CourseMapper courseMapper;
+    private final CourseInfoResolver courseInfoResolver;
     private final TeacherMapper teacherMapper;
     private final UserMapper userMapper;
     private final ClassNameMapper classNameMapper;
@@ -87,12 +90,15 @@ public class DraftCacheManager {
         }
 
         Map<Long, String> courseNames = loadCourseNames(newDrafts);
+        Map<Long, String> campaignNames = loadCampaignNames(newDrafts);
         Map<Long, String> teacherNames = loadTeacherNames(newDrafts);
         Map<String, String> classColleges = loadClassColleges(newDrafts);
 
         List<DraftItem> items = newDrafts.stream()
                 .map(ti -> DraftItem.from(ti,
-                        courseNames.getOrDefault(ti.getCourseId(), "未知课程"),
+                        ti.getCampaignId() != null
+                                ? campaignNames.getOrDefault(ti.getCampaignId(), "未知课程")
+                                : courseNames.getOrDefault(ti.getCourseId(), "未知课程"),
                         teacherNames.getOrDefault(ti.getTeacherId(), "未知教师"),
                         resolveCollege(ti.getClassName(), classColleges)))
                 .toList();
@@ -352,10 +358,20 @@ public class DraftCacheManager {
                 .filter(id -> id != null)
                 .collect(Collectors.toSet());
         if (courseIds.isEmpty()) {
-            return Map.of();
+            return new HashMap<>();
         }
         return courseMapper.selectByIds(courseIds).stream()
                 .collect(Collectors.toMap(Course::getId, Course::getCourseName, (a, b) -> a));
+    }
+
+    private Map<Long, String> loadCampaignNames(List<TeachInfo> drafts) {
+        List<Long> campaignIds = drafts.stream()
+                .map(TeachInfo::getCampaignId)
+                .filter(id -> id != null)
+                .distinct()
+                .toList();
+        return courseInfoResolver.resolveCampaigns(campaignIds).entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getCourseName(), (a, b) -> a));
     }
 
     private Map<Long, String> loadTeacherNames(List<TeachInfo> drafts) {
@@ -364,7 +380,7 @@ public class DraftCacheManager {
                 .filter(id -> id != null)
                 .collect(Collectors.toSet());
         if (teacherIds.isEmpty()) {
-            return Map.of();
+            return new HashMap<>();
         }
 
         List<Teacher> teachers = teacherMapper.selectByIds(teacherIds);
@@ -373,7 +389,7 @@ public class DraftCacheManager {
                 .filter(id -> id != null)
                 .collect(Collectors.toSet());
         Map<Long, String> userIdToName = userIds.isEmpty()
-                ? Map.of()
+                ? new HashMap<>()
                 : userMapper.selectByIds(userIds).stream()
                         .collect(Collectors.toMap(User::getId, User::getName, (a, b) -> a));
 
