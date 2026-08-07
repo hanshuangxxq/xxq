@@ -15,7 +15,8 @@ import lombok.Data;
 public class TeachInfo {
     @TableId (type = IdType.AUTO)
     private Long id;
-    private Long courseId; // 课程ID
+    private Long courseId; // 课程ID（常规课 FK -> course.id；公选课为 NULL）
+    private Long campaignId; // 公选课活动ID（FK -> selection_campaign.id；常规课为 NULL）
     private Long teacherId; // 教师ID
     private String className; // 班级名称
     private Long timeId;  // FK → time.id  上课时间段
