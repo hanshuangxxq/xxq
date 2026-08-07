@@ -33,6 +33,7 @@ import com.xrq.xxq.module.semester.entity.Semester;
 import com.xrq.xxq.module.semester.service.SemesterService;
 import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
+import com.xrq.xxq.util.DistributedLock;
 
 import lombok.RequiredArgsConstructor;
 
@@ -57,6 +58,7 @@ public class SelectionRecordServiceImpl implements SelectionRecordService {
     private final CourseMapper courseMapper;
     private final SemesterService semesterService;
     private final StringRedisTemplate redisTemplate;
+    private final DistributedLock distributedLock;
 
     /**
      * 启动时校正 Redis 选课计数器与 DB 一致。
@@ -126,33 +128,38 @@ public class SelectionRecordServiceImpl implements SelectionRecordService {
             }
         }
 
-        Long dupCount = selectionRecordMapper.selectCount(new LambdaQueryWrapper<SelectionRecord>()
-                .eq(SelectionRecord::getCampaignId, request.getCampaignId())
-                .eq(SelectionRecord::getStudentId, studentUserId)
-                .eq(SelectionRecord::getStatus, RecordStatusEnum.SELECTED));
-        if (dupCount > 0) {
-            throw new BusinessException(409, "已选该课程");
-        }
+        // 分布式锁保护「查重 + 容量 INCR + 插入」关键段，关闭并发下同一生重复选课的竞态窗口。
+        // 锁按 campaignId+studentId 粒度：同一学生重复提交被串行化；容量由 Redis Lua 原子计数器跨学生防超卖。
+        return distributedLock.withLock(
+                "sel:" + request.getCampaignId() + ":" + studentUserId, 30, () -> {
+                    Long dupCount = selectionRecordMapper.selectCount(new LambdaQueryWrapper<SelectionRecord>()
+                            .eq(SelectionRecord::getCampaignId, request.getCampaignId())
+                            .eq(SelectionRecord::getStudentId, studentUserId)
+                            .eq(SelectionRecord::getStatus, RecordStatusEnum.SELECTED));
+                    if (dupCount > 0) {
+                        throw new BusinessException(409, "已选该课程");
+                    }
 
-        String countKey = COUNT_KEY_PREFIX + request.getCampaignId();
-        DefaultRedisScript<Long> script = new DefaultRedisScript<>(INCR_LUA, Long.class);
-        Long result = redisTemplate.execute(script, List.of(countKey), String.valueOf(campaign.getCapacity()));
-        if (result == null || result == -1) {
-            throw new BusinessException(409, "课程已满");
-        }
+                    String countKey = COUNT_KEY_PREFIX + request.getCampaignId();
+                    DefaultRedisScript<Long> script = new DefaultRedisScript<>(INCR_LUA, Long.class);
+                    Long result = redisTemplate.execute(script, List.of(countKey), String.valueOf(campaign.getCapacity()));
+                    if (result == null || result == -1) {
+                        throw new BusinessException(409, "课程已满");
+                    }
 
-        try {
-            SelectionRecord record = new SelectionRecord();
-            record.setCampaignId(request.getCampaignId());
-            record.setStudentId(studentUserId);
-            record.setStatus(RecordStatusEnum.SELECTED);
-            record.setSelectTime(LocalDateTime.now());
-            selectionRecordMapper.insert(record);
-            return toResponse(record, campaign);
-        } catch (Exception e) {
-            redisTemplate.opsForValue().decrement(countKey);
-            throw e;
-        }
+                    try {
+                        SelectionRecord record = new SelectionRecord();
+                        record.setCampaignId(request.getCampaignId());
+                        record.setStudentId(studentUserId);
+                        record.setStatus(RecordStatusEnum.SELECTED);
+                        record.setSelectTime(LocalDateTime.now());
+                        selectionRecordMapper.insert(record);
+                        return toResponse(record, campaign);
+                    } catch (Exception e) {
+                        redisTemplate.opsForValue().decrement(countKey);
+                        throw e;
+                    }
+                });
     }
 
     @Override
