@@ -18,6 +18,7 @@ import com.xrq.xxq.module.user.mapper.*;
 import com.xrq.xxq.util.JwtUtils;
 import com.xrq.xxq.util.auth.LoginSessionStore;
 import com.xrq.xxq.util.auth.UserSession;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 
 import java.time.LocalDateTime;
@@ -158,6 +159,7 @@ public abstract class AbstractLoginService implements LoginService {
     }
 
     @Override
+    @Transactional
     public Boolean register(RegisterRequest request) {
         String account = request.getAccount();
         if (lookupAcrossTables(account) != null) {
