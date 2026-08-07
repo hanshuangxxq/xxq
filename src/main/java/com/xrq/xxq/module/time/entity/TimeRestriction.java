@@ -30,6 +30,9 @@ public class TimeRestriction {
     /** FK → course.id（仅 RESERVED 类型有效，用于指定预留的课程） */
     private Long courseId;
 
+    /** FK -> selection_campaign.id（仅 RESERVED 有效，公选课预留） */
+    private Long campaignId;
+
     /** 限制原因说明 */
     private String reason;
 }
