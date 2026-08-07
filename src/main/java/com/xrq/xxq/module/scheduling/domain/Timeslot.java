@@ -30,7 +30,13 @@ public class Timeslot {
 
     /**
      * 预留课程ID（null 表示无限制）。
-     * 非 null 时此时间段仅供该课程使用（教务管理员设定）。
+     * 非 null 时此时间段仅供该常规课程使用（教务管理员设定）。
      */
     private Long reservedCourseId;
+
+    /**
+     * 预留公选课活动ID（null 表示无限制）。
+     * 非 null 时此时间段仅供该公选课活动使用。
+     */
+    private Long reservedCampaignId;
 }
