@@ -29,6 +29,9 @@ import com.xrq.xxq.module.analysis.mapper.EvaluationTemplateMapper;
 import com.xrq.xxq.module.analysis.mapper.EvaluationTemplateOverrideMapper;
 import com.xrq.xxq.module.analysis.mapper.TeachingEvaluationMapper;
 import com.xrq.xxq.module.analysis.service.EvaluationTemplateService;
+import com.xrq.xxq.module.teachinfo.mapper.TeachInfoMapper;
+import com.xrq.xxq.module.user.mapper.UserMapper;
+import com.xrq.xxq.util.ReferenceValidator;
 
 import lombok.RequiredArgsConstructor;
 
@@ -46,6 +49,9 @@ public class EvaluationTemplateServiceImpl implements EvaluationTemplateService 
     private final EvaluationItemMapper itemMapper;
     private final EvaluationTemplateOverrideMapper overrideMapper;
     private final TeachingEvaluationMapper evaluationMapper;
+    private final UserMapper userMapper;
+    private final TeachInfoMapper teachInfoMapper;
+    private final ReferenceValidator referenceValidator;
 
     // ==================== 模板 CRUD ====================
 
@@ -62,6 +68,7 @@ public class EvaluationTemplateServiceImpl implements EvaluationTemplateService 
         t.setDescription(req.getDescription());
         t.setStatus(EvaluationTemplateStatusEnum.ENABLED);
         t.setIsDefault(0);
+        referenceValidator.requireExists(userMapper, userId, "用户");
         t.setCreateUserId(userId);
         templateMapper.insert(t);
         bindItems(t.getId(), req.getItems(), items);
@@ -145,6 +152,11 @@ public class EvaluationTemplateServiceImpl implements EvaluationTemplateService 
         if (t.getStatus() != EvaluationTemplateStatusEnum.ENABLED) {
             throw new BusinessException(409, "停用模板不可设为默认");
         }
+        if (templateMapper.selectCount(new LambdaQueryWrapper<EvaluationTemplate>()
+                .eq(EvaluationTemplate::getIsDefault, 1)
+                .ne(EvaluationTemplate::getId, id)) > 0) {
+            throw new BusinessException(409, "已有默认模板");
+        }
         // 原默认置普通
         EvaluationTemplate unset = new EvaluationTemplate();
         unset.setIsDefault(0);
@@ -174,6 +186,7 @@ public class EvaluationTemplateServiceImpl implements EvaluationTemplateService 
     @Override
     @Transactional
     public void setOverride(Long teachInfoId, TemplateOverrideRequest req) {
+        referenceValidator.requireExists(teachInfoMapper, teachInfoId, "授课安排");
         Long templateId = req == null ? null : req.getTemplateId();
         if (templateId == null) {
             // 清除覆盖，回退到全局默认模板
@@ -268,11 +281,17 @@ public class EvaluationTemplateServiceImpl implements EvaluationTemplateService 
     }
 
     private void bindItems(Long templateId, List<TemplateItemDto> items, List<EvaluationItem> entities) {
+        referenceValidator.requireExists(templateMapper, templateId, "评教模板");
         Map<Long, EvaluationItem> map = entities.stream()
                 .collect(Collectors.toMap(EvaluationItem::getId, i -> i));
         int order = 1;
         for (TemplateItemDto dto : items) {
             EvaluationItem it = map.get(dto.getItemId());
+            if (templateItemMapper.selectCount(new LambdaQueryWrapper<EvaluationTemplateItem>()
+                    .eq(EvaluationTemplateItem::getTemplateId, templateId)
+                    .eq(EvaluationTemplateItem::getItemId, it.getId())) > 0) {
+                throw new BusinessException(409, "模板指标已存在");
+            }
             EvaluationTemplateItem rel = new EvaluationTemplateItem();
             rel.setTemplateId(templateId);
             rel.setItemId(it.getId());
