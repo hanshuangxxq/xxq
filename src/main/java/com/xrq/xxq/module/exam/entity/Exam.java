@@ -23,7 +23,8 @@ public class Exam {
     private Long id;
 
     private String examName;        // 考试名称
-    private Long courseId;          // FK -> course.id
+    private Long courseId;          // FK -> course.id（公选课为 NULL）
+    private Long campaignId;        // 公选课 FK -> selection_campaign.id（常规课为 NULL）
     private Long teachInfoId;       // 期末/期中绑 teach_info.id；补考/重修为 NULL
     private String className;       // 排考班级（单班级名；期末/期中必填，补考/重修为 NULL）
     private ExamTypeEnum examType;  // FINAL/MIDTERM/MAKEUP/RETAKE
