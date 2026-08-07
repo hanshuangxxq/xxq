@@ -14,8 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
-import com.xrq.xxq.module.course.entity.Course;
 import com.xrq.xxq.module.course.mapper.CourseMapper;
+import com.xrq.xxq.module.course.service.CourseInfoResolver;
 import com.xrq.xxq.module.score.dto.ReviewApplyRequest;
 import com.xrq.xxq.module.score.dto.ReviewReplyRequest;
 import com.xrq.xxq.module.score.dto.ReviewResolveRequest;
@@ -26,8 +26,8 @@ import com.xrq.xxq.module.score.entity.ReviewStatusEnum;
 import com.xrq.xxq.module.score.mapper.ScoreMapper;
 import com.xrq.xxq.module.score.mapper.ScoreReviewMapper;
 import com.xrq.xxq.module.score.service.ScoreReviewService;
-import com.xrq.xxq.module.notification.entity.NotificationTypeEnum;
-import com.xrq.xxq.module.notification.service.NotificationService;
+import org.springframework.context.ApplicationEventPublisher;
+import com.xrq.xxq.common.event.ReviewStatusEvent;
 import com.xrq.xxq.module.user.entity.User;
 import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.entity.user.Teacher;
@@ -49,10 +49,11 @@ public class ScoreReviewServiceImpl extends ServiceImpl<ScoreReviewMapper, Score
 
     private final ScoreMapper scoreMapper;
     private final CourseMapper courseMapper;
+    private final CourseInfoResolver courseInfoResolver;
     private final UserMapper userMapper;
     private final StudentMapper studentMapper;
     private final TeacherMapper teacherMapper;
-    private final NotificationService notificationService;
+    private final ApplicationEventPublisher eventPublisher;
 
     // ==================== 申请 ====================
 
@@ -227,12 +228,12 @@ public class ScoreReviewServiceImpl extends ServiceImpl<ScoreReviewMapper, Score
         Map<Long, Score> gradeMap = scoreMapper.selectByIds(scoreIds).stream()
                 .collect(Collectors.toMap(Score::getId, g -> g, (a, b) -> a));
         List<Long> courseIds = gradeMap.values().stream().map(Score::getCourseId).filter(Objects::nonNull).distinct().toList();
+        List<Long> campaignIds = gradeMap.values().stream().map(Score::getCampaignId).filter(Objects::nonNull).distinct().toList();
         List<Long> teacherIds = gradeMap.values().stream().map(Score::getTeacherId).filter(Objects::nonNull).distinct().toList();
         List<Long> studentUserIds = reviews.stream().map(ScoreReview::getStudentUserId).distinct().toList();
 
-        Map<Long, String> courseNameMap = courseIds.isEmpty() ? Map.of()
-                : courseMapper.selectByIds(courseIds).stream()
-                        .collect(Collectors.toMap(Course::getId, Course::getCourseName, (a, b) -> a));
+        Map<Long, CourseInfoResolver.CourseInfo> byCourse = courseInfoResolver.resolveCourses(courseIds);
+        Map<Long, CourseInfoResolver.CourseInfo> byCampaign = courseInfoResolver.resolveCampaigns(campaignIds);
         Map<Long, Long> teacherIdToUserId = teacherIds.isEmpty() ? Map.of()
                 : teacherMapper.selectByIds(teacherIds).stream()
                         .collect(Collectors.toMap(Teacher::getId, Teacher::getUserId, (a, b) -> a));
@@ -255,7 +256,10 @@ public class ScoreReviewServiceImpl extends ServiceImpl<ScoreReviewMapper, Score
             Score g = gradeMap.get(r.getScoreId());
             if (g != null) {
                 v.setCourseId(g.getCourseId());
-                v.setCourseName(courseNameMap.get(g.getCourseId()));
+                CourseInfoResolver.CourseInfo ci = g.getCampaignId() != null
+                        ? byCampaign.get(g.getCampaignId())
+                        : byCourse.get(g.getCourseId());
+                v.setCourseName(ci != null ? ci.getCourseName() : null);
                 v.setTeacherId(g.getTeacherId());
                 Long tuid = teacherIdToUserId.get(g.getTeacherId());
                 v.setTeacherName(tuid != null ? userNameMap.get(tuid) : null);
@@ -273,11 +277,7 @@ public class ScoreReviewServiceImpl extends ServiceImpl<ScoreReviewMapper, Score
     }
 
     private void notify(Long studentUserId, String title, String content) {
-        try {
-            notificationService.sendToUser(studentUserId, NotificationTypeEnum.GRADE, title, content);
-        } catch (Exception e) {
-            log.warn("复核通知发送失败: studentUserId={}", studentUserId, e);
-        }
+        eventPublisher.publishEvent(new ReviewStatusEvent(studentUserId, title, content));
     }
 
     private void validateScore(BigDecimal s) {
