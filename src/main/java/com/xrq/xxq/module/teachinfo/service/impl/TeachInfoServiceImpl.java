@@ -5,15 +5,27 @@ import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.module.teachinfo.cache.ClassScheduleCacheManager;
 import com.xrq.xxq.module.course.dto.ClassCourseDto;
 import com.xrq.xxq.module.course.dto.CourseDto;
+import com.xrq.xxq.module.course.dto.ElectiveCourseDto;
+import com.xrq.xxq.module.course.dto.PracticeCourseDto;
+import com.xrq.xxq.module.course.dto.PublicCourseDto;
+import com.xrq.xxq.module.course.dto.RequiredCourseDto;
 import com.xrq.xxq.module.course.dto.UserCourseDto;
 import com.xrq.xxq.module.course.dto.WeekScheduleDto;
+import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.course.entity.Course;
+import com.xrq.xxq.module.course.entity.CurseEnum;
+import com.xrq.xxq.module.exam.entity.Exam;
+import com.xrq.xxq.module.exam.mapper.ExamMapper;
 import com.xrq.xxq.module.local.entity.Local;
+import com.xrq.xxq.module.selection.entity.SelectionCampaign;
 import com.xrq.xxq.module.selection.entity.SelectionClass;
 import com.xrq.xxq.module.selection.entity.SelectionClassMember;
+import com.xrq.xxq.module.selection.mapper.SelectionCampaignMapper;
 import com.xrq.xxq.module.selection.mapper.SelectionClassMapper;
 import com.xrq.xxq.module.selection.mapper.SelectionClassMemberMapper;
+import com.xrq.xxq.module.score.entity.Score;
+import com.xrq.xxq.module.score.mapper.ScoreMapper;
 import com.xrq.xxq.module.semester.entity.Semester;
 import com.xrq.xxq.module.teachinfo.entity.TeachInfo;
 import com.xrq.xxq.module.time.entity.Time;
@@ -62,6 +74,9 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
     private final SemesterService semesterService;
     private final SelectionClassMapper selectionClassMapper;
     private final SelectionClassMemberMapper selectionClassMemberMapper;
+    private final SelectionCampaignMapper selectionCampaignMapper;
+    private final ExamMapper examMapper;
+    private final ScoreMapper scoreMapper;
 
     @Override
     public CourseDto getDetailById(Long id, Long userId, String userType) {
@@ -175,8 +190,25 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
     @Override
     public boolean removeById(Serializable id) {
         TeachInfo old = teachInfoMapper.selectById(id);
+        if (old == null) {
+            return false;
+        }
+        // 校验下游引用：有考试/成绩/选课班关联时不允许删除，避免孤儿数据
+        Long examCount = examMapper.selectCount(new LambdaQueryWrapper<Exam>().eq(Exam::getTeachInfoId, id));
+        if (examCount != null && examCount > 0) {
+            throw new BusinessException(409, "该授课安排已关联考试，无法删除");
+        }
+        Long scoreCount = scoreMapper.selectCount(new LambdaQueryWrapper<Score>().eq(Score::getTeachInfoId, id));
+        if (scoreCount != null && scoreCount > 0) {
+            throw new BusinessException(409, "该授课安排已录入成绩，无法删除");
+        }
+        Long selClassCount = selectionClassMapper.selectCount(
+                new LambdaQueryWrapper<SelectionClass>().eq(SelectionClass::getTeachInfoId, id));
+        if (selClassCount != null && selClassCount > 0) {
+            throw new BusinessException(409, "该授课安排关联选课班，无法删除");
+        }
         boolean ok = super.removeById(id);
-        if (ok && old != null) {
+        if (ok) {
             cacheManager.evictByClassNames(old.getClassName());
         }
         return ok;
@@ -351,16 +383,43 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
                 : userMapper.selectByIds(userIds).stream()
                         .collect(Collectors.toMap(User::getId, identity(), (a, b) -> a));
 
+        // 选课班及其活动：teachInfoId -> SelectionClass，campaignId -> SelectionCampaign
+        // 用于公选课（PUBLIC）富化选课活动专属字段，前端无需再调 selection 接口合并
+        List<Long> teachInfoIds = list.stream().map(TeachInfo::getId).filter(Objects::nonNull).distinct().toList();
+        Map<Long, SelectionClass> selectionClassByTeachInfoId = teachInfoIds.isEmpty()
+                ? Map.of()
+                : selectionClassMapper.selectList(new LambdaQueryWrapper<SelectionClass>()
+                        .in(SelectionClass::getTeachInfoId, teachInfoIds))
+                        .stream()
+                        .collect(Collectors.toMap(SelectionClass::getTeachInfoId, sc -> sc, (a, b) -> a));
+        List<Long> campaignIds = list.stream()
+                .map(TeachInfo::getCampaignId).filter(Objects::nonNull).distinct().toList();
+        Map<Long, SelectionCampaign> campaignMap = campaignIds.isEmpty()
+                ? Map.of()
+                : selectionCampaignMapper.selectByIds(campaignIds).stream()
+                        .collect(Collectors.toMap(SelectionCampaign::getId, identity(), (a, b) -> a));
+
         return list.stream().map(info -> {
-            CourseDto resp = new CourseDto();
+            // 公选课走 campaign（courseId 为 null），常规课走 course
+            SelectionCampaign campaign = info.getCampaignId() != null
+                    ? campaignMap.get(info.getCampaignId()) : null;
+            Course course = campaign == null ? courseMap.get(info.getCourseId()) : null;
+            CurseEnum courseType = campaign != null
+                    ? campaign.getCourseType()
+                    : (course != null ? course.getCourseType() : null);
+            CourseDto resp = newCourseDto(courseType);
             resp.setId(info.getId());
 
-            Course course = courseMap.get(info.getCourseId());
-            if (course != null) {
+            if (campaign != null) {
+                resp.setCourseName(campaign.getCourseName());
+                resp.setCredit(campaign.getCredit());
+                resp.setCourseHour(campaign.getCourseHour());
+                resp.setCourseType(courseType != null ? courseType.getDescription() : null);
+            } else if (course != null) {
                 resp.setCourseName(course.getCourseName());
                 resp.setCredit(course.getCredit());
                 resp.setCourseHour(course.getCourseHour());
-                resp.setCourseType(course.getCourseType() != null ? course.getCourseType().getDescription() : null);
+                resp.setCourseType(courseType != null ? courseType.getDescription() : null);
             }
 
             Teacher teacher = teacherMap.get(info.getTeacherId());
@@ -392,8 +451,38 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
                 resp.setClassroom(local.getClassRoom());
             }
 
+            // 公选课富化选课活动专属字段
+            if (resp instanceof PublicCourseDto publicCourse) {
+                SelectionClass sc = selectionClassByTeachInfoId.get(info.getId());
+                if (sc != null) {
+                    publicCourse.setClassNo(sc.getClassNo());
+                    publicCourse.setSelectedCount(sc.getStudentCount());
+                }
+                if (campaign != null) {
+                    publicCourse.setCampaignId(campaign.getId());
+                    publicCourse.setCampaignStatus(campaign.getStatus() != null
+                            ? campaign.getStatus().getCode() : null);
+                    publicCourse.setCapacity(campaign.getCapacity());
+                }
+            }
+
             return resp;
         }).toList();
+    }
+
+    /**
+     * 按课程性质创建对应子类视图。类型为 null 时默认必修（保守处理，保证总有具体实现可实例化）。
+     */
+    private CourseDto newCourseDto(CurseEnum courseType) {
+        if (courseType == null) {
+            return new RequiredCourseDto();
+        }
+        return switch (courseType) {
+            case REQUIRE -> new RequiredCourseDto();
+            case ELECTIVE -> new ElectiveCourseDto();
+            case PUBLIC -> new PublicCourseDto();
+            case PRACTICE -> new PracticeCourseDto();
+        };
     }
 
     /** 根据当前学期的 startDate 计算第 week 周的周一日期。week 为 null 返回 null。 */
