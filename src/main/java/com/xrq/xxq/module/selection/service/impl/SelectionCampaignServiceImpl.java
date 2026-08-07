@@ -23,10 +23,16 @@ import com.xrq.xxq.module.selection.dto.CampaignUpdateRequest;
 import com.xrq.xxq.module.selection.entity.CampaignStatusEnum;
 import com.xrq.xxq.module.selection.entity.SelectionCampaign;
 import com.xrq.xxq.module.selection.entity.SelectionCampaignTimeRestriction;
+import com.xrq.xxq.module.selection.entity.SelectionClass;
+import com.xrq.xxq.module.selection.entity.SelectionClassMember;
 import com.xrq.xxq.module.selection.entity.SelectionGroup;
+import com.xrq.xxq.module.selection.entity.SelectionRecord;
 import com.xrq.xxq.module.selection.mapper.SelectionCampaignMapper;
 import com.xrq.xxq.module.selection.mapper.SelectionCampaignTimeRestrictionMapper;
+import com.xrq.xxq.module.selection.mapper.SelectionClassMapper;
+import com.xrq.xxq.module.selection.mapper.SelectionClassMemberMapper;
 import com.xrq.xxq.module.selection.mapper.SelectionGroupMapper;
+import com.xrq.xxq.module.selection.mapper.SelectionRecordMapper;
 import com.xrq.xxq.module.selection.service.SelectionCampaignService;
 import com.xrq.xxq.module.selection.service.SelectionClassService;
 import com.xrq.xxq.module.time.entity.TimeRestriction;
@@ -55,6 +61,9 @@ public class SelectionCampaignServiceImpl
     private final SelectionGroupMapper selectionGroupMapper;
     private final SelectionCampaignTimeRestrictionMapper selectionCampaignTimeRestrictionMapper;
     private final TimeRestrictionMapper timeRestrictionMapper;
+    private final SelectionClassMapper selectionClassMapper;
+    private final SelectionClassMemberMapper selectionClassMemberMapper;
+    private final SelectionRecordMapper selectionRecordMapper;
     private final SemesterService semesterService;
     private final SelectionClassService selectionClassService;
     private final CourseMapper courseMapper;
@@ -260,21 +269,43 @@ public class SelectionCampaignServiceImpl
     }
 
     /**
-     * 级联清理：删衍生 course 的 RESERVED 时段限制 -> 删活动主表 -> （衍生 course 由调用方按需删）。
+     * 级联清理：DB 的 ON DELETE CASCADE 已移除，应用层显式按依赖顺序删子表。
      * <p>
-     * 子表（selection_class / selection_class_member / selection_record /
-     * selection_campaign_time_restriction）由数据库 ON DELETE CASCADE 级联清理，
-     * 应用层不再逐表删除。
+     * 顺序：selection_class_member（按本活动下所有 selection_class.id 批量删）
+     * -> selection_class（by campaign_id）-> selection_record（by campaign_id）
+     * -> selection_campaign_time_restriction（by campaign_id）
+     * -> time_restriction（campaign_id 指向本活动的 RESERVED 时段）
+     * -> Redis 选课计数器 -> 活动主表。
      *
-     * @param deleteCourse 是否删除衍生 Course；delete() 传 true，deleteByCourseId() 传 false（由调用方删 Course）
+     * @param deleteCourse 是否删除衍生 Course；公选课无衍生 course，此参数保留以兼容签名
      */
     private void doCascadeDelete(SelectionCampaign campaign, boolean deleteCourse) {
-        // 删公选课的 RESERVED 时段限制（campaign_id 指向本活动）
+        Long campaignId = campaign.getId();
+        // 1. 删 selection_class_member：先取本活动下所有 selection_class.id，再批量删其成员
+        List<Long> classIds = selectionClassMapper.selectList(
+                new LambdaQueryWrapper<SelectionClass>()
+                        .eq(SelectionClass::getCampaignId, campaignId))
+                .stream().map(SelectionClass::getId).toList();
+        if (!classIds.isEmpty()) {
+            selectionClassMemberMapper.delete(new LambdaQueryWrapper<SelectionClassMember>()
+                    .in(SelectionClassMember::getClassId, classIds));
+        }
+        // 2. 删 selection_class（by campaign_id）
+        selectionClassMapper.delete(new LambdaQueryWrapper<SelectionClass>()
+                .eq(SelectionClass::getCampaignId, campaignId));
+        // 3. 删 selection_record（by campaign_id）
+        selectionRecordMapper.delete(new LambdaQueryWrapper<SelectionRecord>()
+                .eq(SelectionRecord::getCampaignId, campaignId));
+        // 4. 删 selection_campaign_time_restriction（by campaign_id）
+        selectionCampaignTimeRestrictionMapper.delete(new LambdaQueryWrapper<SelectionCampaignTimeRestriction>()
+                .eq(SelectionCampaignTimeRestriction::getCampaignId, campaignId));
+        // 5. 删公选课的 RESERVED 时段限制（campaign_id 指向本活动）
         timeRestrictionMapper.delete(new LambdaQueryWrapper<TimeRestriction>()
-                .eq(TimeRestriction::getCampaignId, campaign.getId()));
-        // 清理 Redis 选课计数器（selection_record 由 DB CASCADE 删除，Redis key 需手动清）
-        redisTemplate.delete("selection:count:" + campaign.getId());
-        removeById(campaign.getId());
+                .eq(TimeRestriction::getCampaignId, campaignId));
+        // 6. 清理 Redis 选课计数器
+        redisTemplate.delete("selection:count:" + campaignId);
+        // 7. 删活动主表
+        removeById(campaignId);
         // 公选课无衍生 course 记录，无需删除 course 表
     }
 
