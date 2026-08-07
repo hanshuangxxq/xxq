@@ -22,7 +22,8 @@ public class TeachingEvaluation {
     private Long id;
     private Long teachInfoId;
     private Long teacherId;          // teacher.id（快照）
-    private Long courseId;           // 课程ID（快照）
+    private Long courseId;           // 课程ID（快照，公选课为 NULL）
+    private Long campaignId;         // 公选课活动ID（快照，常规课为 NULL）
     private Long semesterId;
     private Long studentUserId;
     private Long templateId;         // 提交时所评教模板 id（快照）
