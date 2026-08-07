@@ -27,6 +27,7 @@ import com.xrq.xxq.module.selection.mapper.SelectionClassMemberMapper;
 import com.xrq.xxq.module.score.entity.Score;
 import com.xrq.xxq.module.score.mapper.ScoreMapper;
 import com.xrq.xxq.module.semester.entity.Semester;
+import com.xrq.xxq.module.semester.mapper.SemesterMapper;
 import com.xrq.xxq.module.teachinfo.entity.TeachInfo;
 import com.xrq.xxq.module.time.entity.Time;
 import com.xrq.xxq.module.time.mapper.TimeMapper;
@@ -44,6 +45,7 @@ import com.xrq.xxq.module.user.mapper.DepartmentMapper;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.module.user.mapper.TeacherMapper;
 import com.xrq.xxq.module.user.mapper.UserMapper;
+import com.xrq.xxq.util.ReferenceValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -77,6 +79,8 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
     private final SelectionCampaignMapper selectionCampaignMapper;
     private final ExamMapper examMapper;
     private final ScoreMapper scoreMapper;
+    private final ReferenceValidator referenceValidator;
+    private final SemesterMapper semesterMapper;
 
     @Override
     public CourseDto getDetailById(Long id, Long userId, String userType) {
@@ -163,8 +167,17 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
 
     // ── 增/改/删时淘汰相关缓存 ──
 
+    private void validateReferences(TeachInfo entity) {
+        referenceValidator.requireCourseRef(entity.getCourseId(), entity.getCampaignId());
+        referenceValidator.requireExists(teacherMapper, entity.getTeacherId(), "教师");
+        referenceValidator.requireExists(timeMapper, entity.getTimeId(), "时间");
+        referenceValidator.requireExists(localMapper, entity.getLocalId(), "地点");
+        referenceValidator.requireExists(semesterMapper, entity.getSemesterId(), "学期");
+    }
+
     @Override
     public boolean save(TeachInfo entity) {
+        validateReferences(entity);
         boolean ok = super.save(entity);
         if (ok) {
             cacheManager.evictByClassNames(entity.getClassName());
@@ -174,6 +187,7 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
 
     @Override
     public boolean updateById(TeachInfo entity) {
+        validateReferences(entity);
         TeachInfo old = teachInfoMapper.selectById(entity.getId());
         boolean ok = super.updateById(entity);
         if (ok) {
