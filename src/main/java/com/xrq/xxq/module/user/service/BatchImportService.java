@@ -82,6 +82,13 @@ public class BatchImportService {
             throw new IllegalArgumentException("密码不能为空");
         }
 
+        // 用户名唯一性预检
+        Long userCnt = userMapper.selectCount(new LambdaQueryWrapper<User>()
+                .eq(User::getName, item.getUsername().strip()));
+        if (userCnt != null && userCnt > 0) {
+            throw new BusinessException(409, "用户名已存在：" + item.getUsername().strip());
+        }
+
         User user = new User();
         user.setName(item.getUsername().strip());
         user.setPassword(EncryptUtils.hashWithPbkdf2(item.getPassword()));
@@ -93,6 +100,13 @@ public class BatchImportService {
         userMapper.insert(user);
 
         if ("student".equals(userType)) {
+            if (item.getIdentifier() != null && !item.getIdentifier().isBlank()) {
+                Long cnt = studentMapper.selectCount(new LambdaQueryWrapper<Student>()
+                        .eq(Student::getStudentNo, item.getIdentifier()));
+                if (cnt != null && cnt > 0) {
+                    throw new BusinessException(409, "学号已存在：" + item.getIdentifier());
+                }
+            }
             Student student = new Student();
             student.setUserId(user.getId());
             student.setStudentNo(item.getIdentifier());
@@ -100,6 +114,13 @@ public class BatchImportService {
             student.setMajorId(resolveMajorId(item.getDepartment()));
             studentMapper.insert(student);
         } else {
+            if (item.getIdentifier() != null && !item.getIdentifier().isBlank()) {
+                Long cnt = teacherMapper.selectCount(new LambdaQueryWrapper<Teacher>()
+                        .eq(Teacher::getTeacherNo, item.getIdentifier()));
+                if (cnt != null && cnt > 0) {
+                    throw new BusinessException(409, "工号已存在：" + item.getIdentifier());
+                }
+            }
             Teacher teacher = new Teacher();
             teacher.setUserId(user.getId());
             teacher.setTeacherNo(item.getIdentifier());
