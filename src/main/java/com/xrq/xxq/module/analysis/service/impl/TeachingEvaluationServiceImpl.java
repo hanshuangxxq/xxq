@@ -52,6 +52,7 @@ import com.xrq.xxq.module.selection.entity.SelectionClassMember;
 import com.xrq.xxq.module.selection.mapper.SelectionClassMapper;
 import com.xrq.xxq.module.selection.mapper.SelectionClassMemberMapper;
 import com.xrq.xxq.module.semester.entity.Semester;
+import com.xrq.xxq.module.semester.mapper.SemesterMapper;
 import com.xrq.xxq.module.semester.service.SemesterService;
 import com.xrq.xxq.module.teachinfo.entity.TeachInfo;
 import com.xrq.xxq.module.teachinfo.mapper.TeachInfoMapper;
@@ -63,6 +64,8 @@ import com.xrq.xxq.module.user.mapper.DepartmentMapper;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.module.user.mapper.TeacherMapper;
 import com.xrq.xxq.module.user.mapper.UserMapper;
+import com.xrq.xxq.util.DistributedLock;
+import com.xrq.xxq.util.ReferenceValidator;
 import com.xrq.xxq.util.auth.AuthFacade;
 
 import lombok.RequiredArgsConstructor;
@@ -98,6 +101,9 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
     private final SelectionClassMemberMapper selectionClassMemberMapper;
     private final SemesterService semesterService;
     private final ProgressService progressService;
+    private final ReferenceValidator referenceValidator;
+    private final DistributedLock distributedLock;
+    private final SemesterMapper semesterMapper;
 
     // ==================== 评教提交 ====================
 
@@ -115,6 +121,10 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
         if (info == null) {
             throw new BusinessException(404, "授课安排不存在");
         }
+        referenceValidator.requireExists(teacherMapper, info.getTeacherId(), "教师");
+        referenceValidator.requireCourseRef(info.getCourseId(), info.getCampaignId());
+        referenceValidator.requireExists(semesterMapper, info.getSemesterId(), "学期");
+        referenceValidator.requireExists(userMapper, studentUserId, "用户");
         assertPeriodOpen(info.getSemesterId());
         Student stu = studentMapper.selectOne(
                 new LambdaQueryWrapper<Student>().eq(Student::getUserId, studentUserId));
@@ -124,6 +134,7 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
 
         // 解析评教模板（课程覆盖优先，否则全局默认）+ 校验评分
         var form = evaluationTemplateService.getEvaluationForm(req.getTeachInfoId());
+        referenceValidator.requireExists(evaluationTemplateMapper, form.getTemplateId(), "评教模板");
         List<TemplateItemDto> templateItems = form.getItems();
         if (templateItems == null || templateItems.isEmpty()) {
             throw new BusinessException(400, "评教模板无指标");
@@ -156,59 +167,61 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
         double avg = req.getScores().stream().mapToInt(s -> s.getScore()).average().orElse(0);
         BigDecimal avgScore = BigDecimal.valueOf(avg).setScale(2, RoundingMode.HALF_UP);
 
-        TeachingEvaluation exist = evaluationMapper.selectOne(new LambdaQueryWrapper<TeachingEvaluation>()
-                .eq(TeachingEvaluation::getTeachInfoId, req.getTeachInfoId())
-                .eq(TeachingEvaluation::getStudentUserId, studentUserId));
-        TeachingEvaluation ev = exist != null ? exist : new TeachingEvaluation();
-        ev.setTeachInfoId(info.getId());
-        ev.setTeacherId(info.getTeacherId());
-        ev.setCourseId(info.getCourseId());
-        ev.setCampaignId(info.getCampaignId());
-        ev.setSemesterId(info.getSemesterId());
-        ev.setStudentUserId(studentUserId);
-        ev.setTemplateId(form.getTemplateId());
-        ev.setAvgScore(avgScore);
-        ev.setComment(req.getComment());
-        ev.setAnonymous(1);
-        if (exist == null) {
-            evaluationMapper.insert(ev);
-        } else {
-            evaluationMapper.updateById(ev);
-        }
-
-        // 增量更新得分明细（按 itemId diff，避免全删全插；快照指标名/满分）
-        List<TeachingEvaluationScore> existingDetails = scoreDetailMapper.selectList(
-                new LambdaQueryWrapper<TeachingEvaluationScore>()
-                        .eq(TeachingEvaluationScore::getEvaluationId, ev.getId()));
-        Map<Long, TeachingEvaluationScore> existingByItemId = existingDetails.stream()
-                .collect(Collectors.toMap(TeachingEvaluationScore::getItemId, d -> d, (a, b) -> a));
-        Set<Long> newItemIds = req.getScores().stream().map(ScoreItemDto::getItemId).collect(Collectors.toSet());
-        // 删除：现有 - 新
-        for (TeachingEvaluationScore d : existingDetails) {
-            if (!newItemIds.contains(d.getItemId())) {
-                scoreDetailMapper.deleteById(d.getId());
-            }
-        }
-        // 新增/更新
-        for (ScoreItemDto s : req.getScores()) {
-            TemplateItemDto item = itemMap.get(s.getItemId());
-            TeachingEvaluationScore existing = existingByItemId.get(s.getItemId());
-            if (existing == null) {
-                TeachingEvaluationScore detail = new TeachingEvaluationScore();
-                detail.setEvaluationId(ev.getId());
-                detail.setItemId(s.getItemId());
-                detail.setItemName(item.getItemName());
-                detail.setMaxScore(item.getMaxScore());
-                detail.setScore(s.getScore());
-                scoreDetailMapper.insert(detail);
+        return distributedLock.withLock("eval:" + req.getTeachInfoId() + ":" + studentUserId, 30, () -> {
+            TeachingEvaluation exist = evaluationMapper.selectOne(new LambdaQueryWrapper<TeachingEvaluation>()
+                    .eq(TeachingEvaluation::getTeachInfoId, req.getTeachInfoId())
+                    .eq(TeachingEvaluation::getStudentUserId, studentUserId));
+            TeachingEvaluation ev = exist != null ? exist : new TeachingEvaluation();
+            ev.setTeachInfoId(info.getId());
+            ev.setTeacherId(info.getTeacherId());
+            ev.setCourseId(info.getCourseId());
+            ev.setCampaignId(info.getCampaignId());
+            ev.setSemesterId(info.getSemesterId());
+            ev.setStudentUserId(studentUserId);
+            ev.setTemplateId(form.getTemplateId());
+            ev.setAvgScore(avgScore);
+            ev.setComment(req.getComment());
+            ev.setAnonymous(1);
+            if (exist == null) {
+                evaluationMapper.insert(ev);
             } else {
-                existing.setItemName(item.getItemName());
-                existing.setMaxScore(item.getMaxScore());
-                existing.setScore(s.getScore());
-                scoreDetailMapper.updateById(existing);
+                evaluationMapper.updateById(ev);
             }
-        }
-        return toView(ev, loadNameMaps(List.of(ev)));
+
+            // 增量更新得分明细（按 itemId diff，避免全删全插；快照指标名/满分）
+            List<TeachingEvaluationScore> existingDetails = scoreDetailMapper.selectList(
+                    new LambdaQueryWrapper<TeachingEvaluationScore>()
+                            .eq(TeachingEvaluationScore::getEvaluationId, ev.getId()));
+            Map<Long, TeachingEvaluationScore> existingByItemId = existingDetails.stream()
+                    .collect(Collectors.toMap(TeachingEvaluationScore::getItemId, d -> d, (a, b) -> a));
+            Set<Long> newItemIds = req.getScores().stream().map(ScoreItemDto::getItemId).collect(Collectors.toSet());
+            // 删除：现有 - 新
+            for (TeachingEvaluationScore d : existingDetails) {
+                if (!newItemIds.contains(d.getItemId())) {
+                    scoreDetailMapper.deleteById(d.getId());
+                }
+            }
+            // 新增/更新
+            for (ScoreItemDto s : req.getScores()) {
+                TemplateItemDto item = itemMap.get(s.getItemId());
+                TeachingEvaluationScore existing = existingByItemId.get(s.getItemId());
+                if (existing == null) {
+                    TeachingEvaluationScore detail = new TeachingEvaluationScore();
+                    detail.setEvaluationId(ev.getId());
+                    detail.setItemId(s.getItemId());
+                    detail.setItemName(item.getItemName());
+                    detail.setMaxScore(item.getMaxScore());
+                    detail.setScore(s.getScore());
+                    scoreDetailMapper.insert(detail);
+                } else {
+                    existing.setItemName(item.getItemName());
+                    existing.setMaxScore(item.getMaxScore());
+                    existing.setScore(s.getScore());
+                    scoreDetailMapper.updateById(existing);
+                }
+            }
+            return toView(ev, loadNameMaps(List.of(ev)));
+        });
     }
 
     /** 校验学生是否选修该授课安排（公选走选课班成员，常规班走班级名册）。 */
@@ -252,6 +265,7 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
         if (current == null) {
             throw new BusinessException(400, "无当前学期");
         }
+        referenceValidator.requireExists(semesterMapper, current.getId(), "学期");
         if (evaluationTemplateMapper.selectCount(new LambdaQueryWrapper<EvaluationTemplate>()
                 .eq(EvaluationTemplate::getIsDefault, 1)) == 0) {
             throw new BusinessException(400, "请先配置默认评教模板");
