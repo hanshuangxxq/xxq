@@ -41,6 +41,7 @@ import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.entity.user.Teacher;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.module.user.mapper.TeacherMapper;
+import com.xrq.xxq.util.ReferenceValidator;
 
 import lombok.RequiredArgsConstructor;
 
@@ -60,6 +61,7 @@ public class SelectionClassServiceImpl implements SelectionClassService {
     private final TeacherMapper teacherMapper;
     private final DraftCacheManager draftCacheManager;
     private final ClassScheduleCacheManager classScheduleCacheManager;
+    private final ReferenceValidator referenceValidator;
 
     @Override
     @Transactional
@@ -117,6 +119,13 @@ public class SelectionClassServiceImpl implements SelectionClassService {
             Set<Long> newStudentIds = batch.stream()
                     .map(SelectionRecord::getStudentId).collect(Collectors.toSet());
             if (sc == null) {
+                // 唯一性预检 (campaign_id, class_no)
+                Long classDup = selectionClassMapper.selectCount(new LambdaQueryWrapper<SelectionClass>()
+                        .eq(SelectionClass::getCampaignId, campaignId)
+                        .eq(SelectionClass::getClassNo, classNo));
+                if (classDup > 0) {
+                    throw new BusinessException(409, "选课班编号已存在(活动=" + campaignId + ", 班号=" + classNo + ")");
+                }
                 // 新班：建 teach_info（教师/时段/教室为 null）+ selection_class + member
                 TeachInfo ti = new TeachInfo();
                 ti.setCampaignId(campaign.getId());
@@ -195,8 +204,19 @@ public class SelectionClassServiceImpl implements SelectionClassService {
         }
     }
 
-    /** 插入选课班成员。 */
+    /** 插入选课班成员：唯一性预检 (class_id, student_id) + 外键存在性校验。 */
     private void insertMember(Long classId, SelectionRecord r) {
+        // 唯一性预检 (class_id, student_id)
+        Long memberDup = selectionClassMemberMapper.selectCount(new LambdaQueryWrapper<SelectionClassMember>()
+                .eq(SelectionClassMember::getClassId, classId)
+                .eq(SelectionClassMember::getStudentId, r.getStudentId()));
+        if (memberDup > 0) {
+            throw new BusinessException(409, "该学生已在本选课班中");
+        }
+        // 外键存在性
+        referenceValidator.requireExists(selectionClassMapper, classId, "选课班");
+        referenceValidator.requireExists(userMapper, r.getStudentId(), "用户");
+        referenceValidator.requireExists(selectionRecordMapper, r.getId(), "选课记录");
         SelectionClassMember member = new SelectionClassMember();
         member.setClassId(classId);
         member.setStudentId(r.getStudentId());
@@ -228,11 +248,9 @@ public class SelectionClassServiceImpl implements SelectionClassService {
 
         String teacherName = null;
         if (teacherId != null) {
+            referenceValidator.requireExists(teacherMapper, teacherId, "教师");
             Teacher teacher = teacherMapper.selectById(teacherId);
-            if (teacher == null) {
-                throw new BusinessException(404, "教师不存在");
-            }
-            if (teacher.getUserId() != null) {
+            if (teacher != null && teacher.getUserId() != null) {
                 User teacherUser = userMapper.selectById(teacher.getUserId());
                 teacherName = teacherUser != null ? teacherUser.getName() : null;
             }
