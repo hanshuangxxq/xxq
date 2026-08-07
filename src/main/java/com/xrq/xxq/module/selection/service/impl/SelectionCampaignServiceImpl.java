@@ -1,7 +1,9 @@
 package com.xrq.xxq.module.selection.service.impl;
 
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -21,16 +23,10 @@ import com.xrq.xxq.module.selection.dto.CampaignUpdateRequest;
 import com.xrq.xxq.module.selection.entity.CampaignStatusEnum;
 import com.xrq.xxq.module.selection.entity.SelectionCampaign;
 import com.xrq.xxq.module.selection.entity.SelectionCampaignTimeRestriction;
-import com.xrq.xxq.module.selection.entity.SelectionClass;
-import com.xrq.xxq.module.selection.entity.SelectionClassMember;
 import com.xrq.xxq.module.selection.entity.SelectionGroup;
-import com.xrq.xxq.module.selection.entity.SelectionRecord;
 import com.xrq.xxq.module.selection.mapper.SelectionCampaignMapper;
 import com.xrq.xxq.module.selection.mapper.SelectionCampaignTimeRestrictionMapper;
-import com.xrq.xxq.module.selection.mapper.SelectionClassMapper;
-import com.xrq.xxq.module.selection.mapper.SelectionClassMemberMapper;
 import com.xrq.xxq.module.selection.mapper.SelectionGroupMapper;
-import com.xrq.xxq.module.selection.mapper.SelectionRecordMapper;
 import com.xrq.xxq.module.selection.service.SelectionCampaignService;
 import com.xrq.xxq.module.selection.service.SelectionClassService;
 import com.xrq.xxq.module.time.entity.TimeRestriction;
@@ -38,9 +34,9 @@ import com.xrq.xxq.module.time.mapper.TimeRestrictionMapper;
 
 import java.time.format.DateTimeFormatter;
 
-import com.xrq.xxq.module.notification.entity.NotificationTargetEnum;
-import com.xrq.xxq.module.notification.entity.NotificationTypeEnum;
-import com.xrq.xxq.module.notification.service.NotificationService;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import com.xrq.xxq.common.event.CampaignOpenedEvent;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -58,14 +54,12 @@ public class SelectionCampaignServiceImpl
 
     private final SelectionGroupMapper selectionGroupMapper;
     private final SelectionCampaignTimeRestrictionMapper selectionCampaignTimeRestrictionMapper;
-    private final SelectionRecordMapper selectionRecordMapper;
-    private final SelectionClassMapper selectionClassMapper;
-    private final SelectionClassMemberMapper selectionClassMemberMapper;
     private final TimeRestrictionMapper timeRestrictionMapper;
     private final SemesterService semesterService;
     private final SelectionClassService selectionClassService;
     private final CourseMapper courseMapper;
-    private final NotificationService notificationService;
+    private final ApplicationEventPublisher eventPublisher;
+    private final StringRedisTemplate redisTemplate;
 
     @Override
     @Transactional
@@ -79,55 +73,44 @@ public class SelectionCampaignServiceImpl
         }
         validateCourseFields(request.getName(), request.getCourseCode(),
                 request.getCredit(), request.getCapacity());
-        // 课程编号在学期内唯一
-        Long codeConflict = baseMapper.selectCount(new LambdaQueryWrapper<SelectionCampaign>()
-                .eq(SelectionCampaign::getSemesterId, request.getSemesterId())
-                .eq(SelectionCampaign::getCourseCode, request.getCourseCode()));
-        if (codeConflict > 0) {
+        // 课程编号在学期内唯一：公选课活动间 + 常规 course 表均不可冲突
+        Long codeConflict = baseMapper.countByCourseCodeInSemester(
+                request.getSemesterId(), request.getCourseCode(), null);
+        if (codeConflict != null && codeConflict > 0) {
             throw new BusinessException(409, "该课程编号已在本学期中存在");
+        }
+        if (courseMapper.exists(new LambdaQueryWrapper<Course>()
+                .eq(Course::getCourseCode, request.getCourseCode()))) {
+            throw new BusinessException(409, "该课程编号已存在");
         }
         if (request.getGroupId() != null && selectionGroupMapper.selectById(request.getGroupId()) == null) {
             throw new BusinessException(404, "选课组不存在");
         }
 
-        // 1. 在 course 表插入衍生记录（source = SELECTION_CAMPAIGN，courseName = 活动名）
-        Course derivedCourse = new Course();
-        derivedCourse.setCourseName(request.getName());
-        if (request.getCourseCode() != null){
-            derivedCourse.setCourseCode(request.getCourseCode());
-        }else {
-            derivedCourse.setCourseCode("SEL-CAMP-" + request.getSemesterId() + "-" + System.currentTimeMillis());
-        }
-        derivedCourse.setCredit(request.getCredit());
-        derivedCourse.setCourseHour(request.getCourseHour());
-        derivedCourse.setDescription(request.getDescription());
-        derivedCourse.setCourseType(request.getCourseType());
-        derivedCourse.setSource(SOURCE_SELECTION_CAMPAIGN);
-        courseMapper.insert(derivedCourse);
-
-        // 2. 创建 campaign（含课程字段 + groupId；name 即课程名）
+        // 公选课课程信息直接存入 campaign，不再在 course 表生成衍生记录
         SelectionCampaign campaign = new SelectionCampaign();
-        campaign.setName(request.getName());
         campaign.setSemesterId(request.getSemesterId());
-        campaign.setCourseId(derivedCourse.getId());
+        campaign.setCourseName(request.getName());
+        campaign.setCourseCode(request.getCourseCode() != null
+                ? request.getCourseCode()
+                : "SEL-CAMP-" + request.getSemesterId() + "-" + System.currentTimeMillis());
+        campaign.setCredit(request.getCredit());
+        campaign.setCourseHour(request.getCourseHour());
+        campaign.setDescription(request.getDescription());
+        campaign.setCourseType(request.getCourseType());
         campaign.setStartWeek(request.getStartWeek() != null ? request.getStartWeek() : DEFAULT_START_WEEK);
         campaign.setEndWeek(request.getEndWeek() != null ? request.getEndWeek() : DEFAULT_END_WEEK);
         campaign.setStartTime(request.getStartTime());
         campaign.setEndTime(request.getEndTime());
         campaign.setStatus(CampaignStatusEnum.DRAFT);
-        campaign.setCourseCode(request.getCourseCode());
-        campaign.setCredit(request.getCredit());
-        campaign.setCourseHour(request.getCourseHour());
-        campaign.setDescription(request.getDescription());
-        campaign.setCourseType(request.getCourseType());
         campaign.setAllowedGradeIds(joinLongs(request.getAllowedGradeIds()));
         campaign.setAllowedMajors(joinLongs(request.getAllowedMajors()));
         campaign.setCapacity(request.getCapacity());
         campaign.setGroupId(request.getGroupId());
         save(campaign);
 
-        // 3. 绑定 TimeRestriction（RESERVED 类型，courseId 指向衍生 course）
-        bindTimeRestrictions(campaign, request.getTimeRestrictionIds(), derivedCourse.getId());
+        // 绑定 TimeRestriction（RESERVED 类型，campaignId 指向本活动）
+        bindTimeRestrictions(campaign, request.getTimeRestrictionIds());
 
         return toResponse(campaign, semester, true);
     }
@@ -160,32 +143,29 @@ public class SelectionCampaignServiceImpl
             throw new BusinessException(400, "结束时间不能早于开始时间");
         }
 
-        // 课程字段部分更新（name 即课程名，变更时同步衍生 course.courseName）
-        boolean courseChanged = false;
-        Course derived = courseMapper.selectById(campaign.getCourseId());
+        // 课程字段更新直接写 campaign（不再走 course 表）
         if (request.getName() != null) {
             if (request.getName().isBlank()) {
                 throw new BusinessException(400, "活动名称不能为空");
             }
-            campaign.setName(request.getName());
-            if (derived != null) derived.setCourseName(request.getName());
-            courseChanged = true;
+            campaign.setCourseName(request.getName());
         }
         if (request.getCourseCode() != null) {
-            Long codeConflict = baseMapper.selectCount(new LambdaQueryWrapper<SelectionCampaign>()
-                    .eq(SelectionCampaign::getSemesterId, campaign.getSemesterId())
-                    .eq(SelectionCampaign::getCourseCode, request.getCourseCode())
-                    .ne(SelectionCampaign::getId, id));
-            if (codeConflict > 0) {
+            Long codeConflict = baseMapper.countByCourseCodeInSemester(
+                    campaign.getSemesterId(), request.getCourseCode(), id);
+            if (codeConflict != null && codeConflict > 0) {
                 throw new BusinessException(409, "该课程编号已在本学期中存在");
             }
+            if (courseMapper.exists(new LambdaQueryWrapper<Course>()
+                    .eq(Course::getCourseCode, request.getCourseCode()))) {
+                throw new BusinessException(409, "该课程编号已存在");
+            }
             campaign.setCourseCode(request.getCourseCode());
-            courseChanged = true;
         }
-        if (request.getCredit() != null) { campaign.setCredit(request.getCredit()); if (derived != null) derived.setCredit(request.getCredit()); courseChanged = true; }
-        if (request.getCourseHour() != null) { campaign.setCourseHour(request.getCourseHour()); if (derived != null) derived.setCourseHour(request.getCourseHour()); courseChanged = true; }
-        if (request.getDescription() != null) { campaign.setDescription(request.getDescription()); if (derived != null) derived.setDescription(request.getDescription()); courseChanged = true; }
-        if (request.getCourseType() != null) { campaign.setCourseType(request.getCourseType()); if (derived != null) derived.setCourseType(request.getCourseType()); courseChanged = true; }
+        if (request.getCredit() != null) campaign.setCredit(request.getCredit());
+        if (request.getCourseHour() != null) campaign.setCourseHour(request.getCourseHour());
+        if (request.getDescription() != null) campaign.setDescription(request.getDescription());
+        if (request.getCourseType() != null) campaign.setCourseType(request.getCourseType());
         if (request.getAllowedGradeIds() != null) campaign.setAllowedGradeIds(joinLongs(request.getAllowedGradeIds()));
         if (request.getAllowedMajors() != null) campaign.setAllowedMajors(joinLongs(request.getAllowedMajors()));
         if (request.getCapacity() != null) {
@@ -196,9 +176,6 @@ public class SelectionCampaignServiceImpl
         }
 
         updateById(campaign);
-        if (courseChanged && derived != null) {
-            courseMapper.updateById(derived);
-        }
 
         // 时段限制重绑（仅当请求显式传入时）
         if (request.getTimeRestrictionIds() != null) {
@@ -232,9 +209,8 @@ public class SelectionCampaignServiceImpl
         if (list.isEmpty()) {
             return List.of();
         }
-        Map<Long, String> groupNameMap = loadGroupNameMap(list);
         return list.stream()
-                .map(c -> toResponse(c, semesterService.getById(c.getSemesterId()), groupNameMap))
+                .map(c -> toResponse(c, semesterService.getById(c.getSemesterId()), true))
                 .collect(Collectors.toList());
     }
 
@@ -276,47 +252,30 @@ public class SelectionCampaignServiceImpl
     @Override
     @Transactional
     public void deleteByCourseId(Long courseId) {
+        // 公选课不再在 course 表生成衍生记录，删除 course 无需联动清理选课活动。
+        // 常规课与选课活动已无 course_id 关联，静默返回。
         if (courseId == null) {
             return;
         }
-        SelectionCampaign campaign = baseMapper.selectOne(
-                new LambdaQueryWrapper<SelectionCampaign>()
-                        .eq(SelectionCampaign::getCourseId, courseId));
-        if (campaign == null) {
-            return;
-        }
-        doCascadeDelete(campaign, false);
     }
 
     /**
-     * 级联清理：选课班成员 -> 选课班 -> 选课记录 -> 时段限制关联 -> 时段限制(RESERVED) -> 活动（-> 衍生 course）。
+     * 级联清理：删衍生 course 的 RESERVED 时段限制 -> 删活动主表 -> （衍生 course 由调用方按需删）。
+     * <p>
+     * 子表（selection_class / selection_class_member / selection_record /
+     * selection_campaign_time_restriction）由数据库 ON DELETE CASCADE 级联清理，
+     * 应用层不再逐表删除。
      *
      * @param deleteCourse 是否删除衍生 Course；delete() 传 true，deleteByCourseId() 传 false（由调用方删 Course）
      */
     private void doCascadeDelete(SelectionCampaign campaign, boolean deleteCourse) {
-        Long id = campaign.getId();
-        List<SelectionClass> classes = selectionClassMapper.selectList(
-                new LambdaQueryWrapper<SelectionClass>().eq(SelectionClass::getCampaignId, id));
-        if (!classes.isEmpty()) {
-            List<Long> classIds = classes.stream().map(SelectionClass::getId).toList();
-            selectionClassMemberMapper.delete(new LambdaQueryWrapper<SelectionClassMember>()
-                    .in(SelectionClassMember::getClassId, classIds));
-            selectionClassMapper.delete(new LambdaQueryWrapper<SelectionClass>()
-                    .eq(SelectionClass::getCampaignId, id));
-        }
-        selectionRecordMapper.delete(new LambdaQueryWrapper<SelectionRecord>()
-                .eq(SelectionRecord::getCampaignId, id));
-        selectionCampaignTimeRestrictionMapper.delete(new LambdaQueryWrapper<SelectionCampaignTimeRestriction>()
-                .eq(SelectionCampaignTimeRestriction::getCampaignId, id));
-        if (campaign.getCourseId() != null) {
-            timeRestrictionMapper.delete(new LambdaQueryWrapper<TimeRestriction>()
-                    .eq(TimeRestriction::getCourseId, campaign.getCourseId()));
-        }
-        Long campaignCourseId = campaign.getCourseId();
-        removeById(id);
-        if (deleteCourse && campaignCourseId != null) {
-            courseMapper.deleteById(campaignCourseId);
-        }
+        // 删公选课的 RESERVED 时段限制（campaign_id 指向本活动）
+        timeRestrictionMapper.delete(new LambdaQueryWrapper<TimeRestriction>()
+                .eq(TimeRestriction::getCampaignId, campaign.getId()));
+        // 清理 Redis 选课计数器（selection_record 由 DB CASCADE 删除，Redis key 需手动清）
+        redisTemplate.delete("selection:count:" + campaign.getId());
+        removeById(campaign.getId());
+        // 公选课无衍生 course 记录，无需删除 course 表
     }
 
     @Override
@@ -328,27 +287,19 @@ public class SelectionCampaignServiceImpl
         if (campaign.getStatus() != CampaignStatusEnum.DRAFT) {
             throw new BusinessException(409, "仅草稿状态的活动可开启");
         }
-        validateCourseFields(campaign.getName(), campaign.getCourseCode(),
-                campaign.getCredit(), campaign.getCapacity());
+        validateCourseFields(campaign.getCourseName(),
+                campaign.getCourseCode(),
+                campaign.getCredit(),
+                campaign.getCapacity());
         campaign.setStatus(CampaignStatusEnum.OPEN);
         updateById(campaign);
 
-        // 全局通知所有学生：广播仅落库 1 条，在线学生实时推送，离线学生上线补推
-        try {
-            String endTimeText = campaign.getEndTime() != null
-                    ? campaign.getEndTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
-                    : "详见系统";
-            notificationService.broadcast(
-                    NotificationTypeEnum.SELECTION,
-                    NotificationTargetEnum.STUDENT,
-                    "选课开始通知",
-                    "选课活动《" + campaign.getName() + "》已开放，截止时间 " + endTimeText
-                            + "，请及时登录系统完成选课。",
-                    senderId);
-        } catch (Exception e) {
-            // 通知失败不影响开课主流程
-            log.warn("选课开始广播通知失败: campaignId={}", id, e);
-        }
+        // 发布活动开放事件，由通知监听器 AFTER_COMMIT 异步广播（业务与通知解耦）
+        String endTimeText = campaign.getEndTime() != null
+                ? campaign.getEndTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+                : "详见系统";
+        String courseName = campaign.getCourseName() != null ? campaign.getCourseName() : "未知活动";
+        eventPublisher.publishEvent(new CampaignOpenedEvent(courseName, endTimeText, senderId));
     }
 
     @Override
@@ -410,10 +361,9 @@ public class SelectionCampaignServiceImpl
     }
 
     /**
-     * 绑定 TimeRestriction（RESERVED 类型，courseId 指向衍生 course）。
-     * 仅在课程刚创建、衍生 course 刚插入后调用。
+     * 绑定 TimeRestriction（RESERVED 类型，campaignId 指向本活动）。
      */
-    private void bindTimeRestrictions(SelectionCampaign campaign, List<Long> trIds, Long derivedCourseId) {
+    private void bindTimeRestrictions(SelectionCampaign campaign, List<Long> trIds) {
         if (trIds == null || trIds.isEmpty()) {
             return;
         }
@@ -425,11 +375,12 @@ public class SelectionCampaignServiceImpl
             if (!"RESERVED".equals(tr.getRestrictionType())) {
                 throw new BusinessException(400, "时段限制 " + trId + " 必须为 RESERVED 类型");
             }
-            if (tr.getCourseId() != null && !tr.getCourseId().equals(derivedCourseId)) {
+            if (tr.getCourseId() != null
+                    || (tr.getCampaignId() != null && !tr.getCampaignId().equals(campaign.getId()))) {
                 throw new BusinessException(400, "时段限制 " + trId + " 已预留给其他课程");
             }
-            if (tr.getCourseId() == null) {
-                tr.setCourseId(derivedCourseId);
+            if (tr.getCampaignId() == null) {
+                tr.setCampaignId(campaign.getId());
                 timeRestrictionMapper.updateById(tr);
             }
             SelectionCampaignTimeRestriction rel = new SelectionCampaignTimeRestriction();
@@ -440,17 +391,54 @@ public class SelectionCampaignServiceImpl
     }
 
     /**
-     * 重绑 TimeRestriction：先清理旧关联（同时删除指向衍生 course 的 RESERVED 时段限制），
-     * 再按新列表重新绑定。要求 DRAFT 状态。
+     * 重绑 TimeRestriction：增量 diff（按 timeRestrictionId 差集），仅增删变化部分，保留项不动。
+     * 移除的：删关联 + 删指向衍生 course 的 RESERVED 时段；新增的：认领时段 + 插关联。要求 DRAFT 状态。
      */
     private void rebindTimeRestrictions(SelectionCampaign campaign, List<Long> newTrIds) {
-        selectionCampaignTimeRestrictionMapper.delete(new LambdaQueryWrapper<SelectionCampaignTimeRestriction>()
-                .eq(SelectionCampaignTimeRestriction::getCampaignId, campaign.getId()));
-        if (campaign.getCourseId() != null) {
+        List<SelectionCampaignTimeRestriction> existing = selectionCampaignTimeRestrictionMapper.selectList(
+                new LambdaQueryWrapper<SelectionCampaignTimeRestriction>()
+                        .eq(SelectionCampaignTimeRestriction::getCampaignId, campaign.getId()));
+        Set<Long> existingIds = existing.stream()
+                .map(SelectionCampaignTimeRestriction::getTimeRestrictionId)
+                .collect(Collectors.toSet());
+        Set<Long> newIds = newTrIds != null ? new HashSet<>(newTrIds) : new HashSet<>();
+
+        // 移除：现有 - 新 -> 删关联 + 删指向本活动的 RESERVED 时段
+        Set<Long> toRemove = new HashSet<>(existingIds);
+        toRemove.removeAll(newIds);
+        for (Long trId : toRemove) {
+            selectionCampaignTimeRestrictionMapper.delete(new LambdaQueryWrapper<SelectionCampaignTimeRestriction>()
+                    .eq(SelectionCampaignTimeRestriction::getCampaignId, campaign.getId())
+                    .eq(SelectionCampaignTimeRestriction::getTimeRestrictionId, trId));
             timeRestrictionMapper.delete(new LambdaQueryWrapper<TimeRestriction>()
-                    .eq(TimeRestriction::getCourseId, campaign.getCourseId()));
+                    .eq(TimeRestriction::getId, trId)
+                    .eq(TimeRestriction::getCampaignId, campaign.getId()));
         }
-        bindTimeRestrictions(campaign, newTrIds, campaign.getCourseId());
+
+        // 新增：新 - 现有 -> 认领时段 + 插关联
+        Set<Long> toAdd = new HashSet<>(newIds);
+        toAdd.removeAll(existingIds);
+        for (Long trId : toAdd) {
+            TimeRestriction tr = timeRestrictionMapper.selectById(trId);
+            if (tr == null) {
+                throw new BusinessException(400, "时段限制 " + trId + " 不存在");
+            }
+            if (!"RESERVED".equals(tr.getRestrictionType())) {
+                throw new BusinessException(400, "时段限制 " + trId + " 必须为 RESERVED 类型");
+            }
+            if (tr.getCourseId() != null
+                    || (tr.getCampaignId() != null && !tr.getCampaignId().equals(campaign.getId()))) {
+                throw new BusinessException(400, "时段限制 " + trId + " 已预留给其他课程");
+            }
+            if (tr.getCampaignId() == null) {
+                tr.setCampaignId(campaign.getId());
+                timeRestrictionMapper.updateById(tr);
+            }
+            SelectionCampaignTimeRestriction rel = new SelectionCampaignTimeRestriction();
+            rel.setCampaignId(campaign.getId());
+            rel.setTimeRestrictionId(trId);
+            selectionCampaignTimeRestrictionMapper.insert(rel);
+        }
     }
 
     private void validateCourseFields(String name, String courseCode, Integer credit, Integer capacity) {
@@ -486,16 +474,12 @@ public class SelectionCampaignServiceImpl
                 ? selectionGroupMapper.selectByIds(List.of(campaign.getGroupId())).stream()
                         .collect(Collectors.toMap(SelectionGroup::getId, SelectionGroup::getName))
                 : Map.of();
-        return toResponse(campaign, semester, groupNameMap);
-    }
-
-    private CampaignResponse toResponse(SelectionCampaign campaign, Semester semester, Map<Long, String> groupNameMap) {
         CampaignResponse resp = new CampaignResponse();
         resp.setId(campaign.getId());
-        resp.setName(campaign.getName());
+        resp.setName(campaign.getCourseName());
         resp.setSemesterId(campaign.getSemesterId());
         resp.setSemesterName(semester != null ? semester.getName() : null);
-        resp.setCourseId(campaign.getCourseId());
+        resp.setCourseId(null); // 公选课不再关联 course 表
         resp.setStartWeek(campaign.getStartWeek());
         resp.setEndWeek(campaign.getEndWeek());
         resp.setStartTime(campaign.getStartTime());
@@ -514,7 +498,10 @@ public class SelectionCampaignServiceImpl
         resp.setTimeRestrictionIds(rels.stream().map(SelectionCampaignTimeRestriction::getTimeRestrictionId).toList());
         resp.setCapacity(campaign.getCapacity());
         resp.setGroupId(campaign.getGroupId());
-        resp.setGroupName(groupNameMap != null ? groupNameMap.get(campaign.getGroupId()) : null);
+        // groupId 为 null（未绑定选课组）时 groupNameMap 是 Map.of()，不可变 Map 的 get(null) 会抛 NPE，
+        // 故先判 groupId 非空再查；groupNameMap 为 null（防御）或查不到时回退 null。
+        resp.setGroupName(campaign.getGroupId() != null && groupNameMap != null
+                ? groupNameMap.get(campaign.getGroupId()) : null);
         resp.setCreateTime(campaign.getCreateTime());
         return resp;
     }
