@@ -152,13 +152,14 @@ public class ScoreController {
     @GetMapping("/statistics")
     public Result<List<ScoreStatisticsDto>> statistics(HttpServletRequest request,
                                                        @RequestParam(required = false) Long courseId,
+                                                       @RequestParam(required = false) String source,
                                                        @RequestParam(required = false) String className,
                                                        @RequestParam(required = false) Long semesterId) {
         Long userId = authFacade.currentUserId(request);
         String userType = authFacade.currentUserType(request);
         authFacade.requireUserTypes(request,
                 AuthFacade.USER_TYPE_DEPARTMENT, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
-        return Result.ok(scoreService.statistics(courseId, className, semesterId, userId, userType));
+        return Result.ok(scoreService.statistics(courseId, source, className, semesterId, userId, userType));
     }
 
     // ──────────────────────── 导出 ────────────────────────
