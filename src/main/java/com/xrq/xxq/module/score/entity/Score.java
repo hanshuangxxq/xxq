@@ -24,7 +24,8 @@ public class Score {
     private Long id;
 
     private Long teachInfoId;        // FK -> teach_info.id
-    private Long courseId;           // 冗余，便于统计/导出
+    private Long courseId;           // 冗余，便于统计/导出（常规课 course.id；公选课为 NULL）
+    private Long campaignId;         // 冗余，公选课 selection_campaign.id（常规课为 NULL）
     private Long teacherId;          // 授课教师 teacher.id（快照）
     private Long studentUserId;      // 学生 user.id
     private Long semesterId;         // FK -> semester.id
