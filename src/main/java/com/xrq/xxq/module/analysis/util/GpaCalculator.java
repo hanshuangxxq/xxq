@@ -37,11 +37,11 @@ public final class GpaCalculator {
     /**
      * 按学分加权计算 GPA。仅取 REGULAR 成绩且 totalScore 非空、学分有效者。
      *
-     * @param scores         成绩列表
-     * @param creditByCourseId 课程ID -&gt; 学分 映射
+     * @param scores       成绩列表
+     * @param creditSource 学分来源（常规课/公选课分表，按成绩非空列路由）
      * @return 加权 GPA（2 位小数）；无有效成绩返回 null
      */
-    public static BigDecimal weightedGpa(List<Score> scores, Map<Long, Integer> creditByCourseId) {
+    public static BigDecimal weightedGpa(List<Score> scores, CreditSource creditSource) {
         if (scores == null || scores.isEmpty()) {
             return null;
         }
@@ -54,7 +54,7 @@ public final class GpaCalculator {
             if (s.getTotalScore() == null) {
                 continue;
             }
-            Integer credit = creditByCourseId == null ? null : creditByCourseId.get(s.getCourseId());
+            Integer credit = creditSource == null ? null : creditSource.creditOf(s);
             if (credit == null || credit <= 0) {
                 continue;
             }
