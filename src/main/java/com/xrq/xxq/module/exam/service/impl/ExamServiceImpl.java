@@ -35,6 +35,7 @@ import com.xrq.xxq.module.exam.service.ExamService;
 import com.xrq.xxq.module.score.entity.Score;
 import com.xrq.xxq.module.score.entity.ScoreTypeEnum;
 import com.xrq.xxq.module.score.mapper.ScoreMapper;
+import com.xrq.xxq.module.semester.mapper.SemesterMapper;
 import com.xrq.xxq.module.local.entity.Local;
 import com.xrq.xxq.module.local.mapper.LocalMapper;
 import com.xrq.xxq.module.semester.entity.Semester;
@@ -48,6 +49,7 @@ import com.xrq.xxq.module.user.entity.user.Teacher;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.module.user.mapper.TeacherMapper;
 import com.xrq.xxq.module.user.mapper.UserMapper;
+import com.xrq.xxq.util.ReferenceValidator;
 
 import lombok.RequiredArgsConstructor;
 
@@ -70,6 +72,8 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements Ex
     private final StudentMapper studentMapper;
     private final ClassNameMapper classNameMapper;
     private final SemesterService semesterService;
+    private final SemesterMapper semesterMapper;
+    private final ReferenceValidator referenceValidator;
 
     // ==================== 教务增删改 ====================
 
@@ -328,6 +332,21 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements Ex
                         .eq(Score::getScoreType, ScoreTypeEnum.REGULAR)
                         .lt(Score::getTotalScore, BigDecimal.valueOf(60)))
                 .stream().map(Score::getStudentUserId).distinct().toList();
+        if (!studentUserIds.isEmpty()) {
+            // 外键存在性校验：考试 + 学生用户
+            referenceValidator.requireExists(baseMapper, e.getId(), "考试");
+            List<User> students = userMapper.selectByIds(studentUserIds);
+            if (students.size() != studentUserIds.size()) {
+                throw new BusinessException(400, "考生名单中存在无效的学生用户");
+            }
+            // 唯一性预检（DB 唯一约束已移至应用层）
+            Long existing = examStudentMapper.selectCount(new LambdaQueryWrapper<ExamStudent>()
+                    .eq(ExamStudent::getExamId, e.getId())
+                    .in(ExamStudent::getStudentUserId, studentUserIds));
+            if (existing != null && existing > 0) {
+                throw new BusinessException(409, "考生名单中存在已分配的学生");
+            }
+        }
         for (Long uid : studentUserIds) {
             ExamStudent es = new ExamStudent();
             es.setExamId(e.getId());
@@ -446,6 +465,11 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements Ex
         if (!req.getStartTime().plusMinutes(req.getDurationMinutes()).isAfter(req.getStartTime())) {
             throw new BusinessException(400, "考试时长超出当日范围");
         }
+        // 外键存在性校验（teach_info_id/local_id 可空则跳过）
+        referenceValidator.requireCourseRef(req.getCourseId(), null);
+        referenceValidator.requireExists(teachInfoMapper, req.getTeachInfoId(), "授课安排");
+        referenceValidator.requireExists(semesterMapper, req.getSemesterId(), "学期");
+        referenceValidator.requireExists(localMapper, req.getLocalId(), "考试地点");
     }
 
     private void copy(ExamCreateRequest req, Exam e) {
