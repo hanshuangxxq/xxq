@@ -25,8 +25,8 @@ public interface ExamService extends IService<Exam> {
     /** 教务删除考试（连带清理考生名单）。 */
     void delete(Long id, Long userId);
 
-    /** 教务查询考试列表（可按学期/课程/类型过滤）。 */
-    List<ExamView> list(Long semesterId, Long courseId, ExamTypeEnum examType);
+    /** 教务查询考试列表（可按学期/课程/类型过滤；source=SELECTION_CAMPAIGN 时 courseId 按 campaignId 过滤）。 */
+    List<ExamView> list(Long semesterId, Long courseId, String source, ExamTypeEnum examType);
 
     /** 教师查询自己课程相关的考试。 */
     List<ExamView> listForTeacher(Long userId);
@@ -36,8 +36,8 @@ public interface ExamService extends IService<Exam> {
 
     // ──────────────────────── 补考/重修 ────────────────────────
 
-    /** 查询不及格学生名单（自动生成补考候选）。 */
-    List<MakeupCandidateDto> listMakeupCandidates(Long courseId, Long semesterId);
+    /** 查询不及格学生名单（自动生成补考候选；source=SELECTION_CAMPAIGN 时 courseId 按 campaignId 过滤）。 */
+    List<MakeupCandidateDto> listMakeupCandidates(Long courseId, String source, Long semesterId);
 
     /** 建补考/重修考试，并按不及格名单自动生成考生。 */
     ExamView createMakeupExam(MakeupExamCreateRequest request, Long userId);
