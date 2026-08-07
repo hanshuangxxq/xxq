@@ -28,40 +28,43 @@ public class ScoreAnalysisController {
     private final ScoreAnalysisService scoreAnalysisService;
     private final AuthFacade authFacade;
 
-    /** 分数段分布：[0-59][60-69][70-79][80-89][90-100] + 均值/及格率/标准差。 */
+    /** 分数段分布：[0-59][60-69][70-79][80-89][90-100] + 均值/及格率/标准差。source=SELECTION_CAMPAIGN 时按公选课过滤。 */
     @GetMapping("/distribution")
     public Result<ScoreDistributionDto> distribution(HttpServletRequest request,
                                                      @RequestParam Long courseId,
+                                                     @RequestParam(required = false) String source,
                                                      @RequestParam(required = false) String className,
                                                      @RequestParam(required = false) Long semesterId) {
         Long userId = authFacade.currentUserId(request);
         String userType = authFacade.currentUserType(request);
         authFacade.requireUserTypes(request,
                 AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_DEPARTMENT, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
-        return Result.ok(scoreAnalysisService.distribution(courseId, className, semesterId, userId, userType));
+        return Result.ok(scoreAnalysisService.distribution(courseId, source, className, semesterId, userId, userType));
     }
 
-    /** 课程成绩跨学期趋势。 */
+    /** 课程成绩跨学期趋势。source=SELECTION_CAMPAIGN 时按公选课过滤。 */
     @GetMapping("/trend")
     public Result<ScoreTrendDto> trend(HttpServletRequest request,
                                        @RequestParam Long courseId,
+                                       @RequestParam(required = false) String source,
                                        @RequestParam(required = false) String className) {
         Long userId = authFacade.currentUserId(request);
         String userType = authFacade.currentUserType(request);
         authFacade.requireUserTypes(request,
                 AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_DEPARTMENT, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
-        return Result.ok(scoreAnalysisService.trend(courseId, className, userId, userType));
+        return Result.ok(scoreAnalysisService.trend(courseId, source, className, userId, userType));
     }
 
-    /** 同课程各班级成绩横向对比（默认当前学期）。 */
+    /** 同课程各班级成绩横向对比（默认当前学期）。source=SELECTION_CAMPAIGN 时按公选课过滤。 */
     @GetMapping("/comparison")
     public Result<ScoreComparisonDto> comparison(HttpServletRequest request,
                                                  @RequestParam Long courseId,
+                                                 @RequestParam(required = false) String source,
                                                  @RequestParam(required = false) Long semesterId) {
         Long userId = authFacade.currentUserId(request);
         String userType = authFacade.currentUserType(request);
         authFacade.requireUserTypes(request,
                 AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_DEPARTMENT, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
-        return Result.ok(scoreAnalysisService.comparison(courseId, semesterId, userId, userType));
+        return Result.ok(scoreAnalysisService.comparison(courseId, source, semesterId, userId, userType));
     }
 }
