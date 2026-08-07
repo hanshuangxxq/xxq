@@ -26,6 +26,7 @@ import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
 import com.xrq.xxq.module.course.entity.Course;
 import com.xrq.xxq.module.course.mapper.CourseMapper;
+import com.xrq.xxq.module.course.service.CourseInfoResolver;
 import com.xrq.xxq.module.score.entity.Score;
 import com.xrq.xxq.module.score.entity.ScoreTypeEnum;
 import com.xrq.xxq.module.score.mapper.ScoreMapper;
@@ -48,25 +49,30 @@ public class ScoreAnalysisServiceImpl implements ScoreAnalysisService {
 
     private final ScoreMapper scoreMapper;
     private final CourseMapper courseMapper;
+    private final CourseInfoResolver courseInfoResolver;
     private final StudentMapper studentMapper;
     private final ClassNameMapper classNameMapper;
     private final SemesterService semesterService;
     private final StudentScopeResolver scopeResolver;
 
     @Override
-    public ScoreDistributionDto distribution(Long courseId, String className, Long semesterId,
+    public ScoreDistributionDto distribution(Long courseId, String source, String className, Long semesterId,
                                              Long callerUserId, String callerUserType) {
         if (courseId == null) {
             throw new BusinessException(400, "课程ID不能为空");
         }
         Long semId = resolveSemesterId(semesterId);
-        List<Long> studentUserIds = resolveScopeForCourse(courseId, className, callerUserId, callerUserType);
+        List<Long> studentUserIds = resolveScopeForCourse(courseId, source, className, callerUserId, callerUserType);
         if (studentUserIds != null && studentUserIds.isEmpty()) {
             return emptyDistribution(courseId);
         }
         LambdaQueryWrapper<Score> w = new LambdaQueryWrapper<Score>()
-                .eq(Score::getCourseId, courseId)
                 .eq(Score::getScoreType, ScoreTypeEnum.REGULAR);
+        if (Course.SOURCE_SELECTION_CAMPAIGN.equals(source)) {
+            w.eq(Score::getCampaignId, courseId);
+        } else {
+            w.eq(Score::getCourseId, courseId);
+        }
         if (semId != null) {
             w.eq(Score::getSemesterId, semId);
         }
@@ -77,22 +83,25 @@ public class ScoreAnalysisServiceImpl implements ScoreAnalysisService {
     }
 
     @Override
-    public ScoreTrendDto trend(Long courseId, String className, Long callerUserId, String callerUserType) {
+    public ScoreTrendDto trend(Long courseId, String source, String className, Long callerUserId, String callerUserType) {
         if (courseId == null) {
             throw new BusinessException(400, "课程ID不能为空");
         }
-        List<Long> studentUserIds = resolveScopeForCourse(courseId, className, callerUserId, callerUserType);
+        List<Long> studentUserIds = resolveScopeForCourse(courseId, source, className, callerUserId, callerUserType);
         ScoreTrendDto dto = new ScoreTrendDto();
         dto.setCourseId(courseId);
-        Course course = courseMapper.selectById(courseId);
-        dto.setCourseName(course != null ? course.getCourseName() : null);
+        dto.setCourseName(resolveCourseName(courseId));
         if (studentUserIds != null && studentUserIds.isEmpty()) {
             dto.setPoints(List.of());
             return dto;
         }
         LambdaQueryWrapper<Score> w = new LambdaQueryWrapper<Score>()
-                .eq(Score::getCourseId, courseId)
                 .eq(Score::getScoreType, ScoreTypeEnum.REGULAR);
+        if (Course.SOURCE_SELECTION_CAMPAIGN.equals(source)) {
+            w.eq(Score::getCampaignId, courseId);
+        } else {
+            w.eq(Score::getCourseId, courseId);
+        }
         if (studentUserIds != null) {
             w.in(Score::getStudentUserId, studentUserIds);
         }
@@ -123,17 +132,16 @@ public class ScoreAnalysisServiceImpl implements ScoreAnalysisService {
     }
 
     @Override
-    public ScoreComparisonDto comparison(Long courseId, Long semesterId,
+    public ScoreComparisonDto comparison(Long courseId, String source, Long semesterId,
                                          Long callerUserId, String callerUserType) {
         if (courseId == null) {
             throw new BusinessException(400, "课程ID不能为空");
         }
         Long semId = resolveSemesterId(semesterId);
-        List<Long> studentUserIds = resolveScopeForCourse(courseId, null, callerUserId, callerUserType);
+        List<Long> studentUserIds = resolveScopeForCourse(courseId, source, null, callerUserId, callerUserType);
         ScoreComparisonDto dto = new ScoreComparisonDto();
         dto.setCourseId(courseId);
-        Course course = courseMapper.selectById(courseId);
-        dto.setCourseName(course != null ? course.getCourseName() : null);
+        dto.setCourseName(resolveCourseName(courseId));
         dto.setSemesterId(semId);
         Semester sem = semId == null ? null : semesterService.getById(semId);
         dto.setSemesterName(sem != null ? sem.getName() : null);
@@ -142,8 +150,12 @@ public class ScoreAnalysisServiceImpl implements ScoreAnalysisService {
             return dto;
         }
         LambdaQueryWrapper<Score> w = new LambdaQueryWrapper<Score>()
-                .eq(Score::getCourseId, courseId)
                 .eq(Score::getScoreType, ScoreTypeEnum.REGULAR);
+        if (Course.SOURCE_SELECTION_CAMPAIGN.equals(source)) {
+            w.eq(Score::getCampaignId, courseId);
+        } else {
+            w.eq(Score::getCourseId, courseId);
+        }
         if (semId != null) {
             w.eq(Score::getSemesterId, semId);
         }
@@ -157,9 +169,9 @@ public class ScoreAnalysisServiceImpl implements ScoreAnalysisService {
     // ==================== 内部计算 ====================
 
     /** 教师校验课程归属后看本课程全部学生；教务/院系走范围解析。 */
-    private List<Long> resolveScopeForCourse(Long courseId, String className, Long callerUserId, String callerUserType) {
+    private List<Long> resolveScopeForCourse(Long courseId, String source, String className, Long callerUserId, String callerUserType) {
         if (AuthFacade.USER_TYPE_TEACHER.equals(callerUserType)) {
-            if (!scopeResolver.teacherCanAccessCourse(callerUserId, courseId)) {
+            if (!scopeResolver.teacherCanAccessCourse(callerUserId, courseId, source)) {
                 throw new BusinessException(403, "权限不足");
             }
             return null;
@@ -175,11 +187,19 @@ public class ScoreAnalysisServiceImpl implements ScoreAnalysisService {
         return current != null ? current.getId() : null;
     }
 
+    /** 解析课程名：courseId 可能是常规课 course.id 或公选课 selection_campaign.id，两表依次尝试。 */
+    private String resolveCourseName(Long courseId) {
+        CourseInfoResolver.CourseInfo info = courseInfoResolver.resolveOne(courseId, null);
+        if (info == null) {
+            info = courseInfoResolver.resolveOne(null, courseId);
+        }
+        return info != null ? info.getCourseName() : null;
+    }
+
     private ScoreDistributionDto emptyDistribution(Long courseId) {
         ScoreDistributionDto dto = new ScoreDistributionDto();
         dto.setCourseId(courseId);
-        Course course = courseMapper.selectById(courseId);
-        dto.setCourseName(course != null ? course.getCourseName() : null);
+        dto.setCourseName(resolveCourseName(courseId));
         dto.setTotalCount(0);
         dto.setSeg0to59(0);
         dto.setSeg60to69(0);
@@ -192,8 +212,7 @@ public class ScoreAnalysisServiceImpl implements ScoreAnalysisService {
     private ScoreDistributionDto buildDistribution(Long courseId, List<Score> grades) {
         ScoreDistributionDto dto = new ScoreDistributionDto();
         dto.setCourseId(courseId);
-        Course course = courseMapper.selectById(courseId);
-        dto.setCourseName(course != null ? course.getCourseName() : null);
+        dto.setCourseName(resolveCourseName(courseId));
         int s0 = 0, s6 = 0, s7 = 0, s8 = 0, s9 = 0;
         BigDecimal sum = BigDecimal.ZERO;
         int scored = 0;
