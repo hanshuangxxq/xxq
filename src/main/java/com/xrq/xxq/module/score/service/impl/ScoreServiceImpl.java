@@ -38,6 +38,7 @@ import com.xrq.xxq.module.score.entity.ScoreTypeEnum;
 import com.xrq.xxq.module.score.mapper.ScoreConfigMapper;
 import com.xrq.xxq.module.score.mapper.ScoreMapper;
 import com.xrq.xxq.module.score.service.ScoreService;
+import com.xrq.xxq.module.semester.mapper.SemesterMapper;
 import org.springframework.context.ApplicationEventPublisher;
 import com.xrq.xxq.common.event.GradeFailedEvent;
 import com.xrq.xxq.module.selection.entity.SelectionClass;
@@ -56,6 +57,7 @@ import com.xrq.xxq.module.user.mapper.DepartmentMapper;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.module.user.mapper.TeacherMapper;
 import com.xrq.xxq.module.user.mapper.UserMapper;
+import com.xrq.xxq.util.ReferenceValidator;
 import com.xrq.xxq.util.auth.AuthFacade;
 
 import lombok.RequiredArgsConstructor;
@@ -83,6 +85,8 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
     private final ApplicationEventPublisher eventPublisher;
     private final ExamMapper examMapper;
     private final SemesterService semesterService;
+    private final SemesterMapper semesterMapper;
+    private final ReferenceValidator referenceValidator;
 
     private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
 
@@ -231,6 +235,11 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
         }
         assertCanEnter(info, enterUserId, userType);
 
+        // 外键存在性校验（授课安排已由上方 selectById 校验）
+        referenceValidator.requireCourseRef(info.getCourseId(), info.getCampaignId());
+        referenceValidator.requireExists(semesterMapper, info.getSemesterId(), "学期");
+        referenceValidator.requireExists(teacherMapper, info.getTeacherId(), "教师");
+
         // 合班时按考试排考班级限定可录入学生，避免给未参加考试的班级录入成绩
         String scopeClassName = resolveExamScopeClassName(request.getExamId(), info);
         Set<Long> allowedUserIds = scopeClassName != null
@@ -249,6 +258,17 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
                 ? courseInfo.getCourseName() : "未知课程";
 
         List<Score> saved = new ArrayList<>();
+        // 批量校验学生用户存在性
+        List<Long> entryStudentIds = request.getEntries().stream()
+                .map(ScoreEntryRequest::getStudentUserId)
+                .filter(Objects::nonNull)
+                .distinct().toList();
+        if (!entryStudentIds.isEmpty()) {
+            List<User> students = userMapper.selectByIds(entryStudentIds);
+            if (students.size() != entryStudentIds.size()) {
+                throw new BusinessException(400, "存在无效的学生用户");
+            }
+        }
         for (ScoreEntryRequest e : request.getEntries()) {
             if (e.getStudentUserId() == null) {
                 throw new BusinessException(400, "学生ID不能为空");
@@ -314,6 +334,21 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
             throw new BusinessException(404, "授课安排不存在");
         }
         assertCanEnter(info, enterUserId, userType);
+        // 外键存在性校验
+        referenceValidator.requireCourseRef(g.getCourseId(), g.getCampaignId());
+        referenceValidator.requireExists(userMapper, g.getStudentUserId(), "学生");
+        referenceValidator.requireExists(semesterMapper, g.getSemesterId(), "学期");
+        referenceValidator.requireExists(teacherMapper, g.getTeacherId(), "教师");
+        referenceValidator.requireExists(baseMapper, g.getOriginalScoreId(), "原成绩");
+        // 唯一性预检（排除自身，DB 唯一约束已移至应用层）
+        Long dup = baseMapper.selectCount(new LambdaQueryWrapper<Score>()
+                .eq(Score::getTeachInfoId, g.getTeachInfoId())
+                .eq(Score::getStudentUserId, g.getStudentUserId())
+                .eq(Score::getScoreType, g.getScoreType())
+                .ne(Score::getId, scoreId));
+        if (dup != null && dup > 0) {
+            throw new BusinessException(409, "成绩记录已存在");
+        }
         validateScore(entry.getRegularScore());
         validateScore(entry.getFinalScore());
         int ratio = g.getRegularRatio() != null ? g.getRegularRatio() : 0;
