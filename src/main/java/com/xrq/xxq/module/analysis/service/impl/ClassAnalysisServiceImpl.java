@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,12 +18,13 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.xrq.xxq.module.analysis.dto.ClassAnalysisDto;
 import com.xrq.xxq.module.analysis.dto.ClassTrendDto;
 import com.xrq.xxq.module.analysis.service.ClassAnalysisService;
+import com.xrq.xxq.module.analysis.util.CreditSource;
 import com.xrq.xxq.module.analysis.util.GpaCalculator;
 import com.xrq.xxq.module.analysis.util.StudentScopeResolver;
 import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
-import com.xrq.xxq.module.course.entity.Course;
 import com.xrq.xxq.module.course.mapper.CourseMapper;
+import com.xrq.xxq.module.course.service.CourseInfoResolver;
 import com.xrq.xxq.module.mojor.entity.Major;
 import com.xrq.xxq.module.mojor.mapper.MajorMapper;
 import com.xrq.xxq.module.score.entity.Score;
@@ -47,6 +49,7 @@ public class ClassAnalysisServiceImpl implements ClassAnalysisService {
 
     private final ScoreMapper scoreMapper;
     private final CourseMapper courseMapper;
+    private final CourseInfoResolver courseInfoResolver;
     private final StudentMapper studentMapper;
     private final ClassNameMapper classNameMapper;
     private final MajorMapper majorMapper;
@@ -76,7 +79,7 @@ public class ClassAnalysisServiceImpl implements ClassAnalysisService {
 
         List<Long> userIds = scores.stream().map(Score::getStudentUserId).distinct().toList();
         Map<Long, String> groupMap = loadGroupMap(userIds, groupBy);
-        Map<Long, Integer> creditMap = loadCreditMap(scores);
+        CreditSource creditSource = loadCreditSource(scores);
 
         Map<String, List<Score>> byGroup = new LinkedHashMap<>();
         for (Score s : scores) {
@@ -88,7 +91,7 @@ public class ClassAnalysisServiceImpl implements ClassAnalysisService {
         }
         List<ClassAnalysisDto> result = new ArrayList<>();
         for (Map.Entry<String, List<Score>> e : byGroup.entrySet()) {
-            result.add(buildGroup(e.getKey(), groupBy, e.getValue(), creditMap));
+            result.add(buildGroup(e.getKey(), groupBy, e.getValue(), creditSource));
         }
         result.sort(Comparator.comparing(ClassAnalysisDto::getGpa,
                 Comparator.nullsLast(Comparator.reverseOrder())));
@@ -127,7 +130,7 @@ public class ClassAnalysisServiceImpl implements ClassAnalysisService {
         List<Score> scores = scoreMapper.selectList(new LambdaQueryWrapper<Score>()
                 .in(Score::getStudentUserId, groupUserIds)
                 .eq(Score::getScoreType, ScoreTypeEnum.REGULAR));
-        Map<Long, Integer> creditMap = loadCreditMap(scores);
+        CreditSource creditSource = loadCreditSource(scores);
         Map<Long, List<Score>> bySem = scores.stream()
                 .filter(s -> s.getSemesterId() != null)
                 .collect(Collectors.groupingBy(Score::getSemesterId));
@@ -142,7 +145,7 @@ public class ClassAnalysisServiceImpl implements ClassAnalysisService {
             Semester sem = semMap.get(e.getKey());
             p.setSemesterName(sem != null ? sem.getName() : null);
             p.setAvgScore(avgOf(e.getValue()));
-            p.setGpa(GpaCalculator.weightedGpa(e.getValue(), creditMap));
+            p.setGpa(GpaCalculator.weightedGpa(e.getValue(), creditSource));
             p.setPassRate(passRateOf(e.getValue()));
             p.setStudentCount((int) e.getValue().stream().map(Score::getStudentUserId).distinct().count());
             points.add(p);
@@ -189,23 +192,32 @@ public class ClassAnalysisServiceImpl implements ClassAnalysisService {
                         s -> className.getOrDefault(s.getClassId(), "未知班级"), (a, b) -> a));
     }
 
-    private Map<Long, Integer> loadCreditMap(List<Score> scores) {
-        Set<Long> ids = scores.stream().map(Score::getCourseId).filter(Objects::nonNull).collect(Collectors.toSet());
-        if (ids.isEmpty()) {
-            return Map.of();
-        }
-        return courseMapper.selectByIds(ids).stream()
-                .filter(c -> c.getCredit() != null)
-                .collect(Collectors.toMap(Course::getId, Course::getCredit, (a, b) -> a));
+    /** 学分来源：常规课/公选课分表解析，避免 id 空间重叠串台。 */
+    private CreditSource loadCreditSource(List<Score> scores) {
+        List<Long> courseIds = scores.stream().map(Score::getCourseId).filter(Objects::nonNull).distinct().toList();
+        List<Long> campaignIds = scores.stream().map(Score::getCampaignId).filter(Objects::nonNull).distinct().toList();
+        Map<Long, Integer> cc = new HashMap<>();
+        courseInfoResolver.resolveCourses(courseIds).forEach((id, info) -> {
+            if (info.getCredit() != null) {
+                cc.put(id, info.getCredit());
+            }
+        });
+        Map<Long, Integer> pc = new HashMap<>();
+        courseInfoResolver.resolveCampaigns(campaignIds).forEach((id, info) -> {
+            if (info.getCredit() != null) {
+                pc.put(id, info.getCredit());
+            }
+        });
+        return new CreditSource(cc, pc);
     }
 
-    private ClassAnalysisDto buildGroup(String groupKey, String groupType, List<Score> scores, Map<Long, Integer> creditMap) {
+    private ClassAnalysisDto buildGroup(String groupKey, String groupType, List<Score> scores, CreditSource creditSource) {
         ClassAnalysisDto dto = new ClassAnalysisDto();
         dto.setGroupKey(groupKey);
         dto.setGroupType(groupType);
         dto.setStudentCount((int) scores.stream().map(Score::getStudentUserId).distinct().count());
         dto.setScoreCount(scores.size());
-        dto.setGpa(GpaCalculator.weightedGpa(scores, creditMap));
+        dto.setGpa(GpaCalculator.weightedGpa(scores, creditSource));
         dto.setAvgScore(avgOf(scores));
         dto.setPassRate(passRateOf(scores));
         dto.setFailCount((int) scores.stream().filter(this::isFail).count());
