@@ -25,14 +25,15 @@ import com.xrq.xxq.module.analysis.entity.WarningStatusEnum;
 import com.xrq.xxq.module.analysis.mapper.WarningConfigMapper;
 import com.xrq.xxq.module.analysis.mapper.WarningRecordMapper;
 import com.xrq.xxq.module.analysis.service.WarningService;
+import com.xrq.xxq.module.analysis.util.CreditSource;
 import com.xrq.xxq.module.analysis.util.GpaCalculator;
 import com.xrq.xxq.module.analysis.util.StudentScopeResolver;
 import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
-import com.xrq.xxq.module.course.entity.Course;
 import com.xrq.xxq.module.course.mapper.CourseMapper;
-import com.xrq.xxq.module.notification.entity.NotificationTypeEnum;
-import com.xrq.xxq.module.notification.service.NotificationService;
+import com.xrq.xxq.module.selection.mapper.SelectionCampaignMapper;
+import org.springframework.context.ApplicationEventPublisher;
+import com.xrq.xxq.common.event.WarningActivatedEvent;
 import com.xrq.xxq.module.score.entity.Score;
 import com.xrq.xxq.module.score.entity.ScoreTypeEnum;
 import com.xrq.xxq.module.score.mapper.ScoreMapper;
@@ -62,11 +63,12 @@ public class WarningServiceImpl implements WarningService {
     private final WarningRecordMapper warningRecordMapper;
     private final ScoreMapper scoreMapper;
     private final CourseMapper courseMapper;
+    private final SelectionCampaignMapper selectionCampaignMapper;
     private final StudentMapper studentMapper;
     private final UserMapper userMapper;
     private final ClassNameMapper classNameMapper;
     private final SemesterService semesterService;
-    private final NotificationService notificationService;
+    private final ApplicationEventPublisher eventPublisher;
     private final StudentScopeResolver scopeResolver;
 
     // ==================== 配置 ====================
@@ -122,9 +124,8 @@ public class WarningServiceImpl implements WarningService {
 
         // 一次性加载全部成绩与课程学分，内存分组
         List<Score> allScores = scoreMapper.selectList(new LambdaQueryWrapper<>());
-        Map<Long, Integer> creditMap = courseMapper.selectList(new LambdaQueryWrapper<>()).stream()
-                .filter(c -> c.getCredit() != null)
-                .collect(Collectors.toMap(Course::getId, Course::getCredit, (a, b) -> a));
+        // 学分映射：常规课 course.id + 公选课 selection_campaign.id，合并到同一 map
+        CreditSource creditSource = CreditSource.loadAll(courseMapper, selectionCampaignMapper);
         Map<Long, List<Score>> byStudent = allScores.stream()
                 .collect(Collectors.groupingBy(Score::getStudentUserId));
 
@@ -140,7 +141,7 @@ public class WarningServiceImpl implements WarningService {
             Long studentUserId = e.getKey();
             List<Score> scores = e.getValue();
             scanned++;
-            StudentMetrics m = computeMetrics(scores, creditMap, semesterId);
+            StudentMetrics m = computeMetrics(scores, creditSource, semesterId);
             WarningLevelEnum target = matchLevel(configs, m);
 
             if (target != null) {
@@ -161,27 +162,31 @@ public class WarningServiceImpl implements WarningService {
     }
 
     /** 计算学生指标：累计 GPA、累计挂科、本学期挂科。挂科=该课程所有尝试最高分<60。 */
-    private StudentMetrics computeMetrics(List<Score> scores, Map<Long, Integer> creditMap, Long semesterId) {
+    private StudentMetrics computeMetrics(List<Score> scores, CreditSource creditSource, Long semesterId) {
         List<Score> regular = scores.stream()
                 .filter(s -> s.getScoreType() == ScoreTypeEnum.REGULAR).toList();
-        BigDecimal gpa = GpaCalculator.weightedGpa(regular, creditMap);
+        BigDecimal gpa = GpaCalculator.weightedGpa(regular, creditSource);
 
-        // 每门课最高分（含补考/重修）+ REGULAR 所在学期
-        Map<Long, BigDecimal> bestByCourse = new HashMap<>();
-        Map<Long, Long> regularSemByCourse = new HashMap<>();
+        // 每门课最高分（含补考/重修）+ REGULAR 所在学期；键加前缀避免 course.id 与 campaign.id 数值空间重叠
+        Map<String, BigDecimal> bestByCourse = new HashMap<>();
+        Map<String, Long> regularSemByCourse = new HashMap<>();
         for (Score s : scores) {
-            if (s.getTotalScore() == null || s.getCourseId() == null) {
+            if (s.getTotalScore() == null) {
                 continue;
             }
-            bestByCourse.merge(s.getCourseId(), s.getTotalScore(),
+            String key = CreditSource.keyOf(s);
+            if (key == null) {
+                continue;
+            }
+            bestByCourse.merge(key, s.getTotalScore(),
                     (a, b) -> a.compareTo(b) >= 0 ? a : b);
             if (s.getScoreType() == ScoreTypeEnum.REGULAR && s.getSemesterId() != null) {
-                regularSemByCourse.putIfAbsent(s.getCourseId(), s.getSemesterId());
+                regularSemByCourse.putIfAbsent(key, s.getSemesterId());
             }
         }
         int failCount = 0;
         int semesterFailCount = 0;
-        for (Map.Entry<Long, BigDecimal> be : bestByCourse.entrySet()) {
+        for (Map.Entry<String, BigDecimal> be : bestByCourse.entrySet()) {
             if (be.getValue().doubleValue() < 60) {
                 failCount++;
                 if (Objects.equals(regularSemByCourse.get(be.getKey()), semesterId)) {
@@ -271,13 +276,7 @@ public class WarningServiceImpl implements WarningService {
     }
 
     private void sendWarningNotification(Long studentUserId, WarningLevelEnum level, String reason) {
-        try {
-            notificationService.sendToUser(studentUserId, NotificationTypeEnum.WARNING,
-                    level.getDescription(),
-                    "您触发" + level.getDescription() + "：" + reason + "，请尽快联系辅导员/教务制定改进计划。");
-        } catch (Exception ex) {
-            log.warn("预警通知发送失败: studentUserId={}, level={}", studentUserId, level, ex);
-        }
+        eventPublisher.publishEvent(new WarningActivatedEvent(studentUserId, level.getDescription(), reason));
     }
 
     // ==================== 看板 / 查询 ====================
