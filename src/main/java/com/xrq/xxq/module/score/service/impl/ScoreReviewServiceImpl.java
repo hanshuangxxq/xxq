@@ -34,6 +34,7 @@ import com.xrq.xxq.module.user.entity.user.Teacher;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.module.user.mapper.TeacherMapper;
 import com.xrq.xxq.module.user.mapper.UserMapper;
+import com.xrq.xxq.util.ReferenceValidator;
 import com.xrq.xxq.util.auth.AuthFacade;
 
 import lombok.RequiredArgsConstructor;
@@ -54,6 +55,7 @@ public class ScoreReviewServiceImpl extends ServiceImpl<ScoreReviewMapper, Score
     private final StudentMapper studentMapper;
     private final TeacherMapper teacherMapper;
     private final ApplicationEventPublisher eventPublisher;
+    private final ReferenceValidator referenceValidator;
 
     // ==================== 申请 ====================
 
@@ -80,6 +82,8 @@ public class ScoreReviewServiceImpl extends ServiceImpl<ScoreReviewMapper, Score
         if (active != null && active > 0) {
             throw new BusinessException(409, "该成绩已有进行中的复核申请");
         }
+        // 外键存在性校验（成绩已由上方 selectById 校验）
+        referenceValidator.requireExists(userMapper, studentUserId, "用户");
         ScoreReview r = new ScoreReview();
         r.setScoreId(request.getScoreId());
         r.setStudentUserId(studentUserId);
@@ -151,6 +155,9 @@ public class ScoreReviewServiceImpl extends ServiceImpl<ScoreReviewMapper, Score
         r.setTeacherReply(request.getReply());
         r.setTeacherId(t.getId());
         r.setStatus(ReviewStatusEnum.TEACHER_REPLIED);
+        // 外键存在性校验（成绩已由上方 selectById 校验）
+        referenceValidator.requireExists(userMapper, r.getStudentUserId(), "用户");
+        referenceValidator.requireExists(teacherMapper, r.getTeacherId(), "教师");
         baseMapper.updateById(r);
         if (request.getNewTotalScore() != null) {
             adjustTotal(g, request.getNewTotalScore());
@@ -176,6 +183,10 @@ public class ScoreReviewServiceImpl extends ServiceImpl<ScoreReviewMapper, Score
         }
         r.setStatus(ReviewStatusEnum.ESCALATED);
         r.setEscalateTime(LocalDateTime.now());
+        // 外键存在性校验
+        referenceValidator.requireExists(scoreMapper, r.getScoreId(), "成绩");
+        referenceValidator.requireExists(userMapper, r.getStudentUserId(), "用户");
+        referenceValidator.requireExists(teacherMapper, r.getTeacherId(), "教师");
         baseMapper.updateById(r);
     }
 
@@ -195,6 +206,11 @@ public class ScoreReviewServiceImpl extends ServiceImpl<ScoreReviewMapper, Score
         r.setAdminId(adminUserId);
         r.setStatus(request.isResolved() ? ReviewStatusEnum.RESOLVED : ReviewStatusEnum.REJECTED);
         r.setResolvedTime(LocalDateTime.now());
+        // 外键存在性校验
+        referenceValidator.requireExists(scoreMapper, r.getScoreId(), "成绩");
+        referenceValidator.requireExists(userMapper, r.getStudentUserId(), "用户");
+        referenceValidator.requireExists(teacherMapper, r.getTeacherId(), "教师");
+        referenceValidator.requireExists(userMapper, r.getAdminId(), "用户");
         baseMapper.updateById(r);
 
         Score g = scoreMapper.selectById(r.getScoreId());
