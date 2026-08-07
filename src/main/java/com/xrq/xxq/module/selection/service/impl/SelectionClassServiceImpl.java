@@ -1,9 +1,11 @@
 package com.xrq.xxq.module.selection.service.impl;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
@@ -14,6 +16,8 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
+import com.xrq.xxq.module.course.entity.Course;
+import com.xrq.xxq.module.course.mapper.CourseMapper;
 import com.xrq.xxq.module.selection.dto.SelectionClassResponse;
 import com.xrq.xxq.module.selection.dto.StudentSelectionDto;
 import com.xrq.xxq.module.selection.entity.CampaignStatusEnum;
@@ -51,6 +55,7 @@ public class SelectionClassServiceImpl implements SelectionClassService {
     private final StudentMapper studentMapper;
     private final UserMapper userMapper;
     private final ClassNameMapper classNameMapper;
+    private final CourseMapper courseMapper;
     private final TeachInfoMapper teachInfoMapper;
     private final TeacherMapper teacherMapper;
     private final DraftCacheManager draftCacheManager;
@@ -64,90 +69,139 @@ public class SelectionClassServiceImpl implements SelectionClassService {
             return;
         }
 
-        // 清理旧的分班结果与对应的 teach_info，同步清理草稿箱中残留的选课班草稿
-        List<SelectionClass> existing = selectionClassMapper.selectList(
-                new LambdaQueryWrapper<SelectionClass>().eq(SelectionClass::getCampaignId, campaignId));
-        if (!existing.isEmpty()) {
-            List<Long> oldClassIds = existing.stream().map(SelectionClass::getId).toList();
-            selectionClassMemberMapper.delete(new LambdaQueryWrapper<SelectionClassMember>()
-                    .in(SelectionClassMember::getClassId, oldClassIds));
-            List<Long> oldTeachInfoIds = existing.stream()
-                    .map(SelectionClass::getTeachInfoId)
-                    .filter(Objects::nonNull)
-                    .toList();
-            if (!oldTeachInfoIds.isEmpty()) {
-                List<TeachInfo> oldTeachInfos = teachInfoMapper.selectByIds(oldTeachInfoIds);
-                for (TeachInfo oldTi : oldTeachInfos) {
-                    if (oldTi.getClassName() != null && !oldTi.getClassName().isBlank()) {
-                        draftCacheManager.removeByClassName(oldTi.getClassName());
-                    }
-                }
-                teachInfoMapper.deleteByIds(oldTeachInfoIds);
-            }
-            selectionClassMapper.delete(new LambdaQueryWrapper<SelectionClass>()
-                    .eq(SelectionClass::getCampaignId, campaignId));
-        }
-
-        // 一个活动 = 一门课，按 selectTime 升序切班
+        // 按新 selectTime 升序 + 容量切，得到新分班（每班 SelectionRecord 列表）
         List<SelectionRecord> records = selectionRecordMapper.selectList(
                 new LambdaQueryWrapper<SelectionRecord>()
                         .eq(SelectionRecord::getCampaignId, campaignId)
                         .eq(SelectionRecord::getStatus, RecordStatusEnum.SELECTED)
                         .orderByAsc(SelectionRecord::getSelectTime));
-        if (records.isEmpty()) {
-            return;
-        }
-
         int capacity = campaign.getCapacity() == null || campaign.getCapacity() <= 0
                 ? Integer.MAX_VALUE : campaign.getCapacity();
-        int classNo = 1;
+        List<List<SelectionRecord>> newBatches = new ArrayList<>();
         int idx = 0;
-        List<TeachInfo> createdTeachInfos = new ArrayList<>();
         while (idx < records.size()) {
             int end = Math.min(idx + capacity, records.size());
-            List<SelectionRecord> chunk = records.subList(idx, end);
-
-            // 1. 创建 teach_info 记录（courseId 用 campaign 衍生的 course.id）
-            TeachInfo ti = new TeachInfo();
-            ti.setCourseId(campaign.getCourseId());
-            ti.setTeacherId(null);
-            ti.setClassName(campaign.getName() + "-" + classNo);
-            ti.setTimeId(null);
-            ti.setLocalId(null);
-            ti.setDayOfWeek(null);
-            ti.setStartWeek(campaign.getStartWeek());
-            ti.setEndWeek(campaign.getEndWeek());
-            ti.setSemesterId(campaign.getSemesterId());
-            teachInfoMapper.insert(ti);
-            createdTeachInfos.add(ti);
-
-            // 2. 创建 selection_class
-            SelectionClass selectionClass = new SelectionClass();
-            selectionClass.setCampaignId(campaignId);
-            selectionClass.setClassNo(classNo);
-            selectionClass.setStudentCount(chunk.size());
-            selectionClass.setTeachInfoId(ti.getId());
-            selectionClassMapper.insert(selectionClass);
-
-            for (SelectionRecord r : chunk) {
-                SelectionClassMember member = new SelectionClassMember();
-                member.setClassId(selectionClass.getId());
-                member.setStudentId(r.getStudentId());
-                member.setRecordId(r.getId());
-                selectionClassMemberMapper.insert(member);
-            }
-
+            newBatches.add(new ArrayList<>(records.subList(idx, end)));
             idx = end;
+        }
+
+        String courseName = campaign.getCourseName() != null ? campaign.getCourseName() : "活动";
+
+        // 现有分班：按 classNo 索引
+        List<SelectionClass> existingClasses = selectionClassMapper.selectList(
+                new LambdaQueryWrapper<SelectionClass>().eq(SelectionClass::getCampaignId, campaignId));
+        Map<Integer, SelectionClass> existingByClassNo = existingClasses.stream()
+                .collect(Collectors.toMap(SelectionClass::getClassNo, c -> c, (a, b) -> a));
+        // 现有 member：classId -> List<member>
+        List<Long> oldClassIds = existingClasses.stream().map(SelectionClass::getId).toList();
+        Map<Long, List<SelectionClassMember>> existingMembersByClassId = oldClassIds.isEmpty()
+                ? Map.of()
+                : selectionClassMemberMapper.selectList(new LambdaQueryWrapper<SelectionClassMember>()
+                        .in(SelectionClassMember::getClassId, oldClassIds)).stream()
+                        .collect(Collectors.groupingBy(SelectionClassMember::getClassId));
+        // 现有 teach_info：teachInfoId -> TeachInfo（删除多余班时清草稿用）
+        List<Long> oldTeachInfoIds = existingClasses.stream()
+                .map(SelectionClass::getTeachInfoId).filter(Objects::nonNull).toList();
+        Map<Long, TeachInfo> existingTiMap = oldTeachInfoIds.isEmpty()
+                ? Map.of()
+                : teachInfoMapper.selectByIds(oldTeachInfoIds).stream()
+                        .collect(Collectors.toMap(TeachInfo::getId, t -> t, (a, b) -> a));
+
+        int newClassCount = newBatches.size();
+        List<TeachInfo> createdTeachInfos = new ArrayList<>();
+
+        // 处理新分班（classNo 1..newClassCount）：增量 diff
+        int classNo = 1;
+        for (List<SelectionRecord> batch : newBatches) {
+            SelectionClass sc = existingByClassNo.get(classNo);
+            Set<Long> newStudentIds = batch.stream()
+                    .map(SelectionRecord::getStudentId).collect(Collectors.toSet());
+            if (sc == null) {
+                // 新班：建 teach_info（教师/时段/教室为 null）+ selection_class + member
+                TeachInfo ti = new TeachInfo();
+                ti.setCampaignId(campaign.getId());
+                ti.setClassName(courseName + "-" + classNo);
+                ti.setStartWeek(campaign.getStartWeek());
+                ti.setEndWeek(campaign.getEndWeek());
+                ti.setSemesterId(campaign.getSemesterId());
+                teachInfoMapper.insert(ti);
+                createdTeachInfos.add(ti);
+                sc = new SelectionClass();
+                sc.setCampaignId(campaignId);
+                sc.setClassNo(classNo);
+                sc.setStudentCount(batch.size());
+                sc.setTeachInfoId(ti.getId());
+                selectionClassMapper.insert(sc);
+                for (SelectionRecord r : batch) {
+                    insertMember(sc.getId(), r);
+                }
+            } else {
+                // 共有班：保留 teach_info（含已分配教师 + 排课时段/教室）+ selection_class，仅增删变化的 member
+                List<SelectionClassMember> existingMembers = existingMembersByClassId.getOrDefault(sc.getId(), List.of());
+                Set<Long> existingStudentIds = existingMembers.stream()
+                        .map(SelectionClassMember::getStudentId).collect(Collectors.toSet());
+                for (SelectionClassMember m : existingMembers) {
+                    if (!newStudentIds.contains(m.getStudentId())) {
+                        selectionClassMemberMapper.deleteById(m.getId());
+                    }
+                }
+                Map<Long, SelectionRecord> recordByStudent = batch.stream()
+                        .collect(Collectors.toMap(SelectionRecord::getStudentId, r -> r, (a, b) -> a));
+                for (Long newStudentId : newStudentIds) {
+                    if (!existingStudentIds.contains(newStudentId)) {
+                        insertMember(sc.getId(), recordByStudent.get(newStudentId));
+                    }
+                }
+                if (sc.getStudentCount() == null || sc.getStudentCount() != batch.size()) {
+                    sc.setStudentCount(batch.size());
+                    selectionClassMapper.updateById(sc);
+                }
+            }
             classNo++;
         }
 
-        // 将选课班 TeachInfo 推入排课草稿箱，让排课流程能消费它们
+        // 删除多余的旧班（classNo > newClassCount）：删 member + teach_info + selection_class + 草稿
+        for (SelectionClass sc : existingClasses) {
+            if (sc.getClassNo() != null && sc.getClassNo() > newClassCount) {
+                selectionClassMemberMapper.delete(new LambdaQueryWrapper<SelectionClassMember>()
+                        .eq(SelectionClassMember::getClassId, sc.getId()));
+                if (sc.getTeachInfoId() != null) {
+                    TeachInfo oldTi = existingTiMap.get(sc.getTeachInfoId());
+                    if (oldTi != null && oldTi.getClassName() != null && !oldTi.getClassName().isBlank()) {
+                        draftCacheManager.removeByClassName(oldTi.getClassName());
+                    }
+                    teachInfoMapper.deleteById(sc.getTeachInfoId());
+                }
+                selectionClassMapper.deleteById(sc.getId());
+            }
+        }
+
+        // 新增班推草稿箱，让排课流程能消费
         if (!createdTeachInfos.isEmpty()) {
             draftCacheManager.addDrafts(createdTeachInfos);
         }
 
-        // 分班改变了 teach_info 数据，清空课表缓存避免脏读
-        classScheduleCacheManager.clearAll();
+        // 精细化清缓存：所有班 class 维度 + 成员 user 维度（替代 clearAll 全局清空）
+        StringBuilder classNames = new StringBuilder();
+        for (int n = 1; n <= newClassCount; n++) {
+            if (n > 1) classNames.append(",");
+            classNames.append(courseName).append("-").append(n);
+        }
+        classScheduleCacheManager.evictByClassNames(classNames.toString());
+        for (SelectionRecord r : records) {
+            if (r.getStudentId() != null) {
+                classScheduleCacheManager.evictUserScope(r.getStudentId());
+            }
+        }
+    }
+
+    /** 插入选课班成员。 */
+    private void insertMember(Long classId, SelectionRecord r) {
+        SelectionClassMember member = new SelectionClassMember();
+        member.setClassId(classId);
+        member.setStudentId(r.getStudentId());
+        member.setRecordId(r.getId());
+        selectionClassMemberMapper.insert(member);
     }
 
     @Override
@@ -193,8 +247,21 @@ public class SelectionClassServiceImpl implements SelectionClassService {
 
         // 同步草稿箱中对应草稿的教师字段（草稿可能已被排课消费，updateTeacher 内部静默跳过）
         draftCacheManager.updateTeacher(ti.getId(), teacherId, teacherName);
-        // 教师变更可能影响课表，清空缓存避免脏读
-        classScheduleCacheManager.clearAll();
+        // 精细化清缓存：该班 class 维度 + 教师/成员 user 维度（替代 clearAll 全局清空）
+        classScheduleCacheManager.evictByClassNames(ti.getClassName());
+        if (teacherId != null) {
+            Teacher t = teacherMapper.selectById(teacherId);
+            if (t != null && t.getUserId() != null) {
+                classScheduleCacheManager.evictUserScope(t.getUserId());
+            }
+        }
+        List<SelectionClassMember> members = selectionClassMemberMapper.selectList(
+                new LambdaQueryWrapper<SelectionClassMember>().eq(SelectionClassMember::getClassId, classId));
+        for (SelectionClassMember m : members) {
+            if (m.getStudentId() != null) {
+                classScheduleCacheManager.evictUserScope(m.getStudentId());
+            }
+        }
 
         return listByCampaign(campaignId).stream()
                 .filter(r -> classId.equals(r.getClassId()))
@@ -211,7 +278,7 @@ public class SelectionClassServiceImpl implements SelectionClassService {
         }
 
         SelectionCampaign campaign = selectionCampaignMapper.selectById(campaignId);
-        String courseName = campaign != null ? campaign.getName() : null;
+        String courseName = campaign != null ? campaign.getCourseName() : null;
 
         List<Long> classIds = classes.stream().map(SelectionClass::getId).toList();
         List<SelectionClassMember> allMembers = selectionClassMemberMapper.selectList(
