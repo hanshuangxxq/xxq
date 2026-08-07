@@ -8,6 +8,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
+import com.xrq.xxq.module.course.entity.Course;
 import com.xrq.xxq.module.teachinfo.entity.TeachInfo;
 import com.xrq.xxq.module.teachinfo.mapper.TeachInfoMapper;
 import com.xrq.xxq.module.user.entity.user.Department;
@@ -92,14 +93,21 @@ public class StudentScopeResolver {
     }
 
     /** 教师是否能访问某课程（存在该教师该课程的 teach_info）。 */
-    public boolean teacherCanAccessCourse(Long teacherUserId, Long courseId) {
+    public boolean teacherCanAccessCourse(Long teacherUserId, Long courseId, String source) {
         Teacher t = teacherMapper.selectOne(
                 new LambdaQueryWrapper<Teacher>().eq(Teacher::getUserId, teacherUserId));
         if (t == null) {
             return false;
         }
-        Long count = teachInfoMapper.selectCount(new LambdaQueryWrapper<TeachInfo>()
-                .eq(TeachInfo::getTeacherId, t.getId()).eq(TeachInfo::getCourseId, courseId));
+        LambdaQueryWrapper<TeachInfo> w = new LambdaQueryWrapper<TeachInfo>()
+                .eq(TeachInfo::getTeacherId, t.getId());
+        // source=SELECTION_CAMPAIGN 时 courseId 实为 campaignId，按 campaign_id 校验授课关系
+        if (Course.SOURCE_SELECTION_CAMPAIGN.equals(source)) {
+            w.eq(TeachInfo::getCampaignId, courseId);
+        } else {
+            w.eq(TeachInfo::getCourseId, courseId);
+        }
+        Long count = teachInfoMapper.selectCount(w);
         return count != null && count > 0;
     }
 
