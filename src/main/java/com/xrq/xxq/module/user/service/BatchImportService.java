@@ -4,9 +4,11 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.module.user.dto.BatchImportResponse;
 import com.xrq.xxq.module.user.dto.BatchImportResponse.ImportResultDetail;
 import com.xrq.xxq.module.user.dto.UserImportItem;
@@ -34,17 +36,19 @@ public class BatchImportService {
     private final TeacherMapper teacherMapper;
     private final MajorMapper majorMapper;
     private final GradeMapper gradeMapper;
+    private final PlatformTransactionManager transactionManager;
 
-    @Transactional
     public BatchImportResponse batchImport(List<UserImportItem> items) {
         BatchImportResponse response = new BatchImportResponse();
         response.setTotal(items.size());
+        // 每行独立事务：单行失败仅回滚该行（user+子类型），不影响其他行，避免孤立 user
+        TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
 
         int index = 0;
         for (UserImportItem item : items) {
             index++;
             try {
-                importOne(item);
+                txTemplate.executeWithoutResult(status -> importOne(item));
                 ImportResultDetail detail = new ImportResultDetail();
                 detail.setIndex(index);
                 detail.setUsername(item.getUsername());
@@ -122,13 +126,10 @@ public class BatchImportService {
         }
         Major major = majorMapper.selectOne(
                 new LambdaQueryWrapper<Major>().eq(Major::getMajorName, majorName.strip()));
-        if (major != null) {
-            return major.getId();
+        if (major == null) {
+            throw new BusinessException(400, "专业不存在：" + majorName.strip() + "，请先在基础数据中创建");
         }
-        Major newMajor = new Major();
-        newMajor.setMajorName(majorName.strip());
-        majorMapper.insert(newMajor);
-        return newMajor.getId();
+        return major.getId();
     }
 
     private Long resolveGradeId(String gradeName) {
@@ -137,12 +138,9 @@ public class BatchImportService {
         }
         Grade grade = gradeMapper.selectOne(
                 new LambdaQueryWrapper<Grade>().eq(Grade::getName, gradeName.strip()));
-        if (grade != null) {
-            return grade.getId();
+        if (grade == null) {
+            throw new BusinessException(400, "年级不存在：" + gradeName.strip() + "，请先在基础数据中创建");
         }
-        Grade newGrade = new Grade();
-        newGrade.setName(gradeName.strip());
-        gradeMapper.insert(newGrade);
-        return newGrade.getId();
+        return grade.getId();
     }
 }
