@@ -18,6 +18,7 @@ import com.xrq.xxq.module.notification.service.NotificationService;
 import com.xrq.xxq.module.notification.ws.NotificationSessionManager;
 import com.xrq.xxq.module.user.entity.User;
 import com.xrq.xxq.module.user.mapper.UserMapper;
+import com.xrq.xxq.util.ReferenceValidator;
 import com.xrq.xxq.util.auth.AuthFacade;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,6 +44,7 @@ public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Not
     private final NotificationBroadcastMapper notificationBroadcastMapper;
     private final NotificationReadMapper notificationReadMapper;
     private final UserMapper userMapper;
+    private final ReferenceValidator referenceValidator;
 
     // ==================== 查询 ====================
 
@@ -116,6 +118,7 @@ public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Not
 
     @Override
     public NotificationResponse sendToUser(Long userId, NotificationTypeEnum type, String title, String content) {
+        referenceValidator.requireExists(userMapper, userId, "用户");
         Notification n = new Notification();
         n.setUserId(userId);
         n.setType(type != null ? type : NotificationTypeEnum.SYSTEM);
@@ -157,9 +160,8 @@ public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Not
 
     @Override
     public void markBroadcastRead(Long userId, String userType, Long broadcastId) {
-        if (notificationBroadcastMapper.selectById(broadcastId) == null) {
-            throw new BusinessException(404, "消息不存在");
-        }
+        referenceValidator.requireExists(notificationBroadcastMapper, broadcastId, "广播消息");
+        referenceValidator.requireExists(userMapper, userId, "用户");
         markBroadcastsRead(userId, List.of(broadcastId));
         pushUnreadCount(userId, userType);
     }
@@ -167,6 +169,7 @@ public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Not
     @Override
     public NotificationResponse broadcast(NotificationTypeEnum type, NotificationTargetEnum target,
                                           String title, String content, Long senderId) {
+        referenceValidator.requireExists(userMapper, senderId, "用户");
         NotificationTargetEnum resolvedTarget = target != null ? target : NotificationTargetEnum.ALL;
         NotificationBroadcast b = new NotificationBroadcast();
         b.setType(type != null ? type : NotificationTypeEnum.SYSTEM);
