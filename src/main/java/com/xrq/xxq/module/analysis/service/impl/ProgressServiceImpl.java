@@ -3,11 +3,9 @@ package com.xrq.xxq.module.analysis.service.impl;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
@@ -17,11 +15,6 @@ import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.module.analysis.dto.LearningProgressDto;
 import com.xrq.xxq.module.analysis.dto.LearningProgressDto.CourseProgress;
 import com.xrq.xxq.module.analysis.service.ProgressService;
-import com.xrq.xxq.util.StudentScopeResolver;
-import com.xrq.xxq.module.clazz.entity.ClassName;
-import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
-import com.xrq.xxq.module.clazz.util.ClassNameUtil;
-import com.xrq.xxq.module.course.mapper.CourseMapper;
 import com.xrq.xxq.module.course.service.CourseInfoResolver;
 import com.xrq.xxq.module.exam.entity.Exam;
 import com.xrq.xxq.module.exam.entity.ExamStatusEnum;
@@ -29,20 +22,16 @@ import com.xrq.xxq.module.exam.mapper.ExamMapper;
 import com.xrq.xxq.module.score.entity.Score;
 import com.xrq.xxq.module.score.entity.ScoreTypeEnum;
 import com.xrq.xxq.module.score.mapper.ScoreMapper;
-import com.xrq.xxq.module.selection.entity.SelectionClass;
-import com.xrq.xxq.module.selection.entity.SelectionClassMember;
-import com.xrq.xxq.module.selection.mapper.SelectionClassMapper;
-import com.xrq.xxq.module.selection.mapper.SelectionClassMemberMapper;
 import com.xrq.xxq.module.semester.entity.Semester;
 import com.xrq.xxq.module.semester.service.SemesterService;
 import com.xrq.xxq.module.teachinfo.entity.TeachInfo;
-import com.xrq.xxq.module.teachinfo.mapper.TeachInfoMapper;
 import com.xrq.xxq.module.user.entity.User;
 import com.xrq.xxq.module.user.entity.user.Student;
-import com.xrq.xxq.module.user.entity.user.Teacher;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
-import com.xrq.xxq.module.user.mapper.TeacherMapper;
 import com.xrq.xxq.module.user.mapper.UserMapper;
+import com.xrq.xxq.util.StudentEnrollmentResolver;
+import com.xrq.xxq.util.StudentScopeResolver;
+import com.xrq.xxq.util.TeacherNameResolver;
 import com.xrq.xxq.util.auth.AuthFacade;
 
 import lombok.RequiredArgsConstructor;
@@ -50,9 +39,9 @@ import lombok.RequiredArgsConstructor;
 /**
  * 学习进度服务实现：派生当前学期各课程完成度。
  * <p>
- * 学生课程来源：常规班（teach_info.className 含学生班级名）+ 公选课班（selection_class_member）。
- * 进度% = (当前周 - startWeek + 1) / (endWeek - startWeek + 1) × 100，clamp 到 [0,100]；
- * 当前周由学期起始日推算。结课判定：当前周 &gt; endWeek 或考试 COMPLETED。
+ * 学生课程来源：常规班（teach_info.className 含学生班级名）+ 公选课班（selection_class_member），
+ * 统一由 {@link StudentEnrollmentResolver} 解析。进度% = (当前周 - startWeek + 1) / (endWeek - startWeek + 1) × 100，
+ * clamp 到 [0,100]；当前周由学期起始日推算。结课判定：当前周 &gt; endWeek 或考试 COMPLETED。
  */
 @Service
 @RequiredArgsConstructor
@@ -60,17 +49,13 @@ public class ProgressServiceImpl implements ProgressService {
 
     private final StudentMapper studentMapper;
     private final UserMapper userMapper;
-    private final ClassNameMapper classNameMapper;
-    private final TeachInfoMapper teachInfoMapper;
-    private final CourseMapper courseMapper;
     private final CourseInfoResolver courseInfoResolver;
-    private final TeacherMapper teacherMapper;
     private final ExamMapper examMapper;
     private final ScoreMapper scoreMapper;
-    private final SelectionClassMapper selectionClassMapper;
-    private final SelectionClassMemberMapper selectionClassMemberMapper;
     private final SemesterService semesterService;
     private final StudentScopeResolver scopeResolver;
+    private final StudentEnrollmentResolver enrollmentResolver;
+    private final TeacherNameResolver teacherNameResolver;
 
     @Override
     public LearningProgressDto getProgress(Long studentUserId, Long callerUserId, String callerUserType) {
@@ -82,7 +67,6 @@ public class ProgressServiceImpl implements ProgressService {
             throw new BusinessException(404, "学生不存在");
         }
         User user = userMapper.selectById(studentUserId);
-        ClassName cn = stu.getClassId() == null ? null : classNameMapper.selectById(stu.getClassId());
 
         LearningProgressDto dto = new LearningProgressDto();
         dto.setStudentUserId(studentUserId);
@@ -96,7 +80,7 @@ public class ProgressServiceImpl implements ProgressService {
         dto.setSemesterName(current.getName());
         dto.setCurrentWeek(computeCurrentWeek(current));
 
-        List<TeachInfo> infos = resolveStudentTeachInfos(studentUserId, cn, current.getId());
+        List<TeachInfo> infos = enrollmentResolver.studentTeachInfos(studentUserId, current.getId());
         if (infos.isEmpty()) {
             dto.setCourses(List.of());
             return dto;
@@ -107,11 +91,7 @@ public class ProgressServiceImpl implements ProgressService {
         Map<Long, CourseInfoResolver.CourseInfo> byCourse = courseInfoResolver.resolveCourses(courseIds);
         Map<Long, CourseInfoResolver.CourseInfo> byCampaign = courseInfoResolver.resolveCampaigns(campaignIds);
         List<Long> teacherIds = infos.stream().map(TeachInfo::getTeacherId).filter(Objects::nonNull).distinct().toList();
-        Map<Long, Long> teacherUserId = teacherIds.isEmpty() ? Map.of()
-                : teacherMapper.selectByIds(teacherIds).stream()
-                        .collect(Collectors.toMap(Teacher::getId, Teacher::getUserId, (a, b) -> a));
-        List<Long> teacherUserIds = new ArrayList<>(teacherUserId.values());
-        Map<Long, String> userNameMap = userMapper.toNameMap(teacherUserIds);
+        Map<Long, String> teacherNameMap = teacherNameResolver.namesByIds(teacherIds);
         List<Long> teachInfoIds = infos.stream().map(TeachInfo::getId).toList();
         Map<Long, Exam> examMap = examMapper.selectList(new LambdaQueryWrapper<Exam>()
                         .in(Exam::getTeachInfoId, teachInfoIds)
@@ -133,8 +113,7 @@ public class ProgressServiceImpl implements ProgressService {
                     ? byCampaign.get(info.getCampaignId())
                     : byCourse.get(info.getCourseId());
             cp.setCourseName(ci != null ? ci.getCourseName() : null);
-            Long tuid = teacherUserId.get(info.getTeacherId());
-            cp.setTeacherName(tuid != null ? userNameMap.get(tuid) : null);
+            cp.setTeacherName(teacherNameMap.get(info.getTeacherId()));
             cp.setStartWeek(info.getStartWeek());
             cp.setEndWeek(info.getEndWeek());
             cp.setProgressPercent(computeProgress(currentWeek, info.getStartWeek(), info.getEndWeek()));
@@ -169,7 +148,7 @@ public class ProgressServiceImpl implements ProgressService {
             return;
         }
         if (AuthFacade.USER_TYPE_DEPARTMENT.equals(callerUserType)) {
-            if (scopeResolver.departmentOwnsStudent (callerUserId, studentUserId)) {
+            if (scopeResolver.departmentOwnsStudent(callerUserId, studentUserId)) {
                 throw new BusinessException(403, "权限不足");
             }
             return;
@@ -186,38 +165,6 @@ public class ProgressServiceImpl implements ProgressService {
         }
         long weeks = ChronoUnit.WEEKS.between(sem.getStartDate(), LocalDate.now());
         return sem.getStartWeek() + (int) weeks;
-    }
-
-    /** 学生当前学期的授课安排：班级名册匹配 + 公选课班成员，按 id 去重。 */
-    private List<TeachInfo> resolveStudentTeachInfos(Long studentUserId, ClassName cn, Long semesterId) {
-        List<TeachInfo> semInfos = teachInfoMapper.selectList(new LambdaQueryWrapper<TeachInfo>()
-                .eq(TeachInfo::getSemesterId, semesterId));
-        String studentClassName = cn != null ? cn.getClassName() : null;
-
-        Map<Long, TeachInfo> merged = new LinkedHashMap<>();
-        // 常规班：teach_info.className（CSV 合班）含学生班级名
-        if (studentClassName != null) {
-            for (TeachInfo i : semInfos) {
-                if (ClassNameUtil.splitClassNames(i.getClassName()).contains(studentClassName)) {
-                    merged.put(i.getId(), i);
-                }
-            }
-        }
-        // 公选课班：selection_class_member -> selection_class -> teach_info
-        List<SelectionClassMember> memberships = selectionClassMemberMapper.selectList(
-                new LambdaQueryWrapper<SelectionClassMember>().eq(SelectionClassMember::getStudentId, studentUserId));
-        List<Long> selClassIds = memberships.stream().map(SelectionClassMember::getClassId)
-                .filter(Objects::nonNull).distinct().toList();
-        if (!selClassIds.isEmpty()) {
-            Set<Long> selTeachInfoIds = selectionClassMapper.selectByIds(selClassIds).stream()
-                    .map(SelectionClass::getTeachInfoId).filter(Objects::nonNull).collect(Collectors.toSet());
-            for (TeachInfo i : semInfos) {
-                if (selTeachInfoIds.contains(i.getId())) {
-                    merged.put(i.getId(), i);
-                }
-            }
-        }
-        return new ArrayList<>(merged.values());
     }
 
     private Integer computeProgress(Integer currentWeek, Integer startWeek, Integer endWeek) {
