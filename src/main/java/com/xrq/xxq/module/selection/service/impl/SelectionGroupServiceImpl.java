@@ -8,8 +8,11 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
+import com.xrq.xxq.common.PageQuery;
+import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.module.selection.dto.SelectionGroupCreateRequest;
 import com.xrq.xxq.module.selection.dto.SelectionGroupResponse;
 import com.xrq.xxq.module.selection.dto.SelectionGroupUpdateRequest;
@@ -87,17 +90,20 @@ public class SelectionGroupServiceImpl
     }
 
     @Override
-    public List<SelectionGroupResponse> listAll() {
-        List<SelectionGroup> groups = baseMapper.selectList(
-                new LambdaQueryWrapper<SelectionGroup>().orderByAsc(SelectionGroup::getId));
+    public PageResult<SelectionGroupResponse> listAll(PageQuery pageQuery) {
+        LambdaQueryWrapper<SelectionGroup> wrapper = new LambdaQueryWrapper<SelectionGroup>()
+                .orderByAsc(SelectionGroup::getId);
+        Page<SelectionGroup> page = baseMapper.selectPage(pageQuery.toPage(), wrapper);
+        List<SelectionGroup> groups = page.getRecords();
         if (groups.isEmpty()) {
-            return List.of();
+            return PageResult.of(page, List.of());
         }
         List<Long> groupIds = groups.stream().map(SelectionGroup::getId).toList();
         Map<Long, Integer> campaignCountMap = countCampaignsByGroup(groupIds);
-        return groups.stream()
+        List<SelectionGroupResponse> records = groups.stream()
                 .map(g -> toResponse(g, campaignCountMap.getOrDefault(g.getId(), 0)))
                 .collect(Collectors.toList());
+        return PageResult.of(page, records);
     }
 
     @Override
