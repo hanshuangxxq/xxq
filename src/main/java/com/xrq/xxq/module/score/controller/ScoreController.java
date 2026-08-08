@@ -55,23 +55,19 @@ public class ScoreController {
     public Result<ScoreConfig> setConfig(HttpServletRequest request,
                                          @PathVariable Long teachInfoId,
                                          @RequestBody ScoreConfigRequest body) {
-        Long userId = authFacade.currentUserId(request);
-        String userType = authFacade.currentUserType(request);
-        authFacade.requireUserTypes(request,
+        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
                 AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
-        scoreService.assertCanEnterTeachInfo(teachInfoId, userId, userType);
-        return Result.ok(scoreConfigService.upsert(teachInfoId, body.getRegularRatio(), userId));
+        scoreService.assertCanEnterTeachInfo(teachInfoId, ctx.userId(), ctx.userType());
+        return Result.ok(scoreConfigService.upsert(teachInfoId, body.getRegularRatio(), ctx.userId()));
     }
 
     /** 查询占比配置。 */
     @GetMapping("/config/{teachInfoId}")
     public Result<ScoreConfig> getConfig(HttpServletRequest request,
                                          @PathVariable Long teachInfoId) {
-        Long userId = authFacade.currentUserId(request);
-        String userType = authFacade.currentUserType(request);
-        authFacade.requireUserTypes(request,
+        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
                 AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
-        scoreService.assertCanEnterTeachInfo(teachInfoId, userId, userType);
+        scoreService.assertCanEnterTeachInfo(teachInfoId, ctx.userId(), ctx.userType());
         return Result.ok(scoreConfigService.getByTeachInfo(teachInfoId));
     }
 
@@ -82,11 +78,9 @@ public class ScoreController {
     public Result<List<ScoreRosterDto>> roster(HttpServletRequest request,
                                                @PathVariable Long teachInfoId,
                                                @RequestParam(required = false) Long examId) {
-        Long userId = authFacade.currentUserId(request);
-        String userType = authFacade.currentUserType(request);
-        authFacade.requireUserTypes(request,
+        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
                 AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
-        scoreService.assertCanEnterTeachInfo(teachInfoId, userId, userType);
+        scoreService.assertCanEnterTeachInfo(teachInfoId, ctx.userId(), ctx.userType());
         return Result.ok(scoreService.roster(teachInfoId, examId));
     }
 
@@ -96,11 +90,9 @@ public class ScoreController {
     @PostMapping
     public Result<List<ScoreView>> saveScores(HttpServletRequest request,
                                               @RequestBody ScoreBatchRequest body) {
-        Long userId = authFacade.currentUserId(request);
-        String userType = authFacade.currentUserType(request);
-        authFacade.requireUserTypes(request,
+        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
                 AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
-        return Result.ok(scoreService.saveScores(body, userId, userType));
+        return Result.ok(scoreService.saveScores(body, ctx.userId(), ctx.userType()));
     }
 
     /** 修改单条成绩（未锁定）。 */
@@ -108,11 +100,9 @@ public class ScoreController {
     public Result<ScoreView> updateScore(HttpServletRequest request,
                                          @PathVariable Long id,
                                          @RequestBody ScoreEntryRequest body) {
-        Long userId = authFacade.currentUserId(request);
-        String userType = authFacade.currentUserType(request);
-        authFacade.requireUserTypes(request,
+        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
                 AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
-        return Result.ok(scoreService.updateScore(id, body, userId, userType));
+        return Result.ok(scoreService.updateScore(id, body, ctx.userId(), ctx.userType()));
     }
 
     // ──────────────────────── 查询 ────────────────────────
@@ -121,11 +111,9 @@ public class ScoreController {
     @GetMapping
     public Result<List<ScoreView>> listByTeachInfo(HttpServletRequest request,
                                                    @RequestParam Long teachInfoId) {
-        Long userId = authFacade.currentUserId(request);
-        String userType = authFacade.currentUserType(request);
-        authFacade.requireUserTypes(request,
+        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
                 AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_DEPARTMENT, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
-        return Result.ok(scoreService.listByTeachInfo(teachInfoId, userId, userType));
+        return Result.ok(scoreService.listByTeachInfo(teachInfoId, ctx.userId(), ctx.userType()));
     }
 
     /** 学生查询自己的成绩：默认当前学期，传 semesterId 时查指定学期。 */
@@ -155,11 +143,9 @@ public class ScoreController {
                                                        @RequestParam(required = false) String source,
                                                        @RequestParam(required = false) String className,
                                                        @RequestParam(required = false) Long semesterId) {
-        Long userId = authFacade.currentUserId(request);
-        String userType = authFacade.currentUserType(request);
-        authFacade.requireUserTypes(request,
+        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
                 AuthFacade.USER_TYPE_DEPARTMENT, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
-        return Result.ok(scoreService.statistics(courseId, source, className, semesterId, userId, userType));
+        return Result.ok(scoreService.statistics(courseId, source, className, semesterId, ctx.userId(), ctx.userType()));
     }
 
     // ──────────────────────── 导出 ────────────────────────
@@ -173,11 +159,9 @@ public class ScoreController {
                        HttpServletResponse response,
                        @RequestParam Long teachInfoId,
                        @RequestParam(defaultValue = "excel") String format) throws IOException {
-        Long userId = authFacade.currentUserId(request);
-        String userType = authFacade.currentUserType(request);
-        authFacade.requireUserTypes(request,
+        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
                 AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_DEPARTMENT, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
-        List<ScoreView> grades = scoreService.listByTeachInfo(teachInfoId, userId, userType);
+        List<ScoreView> grades = scoreService.listByTeachInfo(teachInfoId, ctx.userId(), ctx.userType());
         String courseName = (grades.isEmpty() || grades.getFirst().getCourseName() == null)
                 ? "成绩" : grades.getFirst().getCourseName();
 
