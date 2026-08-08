@@ -19,6 +19,7 @@ import com.xrq.xxq.module.time.entity.Time;
 import com.xrq.xxq.module.time.entity.TimeRestriction;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
 import com.xrq.xxq.module.course.service.CourseInfoResolver;
+import com.xrq.xxq.module.local.entity.LocalTypeEnum;
 import com.xrq.xxq.module.local.mapper.LocalMapper;
 import com.xrq.xxq.module.teachinfo.mapper.TeachInfoMapper;
 import com.xrq.xxq.module.time.mapper.TimeMapper;
@@ -263,14 +264,18 @@ public class SchedulingServiceImpl implements SchedulingService {
         return timeslots;
     }
 
-    /** 将 local 表记录转换为 Room 问题事实。max 为 null 时用 Integer.MAX_VALUE 表示无限制。 */
+    /**
+     * 将 local 表记录转换为 Room 问题事实。max 为 null 时用 Integer.MAX_VALUE 表示无限制。
+     * 自动排课仅选取普通教室（CLASSROOM），实验室/机房/报告厅不参与自动排课。
+     */
     private List<Room> buildRooms() {
         return localMapper.selectList(null).stream()
+                .filter(local -> local.getType() == LocalTypeEnum.CLASSROOM)
                 .map(local -> {
                     int capacity = local.getMax() != null && local.getMax() > 0
                             ? local.getMax()
                             : Integer.MAX_VALUE;
-                    return new Room(local.getId(), local.getBuilding(), local.getClassRoom(), capacity);
+                    return new Room(local.getId(), local.getBuilding(), local.getClassRoom(), capacity, LocalTypeEnum.CLASSROOM);
                 })
                 .toList();
     }
