@@ -9,10 +9,13 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.xrq.xxq.common.Result;
 import com.xrq.xxq.module.local.entity.Local;
+import com.xrq.xxq.module.local.entity.LocalTypeEnum;
 import com.xrq.xxq.module.local.service.LocalService;
 
 import lombok.RequiredArgsConstructor;
@@ -28,8 +31,12 @@ public class LocalController {
     private final LocalService localService;
 
     @GetMapping
-    public Result<List<Local>> list() {
-        return Result.ok(localService.list());
+    public Result<List<Local>> list(@RequestParam(required = false) String type) {
+        LocalTypeEnum typeEnum = LocalTypeEnum.fromValue(type);
+        if (typeEnum == null) {
+            return Result.ok(localService.list());
+        }
+        return Result.ok(localService.list(new LambdaQueryWrapper<Local>().eq(Local::getType, typeEnum)));
     }
 
     @GetMapping("/{id}")
