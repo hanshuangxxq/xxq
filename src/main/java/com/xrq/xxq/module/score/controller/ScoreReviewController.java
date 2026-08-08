@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.xrq.xxq.common.PageQuery;
+import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.common.Result;
 import com.xrq.xxq.module.score.dto.ReviewApplyRequest;
 import com.xrq.xxq.module.score.dto.ReviewReplyRequest;
@@ -53,11 +55,13 @@ public class ScoreReviewController {
 
     /** 处理人查询待办（教师其课程 / 教务全部，可按状态过滤）。 */
     @GetMapping
-    public Result<List<ReviewView>> listForHandler(HttpServletRequest request,
-                                                   @RequestParam(required = false) ReviewStatusEnum status) {
+    public Result<PageResult<ReviewView>> listForHandler(HttpServletRequest request,
+                                                         @RequestParam(required = false) ReviewStatusEnum status,
+                                                         @RequestParam(required = false) Integer page,
+                                                         @RequestParam(required = false) Integer pageSize) {
         AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
                 AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
-        return Result.ok(scoreReviewService.listForHandler(ctx.userId(), ctx.userType(), status));
+        return Result.ok(scoreReviewService.listForHandler(ctx.userId(), ctx.userType(), status, new PageQuery(page, pageSize)));
     }
 
     /** 教师回复复核申请（可调分）。 */
