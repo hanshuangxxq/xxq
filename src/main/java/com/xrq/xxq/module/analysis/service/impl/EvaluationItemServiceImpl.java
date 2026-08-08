@@ -18,6 +18,7 @@ import com.xrq.xxq.module.analysis.mapper.EvaluationItemMapper;
 import com.xrq.xxq.module.analysis.mapper.EvaluationTemplateItemMapper;
 import com.xrq.xxq.module.analysis.service.EvaluationItemService;
 import com.xrq.xxq.module.user.mapper.UserMapper;
+import com.xrq.xxq.util.ParamValidator;
 import com.xrq.xxq.util.ReferenceValidator;
 
 import lombok.RequiredArgsConstructor;
@@ -41,9 +42,7 @@ public class EvaluationItemServiceImpl implements EvaluationItemService {
     @Override
     @Transactional
     public ItemResponse createItem(ItemCreateRequest req, Long userId) {
-        if (req.getName() == null || req.getName().isBlank()) {
-            throw new BusinessException(400, "指标名称不能为空");
-        }
+        ParamValidator.requireNonBlank(req.getName(), "指标名称");
         int maxScore = normalizeMaxScore(req.getMaxScore());
         if (itemMapper.selectCount(new LambdaQueryWrapper<EvaluationItem>()
                 .eq(EvaluationItem::getName, req.getName())) > 0) {
@@ -77,9 +76,7 @@ public class EvaluationItemServiceImpl implements EvaluationItemService {
             throw new BusinessException(404, "指标不存在");
         }
         if (req.getName() != null) {
-            if (req.getName().isBlank()) {
-                throw new BusinessException(400, "指标名称不能为空");
-            }
+            ParamValidator.requireNonBlank(req.getName(), "指标名称");
             if (!req.getName().equals(item.getName())
                     && itemMapper.selectCount(new LambdaQueryWrapper<EvaluationItem>()
                             .eq(EvaluationItem::getName, req.getName())
