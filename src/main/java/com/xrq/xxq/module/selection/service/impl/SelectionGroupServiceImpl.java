@@ -19,6 +19,7 @@ import com.xrq.xxq.module.selection.entity.SelectionGroup;
 import com.xrq.xxq.module.selection.mapper.SelectionCampaignMapper;
 import com.xrq.xxq.module.selection.mapper.SelectionGroupMapper;
 import com.xrq.xxq.module.selection.service.SelectionGroupService;
+import com.xrq.xxq.util.ParamValidator;
 
 import lombok.RequiredArgsConstructor;
 
@@ -37,9 +38,7 @@ public class SelectionGroupServiceImpl
         if (nameConflict > 0) {
             throw new BusinessException(409, "组名已存在");
         }
-        if (request.getMaxCourses() <= 0) {
-            throw new BusinessException(400, "本组选课上限必须大于0");
-        }
+        ParamValidator.requirePositive(request.getMaxCourses(), "本组选课上限");
         SelectionGroup group = new SelectionGroup();
         group.setName(request.getName());
         group.setMaxCourses(request.getMaxCourses());
@@ -63,9 +62,7 @@ public class SelectionGroupServiceImpl
             group.setName(request.getName());
         }
         if (request.getMaxCourses() != null) {
-            if (request.getMaxCourses() <= 0) {
-                throw new BusinessException(400, "本组选课上限必须大于0");
-            }
+            ParamValidator.requirePositive(request.getMaxCourses(), "本组选课上限");
             if (!request.getMaxCourses().equals(group.getMaxCourses())) {
                 Long openCount = countOpenCampaignsInGroup(groupId);
                 if (openCount > 0) {
