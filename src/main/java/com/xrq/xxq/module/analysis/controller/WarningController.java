@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.xrq.xxq.common.PageQuery;
+import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.common.Result;
 import com.xrq.xxq.module.analysis.dto.WarningConfigDto;
 import com.xrq.xxq.module.analysis.dto.WarningConfigRequest;
@@ -59,14 +61,16 @@ public class WarningController {
 
     /** 预警看板：教务全校、院系本院；按学期/级别过滤，默认当前学期生效中预警。 */
     @GetMapping
-    public Result<List<WarningItemDto>> list(HttpServletRequest request,
-                                             @RequestParam(required = false) Long semesterId,
-                                             @RequestParam(required = false) String level) {
+    public Result<PageResult<WarningItemDto>> list(HttpServletRequest request,
+                                                   @RequestParam(required = false) Long semesterId,
+                                                   @RequestParam(required = false) String level,
+                                                   @RequestParam(required = false) Integer page,
+                                                   @RequestParam(required = false) Integer pageSize) {
         AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
                 AuthFacade.USER_TYPE_ACADEMIC_ADMIN, AuthFacade.USER_TYPE_DEPARTMENT);
         WarningLevelEnum levelEnum = (level == null || level.isBlank())
                 ? null : WarningLevelEnum.fromValue(level);
-        return Result.ok(warningService.list(semesterId, levelEnum, ctx.userId(), ctx.userType()));
+        return Result.ok(warningService.list(semesterId, levelEnum, ctx.userId(), ctx.userType(), new PageQuery(page, pageSize)));
     }
 
     /** 学生查询本人生效中的预警。 */
