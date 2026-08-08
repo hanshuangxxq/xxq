@@ -19,6 +19,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.xrq.xxq.common.BusinessException;
+import com.xrq.xxq.common.PageQuery;
+import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.module.analysis.dto.EvaluationScoreView;
 import com.xrq.xxq.module.analysis.dto.EvaluationStatusDto;
 import com.xrq.xxq.module.analysis.dto.EvaluationSubmitRequest;
@@ -391,7 +393,7 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
     }
 
     @Override
-    public List<TeacherQualityDto> listTeacherQuality(Long semesterId, Long callerUserId, String callerUserType) {
+    public PageResult<TeacherQualityDto> listTeacherQuality(Long semesterId, Long callerUserId, String callerUserType, PageQuery pageQuery) {
         List<Teacher> teachers = teacherMapper.selectList(new LambdaQueryWrapper<>());
         if (AuthFacade.USER_TYPE_DEPARTMENT.equals(callerUserType)) {
             Department dept = departmentMapper.findByUserId(callerUserId);
@@ -403,7 +405,7 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
             throw new BusinessException(403, "权限不足");
         }
         if (teachers.isEmpty()) {
-            return List.of();
+            return new PageResult<>(List.of(), 0, pageQuery.resolvedPage(), pageQuery.resolvedSize(), 0);
         }
 
         List<Long> teacherIds = teachers.stream().map(Teacher::getId).toList();
@@ -442,7 +444,8 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
         }
         result.sort(Comparator.comparing(TeacherQualityDto::getAvgEvaluationScore,
                 Comparator.nullsLast(Comparator.reverseOrder())));
-        return result;
+        // 聚合查询无法将分页下推到 SQL，全局排序后内存切片
+        return PageResult.slice(result, pageQuery);
     }
 
     private void assertCanViewTeacher(Teacher teacher, Long callerUserId, String callerUserType) {
