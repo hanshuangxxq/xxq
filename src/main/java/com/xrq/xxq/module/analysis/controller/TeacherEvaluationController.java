@@ -96,21 +96,17 @@ public class TeacherEvaluationController {
     public Result<TeacherQualityDto> quality(HttpServletRequest request,
                                              @PathVariable Long teacherId,
                                              @RequestParam(required = false) Long semesterId) {
-        Long userId = authFacade.currentUserId(request);
-        String userType = authFacade.currentUserType(request);
-        authFacade.requireUserTypes(request,
+        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
                 AuthFacade.USER_TYPE_ACADEMIC_ADMIN, AuthFacade.USER_TYPE_DEPARTMENT, AuthFacade.USER_TYPE_TEACHER);
-        return Result.ok(evaluationService.teacherQuality(teacherId, semesterId, userId, userType));
+        return Result.ok(evaluationService.teacherQuality(teacherId, semesterId, ctx.userId(), ctx.userType()));
     }
 
     /** 教师质量列表/对比（教务全校、院系本院），可按学期过滤。 */
     @GetMapping("/teacher-quality")
     public Result<List<TeacherQualityDto>> list(HttpServletRequest request,
                                                 @RequestParam(required = false) Long semesterId) {
-        Long userId = authFacade.currentUserId(request);
-        String userType = authFacade.currentUserType(request);
-        authFacade.requireUserTypes(request,
+        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
                 AuthFacade.USER_TYPE_ACADEMIC_ADMIN, AuthFacade.USER_TYPE_DEPARTMENT);
-        return Result.ok(evaluationService.listTeacherQuality(semesterId, userId, userType));
+        return Result.ok(evaluationService.listTeacherQuality(semesterId, ctx.userId(), ctx.userType()));
     }
 }
