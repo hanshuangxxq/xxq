@@ -1,5 +1,7 @@
 package com.xrq.xxq.module.score.service.impl;
 
+import java.math.BigDecimal;
+
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
@@ -7,6 +9,7 @@ import com.xrq.xxq.module.score.entity.ScoreConfig;
 import com.xrq.xxq.module.score.mapper.ScoreConfigMapper;
 import com.xrq.xxq.module.score.service.ScoreConfigService;
 import com.xrq.xxq.module.teachinfo.mapper.TeachInfoMapper;
+import com.xrq.xxq.util.ParamValidator;
 import com.xrq.xxq.util.ReferenceValidator;
 
 import lombok.RequiredArgsConstructor;
@@ -30,9 +33,7 @@ public class ScoreConfigServiceImpl extends ServiceImpl<ScoreConfigMapper, Score
 
     @Override
     public ScoreConfig upsert(Long teachInfoId, Integer regularRatio, Long userId) {
-        if (regularRatio == null || regularRatio < 0 || regularRatio > 100) {
-            throw new BusinessException(400, "平时分占比必须在 0-100 之间");
-        }
+        ParamValidator.requireInRange(regularRatio != null ? BigDecimal.valueOf(regularRatio) : null, 0, 100, "平时分占比");
         // 外键存在性校验
         referenceValidator.requireExists(teachInfoMapper, teachInfoId, "授课安排");
         ScoreConfig exist = getByTeachInfo(teachInfoId);
