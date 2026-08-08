@@ -24,6 +24,7 @@ import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.module.user.mapper.TeacherMapper;
 import com.xrq.xxq.module.user.mapper.UserMapper;
 import com.xrq.xxq.util.EncryptUtils;
+import com.xrq.xxq.util.ParamValidator;
 
 import lombok.RequiredArgsConstructor;
 
@@ -75,12 +76,8 @@ public class BatchImportService {
             throw new IllegalArgumentException("用户类型只允许 student 或 teacher，收到: " + userType);
         }
 
-        if (item.getUsername() == null || item.getUsername().isBlank()) {
-            throw new IllegalArgumentException("用户名不能为空");
-        }
-        if (item.getPassword() == null || item.getPassword().isBlank()) {
-            throw new IllegalArgumentException("密码不能为空");
-        }
+        ParamValidator.requireNonBlank(item.getUsername(), "用户名");
+        ParamValidator.requireNonBlank(item.getPassword(), "密码");
 
         // 用户名唯一性预检
         Long userCnt = userMapper.selectCount(new LambdaQueryWrapper<User>()
