@@ -9,10 +9,14 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.xrq.xxq.common.BusinessException;
+import com.xrq.xxq.common.PageQuery;
+import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.common.Result;
 import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.clazz.service.ClassNameService;
@@ -49,17 +53,18 @@ public class ClassNameController {
      * </ul>
      */
     @GetMapping
-    public Result<List<ClassName>> list(HttpServletRequest request) {
+    public Result<PageResult<ClassName>> list(HttpServletRequest request,
+                                              @RequestParam(required = false) Integer page,
+                                              @RequestParam(required = false) Integer pageSize) {
         String userType = authFacade.currentUserType(request);
-
+        PageQuery pageQuery = new PageQuery(page, pageSize);
+        LambdaQueryWrapper<ClassName> wrapper = new LambdaQueryWrapper<>();
         if (AuthFacade.USER_TYPE_DEPARTMENT.equals(userType)) {
             Department dept = resolveDepartment(request);
-            List<ClassName> list = classNameService.list(
-                    new LambdaQueryWrapper<ClassName>().eq(ClassName::getCollege, dept.getDepartmentName()));
-            return Result.ok(list);
+            wrapper.eq(ClassName::getCollege, dept.getDepartmentName());
         }
-
-        return Result.ok(classNameService.list());
+        Page<ClassName> result = classNameService.page(pageQuery.toPage(), wrapper);
+        return Result.ok(PageResult.of(result, result.getRecords()));
     }
 
     /** 查询本院系的班级。仅院系管理者可用。 */
