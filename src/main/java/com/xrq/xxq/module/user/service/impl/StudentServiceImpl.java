@@ -9,8 +9,11 @@ import org.springframework.stereotype.Service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
+import com.xrq.xxq.common.PageQuery;
+import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
 import com.xrq.xxq.module.clazz.service.ClassNameService;
@@ -43,7 +46,7 @@ public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> impl
     private final GradeMapper gradeMapper;
 
     @Override
-    public List<StudentDto> queryStudents(Long gradeId, List<Long> classIds, List<Long> majorIds, Boolean unassigned, String name) {
+    public PageResult<StudentDto> queryStudents(Long gradeId, List<Long> classIds, List<Long> majorIds, Boolean unassigned, String name, PageQuery pageQuery) {
         LambdaQueryWrapper<Student> wrapper = new LambdaQueryWrapper<>();
 
         if (name != null && !name.isBlank()) {
@@ -53,7 +56,7 @@ public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> impl
                     .map(User::getId)
                     .toList();
             if (matchedUserIds.isEmpty()) {
-                return List.of();
+                return new PageResult<>(List.of(), 0, pageQuery.resolvedPage(), pageQuery.resolvedSize(), 0);
             }
             wrapper.in(Student::getUserId, matchedUserIds);
         }
@@ -70,10 +73,12 @@ public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> impl
         if (Boolean.TRUE.equals(unassigned)) {
             wrapper.isNull(Student::getClassId);
         }
+        wrapper.orderByAsc(Student::getId);
 
-        List<Student> students = studentMapper.selectList(wrapper);
+        Page<Student> page = studentMapper.selectPage(pageQuery.toPage(), wrapper);
+        List<Student> students = page.getRecords();
         if (students.isEmpty()) {
-            return List.of();
+            return PageResult.of(page, List.of());
         }
 
         Set<Long> userIds = students.stream()
@@ -101,12 +106,13 @@ public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> impl
                 : gradeMapper.selectByIds(queriedGradeIds).stream()
                         .collect(Collectors.toMap(Grade::getId, Grade::getName));
 
-        return students.stream()
+        List<StudentDto> records = students.stream()
                 .map(s -> toDto(s, userMap.get(s.getUserId()),
                         classNameMap.get(s.getClassId()),
                         majorNameMap.get(s.getMajorId()),
                         s.getGradeId() != null ? gradeNameMap.get(s.getGradeId()) : null))
                 .toList();
+        return PageResult.of(page, records);
     }
 
     @Override
