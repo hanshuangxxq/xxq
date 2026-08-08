@@ -109,4 +109,22 @@ public class AuthFacade {
         requireDepartment(request);
         return currentUserId(request);
     }
+
+    // ---- 多类型校验：校验 + 返回 userId / 上下文 ----
+
+    /** 多类型校验上下文（userId + userType），供需要同时透传两者的调用方使用。 */
+    public record AuthContext(Long userId, String userType) {
+    }
+
+    /** 多类型校验 + 返回 userId（仅需 userId 的调用方）。 */
+    public Long requireUserTypesUserId(HttpServletRequest request, String... allowedTypes) {
+        requireUserTypes(request, allowedTypes);
+        return currentUserId(request);
+    }
+
+    /** 多类型校验 + 返回上下文（需同时取 userId 与 userType 的调用方）。 */
+    public AuthContext requireUserTypesContext(HttpServletRequest request, String... allowedTypes) {
+        requireUserTypes(request, allowedTypes);
+        return new AuthContext(currentUserId(request), currentUserType(request));
+    }
 }
