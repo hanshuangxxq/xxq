@@ -1,8 +1,8 @@
 package com.xrq.xxq.module.selection.service;
 
-import java.util.List;
-
 import com.baomidou.mybatisplus.spring.service.IService;
+import com.xrq.xxq.common.PageQuery;
+import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.module.selection.dto.SelectionGroupCreateRequest;
 import com.xrq.xxq.module.selection.dto.SelectionGroupResponse;
 import com.xrq.xxq.module.selection.dto.SelectionGroupUpdateRequest;
@@ -25,7 +25,7 @@ public interface SelectionGroupService extends IService<SelectionGroup> {
 
     SelectionGroupResponse getDetail(Long groupId);
 
-    List<SelectionGroupResponse> listAll();
+    PageResult<SelectionGroupResponse> listAll(PageQuery pageQuery);
 
     void delete(Long groupId);
 }
