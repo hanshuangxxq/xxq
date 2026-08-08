@@ -2,6 +2,8 @@ package com.xrq.xxq.module.analysis.service;
 
 import java.util.List;
 
+import com.xrq.xxq.common.PageQuery;
+import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.module.analysis.dto.EvaluationStatusDto;
 import com.xrq.xxq.module.analysis.dto.EvaluationSubmitRequest;
 import com.xrq.xxq.module.analysis.dto.TeacherQualityDto;
@@ -34,5 +36,5 @@ public interface TeachingEvaluationService {
     EvaluationStatusDto getPeriodStatus(Long callerUserId, String callerUserType);
 
     /** 教师质量列表/对比（教务全校、院系本院）。 */
-    List<TeacherQualityDto> listTeacherQuality(Long semesterId, Long callerUserId, String callerUserType);
+    PageResult<TeacherQualityDto> listTeacherQuality(Long semesterId, Long callerUserId, String callerUserType, PageQuery pageQuery);
 }
