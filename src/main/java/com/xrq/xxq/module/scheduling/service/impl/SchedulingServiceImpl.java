@@ -34,12 +34,9 @@ import com.xrq.xxq.module.scheduling.domain.Room;
 import com.xrq.xxq.module.scheduling.domain.StudentGroup;
 import com.xrq.xxq.module.scheduling.domain.Timeslot;
 import com.xrq.xxq.module.scheduling.service.SchedulingService;
-import com.xrq.xxq.module.user.entity.User;
 import com.xrq.xxq.module.user.entity.user.Student;
-import com.xrq.xxq.module.user.entity.user.Teacher;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
-import com.xrq.xxq.module.user.mapper.TeacherMapper;
-import com.xrq.xxq.module.user.mapper.UserMapper;
+import com.xrq.xxq.util.TeacherNameResolver;
 
 import ai.timefold.solver.core.api.score.HardSoftScore;
 import ai.timefold.solver.core.api.solver.SolutionManager;
@@ -76,13 +73,12 @@ public class SchedulingServiceImpl implements SchedulingService {
     private final TimeMapper timeMapper;
     private final LocalMapper localMapper;
     private final CourseInfoResolver courseInfoResolver;
-    private final TeacherMapper teacherMapper;
-    private final UserMapper userMapper;
     private final StudentMapper studentMapper;
     private final ClassNameMapper classNameMapper;
     private final TimeRestrictionMapper timeRestrictionMapper;
     private final SelectionClassMapper selectionClassMapper;
     private final SelectionClassMemberMapper selectionClassMemberMapper;
+    private final TeacherNameResolver teacherNameResolver;
 
     private final Map<Long, CourseSchedule> solutionCache = new ConcurrentHashMap<>();
 
@@ -210,7 +206,9 @@ public class SchedulingServiceImpl implements SchedulingService {
         List<Long> campaignIds = teachInfos.stream().map(TeachInfo::getCampaignId).filter(Objects::nonNull).distinct().toList();
         Map<Long, String> courseNameByCourse = courseInfoResolver.resolveCourseNameMap(courseIds);
         Map<Long, String> courseNameByCampaign = courseInfoResolver.resolveCampaignNameMap(campaignIds);
-        Map<Long, String> teacherNames = loadTeacherNames();
+        List<Long> teacherIds = teachInfos.stream().map(TeachInfo::getTeacherId)
+                .filter(Objects::nonNull).distinct().toList();
+        Map<Long, String> teacherNames = teacherNameResolver.namesByIds(teacherIds);
 
         CourseSchedule schedule = new CourseSchedule();
         schedule.setId(scheduleId);
@@ -447,21 +445,6 @@ public class SchedulingServiceImpl implements SchedulingService {
                     initialRoom));
         }
         return lessons;
-    }
-
-    /**
-     * 加载教师ID → 教师姓名的映射。
-     * teach_info.teacher_id → teacher.id → teacher.userId → user.name。
-     */
-    private Map<Long, String> loadTeacherNames() {
-        List<User> users = userMapper.selectList(null);
-        Map<Long, String> userIdToName = users.stream()
-                .collect(Collectors.toMap(User::getId, User::getName, (a, b) -> a));
-
-        return teacherMapper.selectList(null).stream()
-                .collect(Collectors.toMap(
-                        Teacher::getId,
-                        t -> userIdToName.getOrDefault(t.getUserId(), "未知")));
     }
 
     // ────────────────────────── 结果持久化 ──────────────────────────
