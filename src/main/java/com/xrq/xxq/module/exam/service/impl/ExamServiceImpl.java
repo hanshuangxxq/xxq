@@ -15,11 +15,12 @@ import org.springframework.transaction.annotation.Transactional;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
+import com.xrq.xxq.module.analysis.util.ScoreStats;
 import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
-import com.xrq.xxq.module.course.entity.Course;
 import com.xrq.xxq.module.course.mapper.CourseMapper;
 import com.xrq.xxq.module.course.service.CourseInfoResolver;
+import com.xrq.xxq.module.course.util.CourseRouting;
 import com.xrq.xxq.module.exam.dto.ClassCourseOptionDto;
 import com.xrq.xxq.module.exam.dto.ExamCreateRequest;
 import com.xrq.xxq.module.exam.dto.ExamView;
@@ -35,10 +36,10 @@ import com.xrq.xxq.module.exam.service.ExamService;
 import com.xrq.xxq.module.score.entity.Score;
 import com.xrq.xxq.module.score.entity.ScoreTypeEnum;
 import com.xrq.xxq.module.score.mapper.ScoreMapper;
+import com.xrq.xxq.module.score.util.ScoreQueries;
 import com.xrq.xxq.module.semester.mapper.SemesterMapper;
 import com.xrq.xxq.module.local.entity.Local;
 import com.xrq.xxq.module.local.mapper.LocalMapper;
-import com.xrq.xxq.module.semester.entity.Semester;
 import com.xrq.xxq.module.semester.service.SemesterService;
 import com.xrq.xxq.module.teachinfo.entity.TeachInfo;
 import com.xrq.xxq.module.teachinfo.mapper.TeachInfoMapper;
@@ -49,6 +50,7 @@ import com.xrq.xxq.module.user.entity.user.Teacher;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.module.user.mapper.TeacherMapper;
 import com.xrq.xxq.module.user.mapper.UserMapper;
+import com.xrq.xxq.util.ParamValidator;
 import com.xrq.xxq.util.ReferenceValidator;
 
 import lombok.RequiredArgsConstructor;
@@ -130,11 +132,7 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements Ex
             w.eq(Exam::getSemesterId, semesterId);
         }
         if (courseId != null) {
-            if (Course.SOURCE_SELECTION_CAMPAIGN.equals(source)) {
-                w.eq(Exam::getCampaignId, courseId);
-            } else {
-                w.eq(Exam::getCourseId, courseId);
-            }
+            CourseRouting.apply(w, courseId, source, Exam::getCampaignId, Exam::getCourseId);
         }
         if (examType != null) {
             w.eq(Exam::getExamType, examType);
@@ -144,8 +142,7 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements Ex
 
     @Override
     public List<ExamView> listForTeacher(Long userId) {
-        Teacher t = teacherMapper.selectOne(
-                new LambdaQueryWrapper<Teacher>().eq(Teacher::getUserId, userId));
+        Teacher t = teacherMapper.findByUserId(userId);
         if (t == null) {
             return List.of();
         }
@@ -225,21 +222,15 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements Ex
         List<Long> teacherIds = list.stream().map(TeachInfo::getTeacherId).filter(Objects::nonNull).distinct().toList();
         List<Long> semesterIds = list.stream().map(TeachInfo::getSemesterId).filter(Objects::nonNull).distinct().toList();
 
-        Map<Long, String> courseNameByCourse = courseInfoResolver.resolveCourses(courseIds).entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getCourseName(), (a, b) -> a));
-        Map<Long, String> courseNameByCampaign = courseInfoResolver.resolveCampaigns(campaignIds).entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getCourseName(), (a, b) -> a));
+        Map<Long, String> courseNameByCourse = courseInfoResolver.resolveCourseNameMap(courseIds);
+        Map<Long, String> courseNameByCampaign = courseInfoResolver.resolveCampaignNameMap(campaignIds);
         Map<Long, Teacher> teacherMap = teacherIds.isEmpty() ? Map.of()
                 : teacherMapper.selectByIds(teacherIds).stream()
                         .collect(Collectors.toMap(Teacher::getId, t -> t, (a, b) -> a));
-        Map<Long, String> semesterNameMap = semesterIds.isEmpty() ? Map.of()
-                : semesterService.listByIds(semesterIds).stream()
-                        .collect(Collectors.toMap(Semester::getId, Semester::getName, (a, b) -> a));
+        Map<Long, String> semesterNameMap = semesterService.toNameMap(semesterIds);
 
         List<Long> teacherUserIds = teacherMap.values().stream().map(Teacher::getUserId).toList();
-        Map<Long, String> userNameMap = teacherUserIds.isEmpty() ? Map.of()
-                : userMapper.selectByIds(teacherUserIds).stream()
-                        .collect(Collectors.toMap(User::getId, User::getName, (a, b) -> a));
+        Map<Long, String> userNameMap = userMapper.toNameMap(teacherUserIds);
 
         return list.stream()
                 .filter(info -> !examinedTeachInfoIds.contains(info.getId()))
@@ -265,17 +256,11 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements Ex
 
     @Override
     public List<MakeupCandidateDto> listMakeupCandidates(Long courseId, String source, Long semesterId) {
-        LambdaQueryWrapper<Score> w = new LambdaQueryWrapper<Score>()
-                .eq(Score::getScoreType, ScoreTypeEnum.REGULAR)
-                .lt(Score::getTotalScore, BigDecimal.valueOf(60))
+        LambdaQueryWrapper<Score> w = courseId != null
+                ? ScoreQueries.regularByCourseOrCampaign(courseId, source)
+                : new LambdaQueryWrapper<Score>().eq(Score::getScoreType, ScoreTypeEnum.REGULAR);
+        w.lt(Score::getTotalScore, BigDecimal.valueOf(ScoreStats.PASS_SCORE))
                 .orderByAsc(Score::getStudentUserId);
-        if (courseId != null) {
-            if (Course.SOURCE_SELECTION_CAMPAIGN.equals(source)) {
-                w.eq(Score::getCampaignId, courseId);
-            } else {
-                w.eq(Score::getCourseId, courseId);
-            }
-        }
         if (semesterId != null) {
             w.eq(Score::getSemesterId, semesterId);
         }
@@ -284,11 +269,8 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements Ex
             return List.of();
         }
         List<Long> studentUserIds = failing.stream().map(Score::getStudentUserId).distinct().toList();
-        Map<Long, String> nameMap = userMapper.selectByIds(studentUserIds).stream()
-                .collect(Collectors.toMap(User::getId, User::getName, (a, b) -> a));
-        Map<Long, String> noMap = studentMapper.selectList(
-                        new LambdaQueryWrapper<Student>().in(Student::getUserId, studentUserIds)).stream()
-                .collect(Collectors.toMap(Student::getUserId, Student::getStudentNo, (a, b) -> a));
+        Map<Long, String> nameMap = userMapper.toNameMap(studentUserIds);
+        Map<Long, String> noMap = studentMapper.toStudentNoMap(studentUserIds);
         return failing.stream().map(g -> {
             MakeupCandidateDto dto = new MakeupCandidateDto();
             dto.setStudentUserId(g.getStudentUserId());
@@ -326,11 +308,10 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements Ex
 
         // 按不及格名单自动生成考生
         Long sourceSem = request.getSourceSemesterId() != null ? request.getSourceSemesterId() : request.getSemesterId();
-        List<Long> studentUserIds = scoreMapper.selectList(new LambdaQueryWrapper<Score>()
-                        .eq(Score::getCourseId, request.getCourseId())
-                        .eq(Score::getSemesterId, sourceSem)
-                        .eq(Score::getScoreType, ScoreTypeEnum.REGULAR)
-                        .lt(Score::getTotalScore, BigDecimal.valueOf(60)))
+        List<Long> studentUserIds = scoreMapper.selectList(
+                        ScoreQueries.regularByCourseOrCampaign(request.getCourseId(), null)
+                                .eq(Score::getSemesterId, sourceSem)
+                                .lt(Score::getTotalScore, BigDecimal.valueOf(ScoreStats.PASS_SCORE)))
                 .stream().map(Score::getStudentUserId).distinct().toList();
         if (!studentUserIds.isEmpty()) {
             // 外键存在性校验：考试 + 学生用户
@@ -368,18 +349,10 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements Ex
     }
 
     private void validateMakeup(MakeupExamCreateRequest req) {
-        if (req.getExamName() == null || req.getExamName().isBlank()) {
-            throw new BusinessException(400, "考试名称不能为空");
-        }
-        if (req.getCourseId() == null) {
-            throw new BusinessException(400, "课程不能为空");
-        }
-        if (req.getSemesterId() == null) {
-            throw new BusinessException(400, "学期不能为空");
-        }
-        if (req.getExamDate() == null) {
-            throw new BusinessException(400, "考试日期不能为空");
-        }
+        ParamValidator.requireNonBlank(req.getExamName(), "考试名称");
+        ParamValidator.requireNonNull(req.getCourseId(), "课程");
+        ParamValidator.requireNonNull(req.getSemesterId(), "学期");
+        ParamValidator.requireNonNull(req.getExamDate(), "考试日期");
         if (req.getStartTime() == null || req.getDurationMinutes() == null) {
             throw new BusinessException(400, "开始时间与考试时长不能为空");
         }
@@ -400,10 +373,8 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements Ex
         List<Long> courseIds = exams.stream().map(Exam::getCourseId).filter(Objects::nonNull).distinct().toList();
         List<Long> campaignIds = exams.stream().map(Exam::getCampaignId).filter(Objects::nonNull).distinct().toList();
         List<Long> localIds = exams.stream().map(Exam::getLocalId).filter(Objects::nonNull).distinct().toList();
-        Map<Long, String> courseNameByCourse = courseInfoResolver.resolveCourses(courseIds).entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getCourseName(), (a, b) -> a));
-        Map<Long, String> courseNameByCampaign = courseInfoResolver.resolveCampaigns(campaignIds).entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getCourseName(), (a, b) -> a));
+        Map<Long, String> courseNameByCourse = courseInfoResolver.resolveCourseNameMap(courseIds);
+        Map<Long, String> courseNameByCampaign = courseInfoResolver.resolveCampaignNameMap(campaignIds);
         Map<Long, Local> localMap = localIds.isEmpty() ? Map.of()
                 : localMapper.selectByIds(localIds).stream()
                         .collect(Collectors.toMap(Local::getId, l -> l, (a, b) -> a));
@@ -437,25 +408,15 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements Ex
     }
 
     private void validate(ExamCreateRequest req) {
-        if (req.getExamName() == null || req.getExamName().isBlank()) {
-            throw new BusinessException(400, "考试名称不能为空");
-        }
-        if (req.getCourseId() == null) {
-            throw new BusinessException(400, "课程不能为空");
-        }
-        if (req.getExamType() == null) {
-            throw new BusinessException(400, "考试类型不能为空");
-        }
+        ParamValidator.requireNonBlank(req.getExamName(), "考试名称");
+        ParamValidator.requireNonNull(req.getCourseId(), "课程");
+        ParamValidator.requireNonNull(req.getExamType(), "考试类型");
         if ((req.getExamType() == ExamTypeEnum.FINAL || req.getExamType() == ExamTypeEnum.MIDTERM)
                 && (req.getClassName() == null || req.getClassName().isBlank())) {
             throw new BusinessException(400, "期末/期中考试必须指定排考班级");
         }
-        if (req.getSemesterId() == null) {
-            throw new BusinessException(400, "学期不能为空");
-        }
-        if (req.getExamDate() == null) {
-            throw new BusinessException(400, "考试日期不能为空");
-        }
+        ParamValidator.requireNonNull(req.getSemesterId(), "学期");
+        ParamValidator.requireNonNull(req.getExamDate(), "考试日期");
         if (req.getStartTime() == null || req.getDurationMinutes() == null) {
             throw new BusinessException(400, "开始时间与考试时长不能为空");
         }
