@@ -3,7 +3,6 @@ package com.xrq.xxq.module.score.service.impl;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -18,11 +17,13 @@ import org.springframework.transaction.annotation.Transactional;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
+import com.xrq.xxq.module.analysis.util.ScoreStats;
 import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
-import com.xrq.xxq.module.course.entity.Course;
+import com.xrq.xxq.module.clazz.util.ClassNameUtil;
 import com.xrq.xxq.module.course.mapper.CourseMapper;
 import com.xrq.xxq.module.course.service.CourseInfoResolver;
+import com.xrq.xxq.module.course.util.CourseRouting;
 import com.xrq.xxq.module.exam.dto.MakeupScoreEntryRequest;
 import com.xrq.xxq.module.exam.entity.Exam;
 import com.xrq.xxq.module.exam.entity.ExamTypeEnum;
@@ -58,6 +59,7 @@ import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.module.user.mapper.TeacherMapper;
 import com.xrq.xxq.module.user.mapper.UserMapper;
 import com.xrq.xxq.util.ReferenceValidator;
+import com.xrq.xxq.util.StudentScopeResolver;
 import com.xrq.xxq.util.auth.AuthFacade;
 
 import lombok.RequiredArgsConstructor;
@@ -87,8 +89,7 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
     private final SemesterService semesterService;
     private final SemesterMapper semesterMapper;
     private final ReferenceValidator referenceValidator;
-
-    private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
+    private final StudentScopeResolver studentScopeResolver;
 
     // ==================== 权限 ====================
 
@@ -106,8 +107,7 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
             return;
         }
         if (AuthFacade.USER_TYPE_TEACHER.equals(userType)) {
-            Teacher t = teacherMapper.selectOne(
-                    new LambdaQueryWrapper<Teacher>().eq(Teacher::getUserId, userId));
+            Teacher t = teacherMapper.findByUserId(userId);
             if (t == null || !t.getId().equals(info.getTeacherId())) {
                 throw new BusinessException(403, "权限不足");
             }
@@ -121,16 +121,14 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
             return;
         }
         if (AuthFacade.USER_TYPE_TEACHER.equals(userType)) {
-            Teacher t = teacherMapper.selectOne(
-                    new LambdaQueryWrapper<Teacher>().eq(Teacher::getUserId, userId));
+            Teacher t = teacherMapper.findByUserId(userId);
             if (t != null && t.getId().equals(info.getTeacherId())) {
                 return;
             }
             throw new BusinessException(403, "权限不足");
         }
         if (AuthFacade.USER_TYPE_DEPARTMENT.equals(userType)) {
-            Department dept = departmentMapper.selectOne(
-                    new LambdaQueryWrapper<Department>().eq(Department::getUserId, userId));
+            Department dept = departmentMapper.findByUserId(userId);
             if (dept != null && belongsToCollege(info.getClassName(), dept.getDepartmentName())) {
                 return;
             }
@@ -152,11 +150,8 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
         if (studentUserIds.isEmpty()) {
             return List.of();
         }
-        Map<Long, String> nameMap = userMapper.selectByIds(studentUserIds).stream()
-                .collect(Collectors.toMap(User::getId, User::getName, (a, b) -> a));
-        Map<Long, String> noMap = studentMapper.selectList(
-                        new LambdaQueryWrapper<Student>().in(Student::getUserId, studentUserIds)).stream()
-                .collect(Collectors.toMap(Student::getUserId, Student::getStudentNo, (a, b) -> a));
+        Map<Long, String> nameMap = userMapper.toNameMap(studentUserIds);
+        Map<Long, String> noMap = studentMapper.toStudentNoMap(studentUserIds);
         return studentUserIds.stream().map(uid -> {
             ScoreRosterDto dto = new ScoreRosterDto();
             dto.setStudentUserId(uid);
@@ -179,7 +174,7 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
                             new LambdaQueryWrapper<SelectionClassMember>().in(SelectionClassMember::getClassId, classIds))
                     .stream().map(SelectionClassMember::getStudentId).distinct().toList();
         }
-        List<String> classNames = splitClassNames(info.getClassName());
+        List<String> classNames = ClassNameUtil.splitClassNames(info.getClassName());
         if (classNames.isEmpty()) {
             return List.of();
         }
@@ -276,10 +271,10 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
             if (allowedUserIds != null && !allowedUserIds.contains(e.getStudentUserId())) {
                 throw new BusinessException(400, "存在未参加本次考试的学生，无法录入成绩");
             }
-            validateScore(e.getRegularScore());
-            validateScore(e.getFinalScore());
+            ScoreStats.validateScore(e.getRegularScore());
+            ScoreStats.validateScore(e.getFinalScore());
             BigDecimal total = computeTotal(e.getRegularScore(), e.getFinalScore(), ratio);
-            String level = levelOf(total);
+            String level = ScoreStats.levelOf(total);
 
             Score exist = baseMapper.selectOne(new LambdaQueryWrapper<Score>()
                     .eq(Score::getTeachInfoId, teachInfoId)
@@ -311,7 +306,7 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
             saved.add(g);
 
             // 录入即生效：新建且不及格者发布事件，由通知监听器 AFTER_COMMIT 异步发送
-            if (isNew && total != null && total.doubleValue() < 60) {
+            if (isNew && ScoreStats.isFail(total)) {
                 eventPublisher.publishEvent(new GradeFailedEvent(
                         e.getStudentUserId(), courseName, total.stripTrailingZeros().toPlainString()));
             }
@@ -349,14 +344,14 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
         if (dup != null && dup > 0) {
             throw new BusinessException(409, "成绩记录已存在");
         }
-        validateScore(entry.getRegularScore());
-        validateScore(entry.getFinalScore());
+        ScoreStats.validateScore(entry.getRegularScore());
+        ScoreStats.validateScore(entry.getFinalScore());
         int ratio = g.getRegularRatio() != null ? g.getRegularRatio() : 0;
         BigDecimal total = computeTotal(entry.getRegularScore(), entry.getFinalScore(), ratio);
         g.setRegularScore(entry.getRegularScore());
         g.setFinalScore(entry.getFinalScore());
         g.setTotalScore(total);
-        g.setScoreLevel(levelOf(total));
+        g.setScoreLevel(ScoreStats.levelOf(total));
         g.setEnterUserId(enterUserId);
         baseMapper.updateById(g);
         return toViews(List.of(g)).getFirst();
@@ -381,13 +376,9 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
     @Override
     public List<ScoreView> listMyScores(Long studentUserId, Long semesterId) {
         // 默认查当前学期；前端需查其它学期时显式传 semesterId
-        Long effectiveSemesterId = semesterId;
+        Long effectiveSemesterId = semesterService.resolveOrDefault(semesterId);
         if (effectiveSemesterId == null) {
-            Semester current = semesterService.getCurrent();
-            if (current == null) {
-                return List.of();
-            }
-            effectiveSemesterId = current.getId();
+            return List.of();
         }
         List<Score> grades = baseMapper.selectList(new LambdaQueryWrapper<Score>()
                 .eq(Score::getStudentUserId, studentUserId)
@@ -437,7 +428,7 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
             if (e.getStudentUserId() == null) {
                 throw new BusinessException(400, "学生ID不能为空");
             }
-            validateScore(e.getScore());
+            ScoreStats.validateScore(e.getScore());
             // 查原不及格 REGULAR 成绩，确定 teachInfoId/teacherId 并关联
             // 公选课按 campaignId 关联（courseId 为 null）
             LambdaQueryWrapper<Score> ow = new LambdaQueryWrapper<Score>()
@@ -467,7 +458,7 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
             g.setFinalScore(e.getScore());
             g.setRegularRatio(0);
             g.setTotalScore(e.getScore());
-            g.setScoreLevel(levelOf(e.getScore()));
+            g.setScoreLevel(ScoreStats.levelOf(e.getScore()));
             g.setScoreType(gt);
             g.setOriginalScoreId(original.getId());
             g.setEnterUserId(enterUserId);
@@ -487,8 +478,7 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
             return;
         }
         if (AuthFacade.USER_TYPE_TEACHER.equals(userType)) {
-            Teacher t = teacherMapper.selectOne(
-                    new LambdaQueryWrapper<Teacher>().eq(Teacher::getUserId, userId));
+            Teacher t = teacherMapper.findByUserId(userId);
             if (t == null) {
                 throw new BusinessException(403, "权限不足");
             }
@@ -513,16 +503,11 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
     @Override
     public List<ScoreStatisticsDto> statistics(Long courseId, String source, String className, Long semesterId,
                                                Long userId, String userType) {
-        List<Long> studentUserIds = resolveScopedStudentUserIds(userType, userId, className);
+        List<Long> studentUserIds = studentScopeResolver.resolveScopedStudentUserIds(userType, userId, className);
         LambdaQueryWrapper<Score> w = new LambdaQueryWrapper<Score>()
                 .eq(Score::getScoreType, ScoreTypeEnum.REGULAR);
         if (courseId != null) {
-            // source=SELECTION_CAMPAIGN 表示 courseId 实为公选课 campaignId，按 campaign_id 过滤
-            if (Course.SOURCE_SELECTION_CAMPAIGN.equals(source)) {
-                w.eq(Score::getCampaignId, courseId);
-            } else {
-                w.eq(Score::getCourseId, courseId);
-            }
+            CourseRouting.apply(w, courseId, source, Score::getCampaignId, Score::getCourseId);
         }
         if (semesterId != null) {
             w.eq(Score::getSemesterId, semesterId);
@@ -540,14 +525,10 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
         // 分组键加前缀避免 course.id 与 campaign.id 数值空间重叠：公选课按 campaignId 分组
         Map<String, List<Score>> byKey = grades.stream().collect(Collectors.groupingBy(
                 g -> g.getCampaignId() != null ? "C" + g.getCampaignId() : "K" + g.getCourseId()));
-        Map<Long, String> courseNameByCourse = courseInfoResolver.resolveCourses(
-                grades.stream().map(Score::getCourseId).filter(Objects::nonNull).distinct().toList())
-                .entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getCourseName(), (a, b) -> a));
-        Map<Long, String> courseNameByCampaign = courseInfoResolver.resolveCampaigns(
-                grades.stream().map(Score::getCampaignId).filter(Objects::nonNull).distinct().toList())
-                .entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getCourseName(), (a, b) -> a));
+        Map<Long, String> courseNameByCourse = courseInfoResolver.resolveCourseNameMap(
+                grades.stream().map(Score::getCourseId).filter(Objects::nonNull).distinct().toList());
+        Map<Long, String> courseNameByCampaign = courseInfoResolver.resolveCampaignNameMap(
+                grades.stream().map(Score::getCampaignId).filter(Objects::nonNull).distinct().toList());
         List<ScoreStatisticsDto> result = new ArrayList<>();
         for (Map.Entry<String, List<Score>> e : byKey.entrySet()) {
             List<Score> groupScores = e.getValue();
@@ -564,44 +545,6 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
             result.add(buildStats(statCourseId, courseName, groupScores));
         }
         return result;
-    }
-
-    /**
-     * 解析当前角色可见的学生 user.id 列表。
-     * <p>返回 null 表示不过滤（教务且未指定班级 = 全部）；空 list 表示无可见学生。
-     */
-    private List<Long> resolveScopedStudentUserIds(String userType, Long userId, String className) {
-        List<Long> classIds;
-        if (AuthFacade.USER_TYPE_ACADEMIC_ADMIN.equals(userType)) {
-            if (className == null || className.isBlank()) {
-                return null;
-            }
-            classIds = classNameMapper.selectList(new LambdaQueryWrapper<ClassName>()
-                            .eq(ClassName::getClassName, className)).stream()
-                    .map(ClassName::getId).toList();
-        } else if (AuthFacade.USER_TYPE_DEPARTMENT.equals(userType)) {
-            Department dept = departmentMapper.selectOne(
-                    new LambdaQueryWrapper<Department>().eq(Department::getUserId, userId));
-            if (dept == null) {
-                return List.of();
-            }
-            classIds = classNameMapper.selectList(new LambdaQueryWrapper<ClassName>()
-                            .eq(ClassName::getCollege, dept.getDepartmentName())).stream()
-                    .map(ClassName::getId).toList();
-            if (className != null && !className.isBlank()) {
-                List<Long> nameIds = classNameMapper.selectList(new LambdaQueryWrapper<ClassName>()
-                                .eq(ClassName::getClassName, className)).stream()
-                        .map(ClassName::getId).toList();
-                classIds = classIds.stream().filter(nameIds::contains).toList();
-            }
-        } else {
-            throw new BusinessException(403, "权限不足");
-        }
-        if (classIds.isEmpty()) {
-            return List.of();
-        }
-        return studentMapper.selectList(new LambdaQueryWrapper<Student>().in(Student::getClassId, classIds))
-                .stream().map(Student::getUserId).toList();
     }
 
     private ScoreStatisticsDto buildStats(Long courseId, String courseName, List<Score> grades) {
@@ -638,7 +581,7 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
         if (scored > 0) {
             dto.setAvgScore(sum.divide(BigDecimal.valueOf(scored), 2, RoundingMode.HALF_UP));
             dto.setPassRate(BigDecimal.valueOf(exc + good + med + pass)
-                    .multiply(HUNDRED).divide(BigDecimal.valueOf(scored), 2, RoundingMode.HALF_UP));
+                    .multiply(ScoreStats.HUNDRED).divide(BigDecimal.valueOf(scored), 2, RoundingMode.HALF_UP));
         }
         return dto;
     }
@@ -655,10 +598,8 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
         List<Long> studentUserIds = grades.stream().map(Score::getStudentUserId).distinct().toList();
 
         // 课程名：常规课走 course 表，公选课走 selection_campaign
-        Map<Long, String> courseNameByCourse = courseInfoResolver.resolveCourses(courseIds).entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getCourseName(), (a, b) -> a));
-        Map<Long, String> courseNameByCampaign = courseInfoResolver.resolveCampaigns(campaignIds).entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getCourseName(), (a, b) -> a));
+        Map<Long, String> courseNameByCourse = courseInfoResolver.resolveCourseNameMap(courseIds);
+        Map<Long, String> courseNameByCampaign = courseInfoResolver.resolveCampaignNameMap(campaignIds);
 
         Map<Long, Long> teacherIdToUserId = teacherIds.isEmpty() ? Map.of()
                 : teacherMapper.selectByIds(teacherIds).stream()
@@ -666,13 +607,9 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
 
         List<Long> allUserIds = new ArrayList<>(studentUserIds);
         allUserIds.addAll(teacherIdToUserId.values());
-        Map<Long, String> userNameMap = allUserIds.isEmpty() ? Map.of()
-                : userMapper.selectByIds(allUserIds).stream()
-                        .collect(Collectors.toMap(User::getId, User::getName, (a, b) -> a));
+        Map<Long, String> userNameMap = userMapper.toNameMap(allUserIds);
 
-        Map<Long, String> studentNoMap = studentUserIds.isEmpty() ? Map.of()
-                : studentMapper.selectList(new LambdaQueryWrapper<Student>().in(Student::getUserId, studentUserIds))
-                        .stream().collect(Collectors.toMap(Student::getUserId, Student::getStudentNo, (a, b) -> a));
+        Map<Long, String> studentNoMap = studentMapper.toStudentNoMap(studentUserIds);
 
         return grades.stream().map(g -> {
             ScoreView v = new ScoreView();
@@ -701,44 +638,15 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
         }).toList();
     }
 
-    private void validateScore(BigDecimal s) {
-        if (s == null) {
-            throw new BusinessException(400, "成绩不能为空");
-        }
-        double v = s.doubleValue();
-        if (v < 0 || v > 100) {
-            throw new BusinessException(400, "成绩必须在 0-100 之间");
-        }
-    }
-
     private BigDecimal computeTotal(BigDecimal regular, BigDecimal finale, int ratio) {
         BigDecimal ratioBd = BigDecimal.valueOf(ratio);
-        BigDecimal regularPart = regular.multiply(ratioBd).divide(HUNDRED, 2, RoundingMode.HALF_UP);
-        BigDecimal finalPart = finale.multiply(HUNDRED.subtract(ratioBd)).divide(HUNDRED, 2, RoundingMode.HALF_UP);
+        BigDecimal regularPart = regular.multiply(ratioBd).divide(ScoreStats.HUNDRED, 2, RoundingMode.HALF_UP);
+        BigDecimal finalPart = finale.multiply(ScoreStats.HUNDRED.subtract(ratioBd)).divide(ScoreStats.HUNDRED, 2, RoundingMode.HALF_UP);
         return regularPart.add(finalPart);
     }
 
-    private String levelOf(BigDecimal total) {
-        if (total == null) {
-            return null;
-        }
-        double t = total.doubleValue();
-        if (t >= 90) return "优";
-        if (t >= 80) return "良";
-        if (t >= 70) return "中";
-        if (t >= 60) return "及格";
-        return "不及格";
-    }
-
-    private List<String> splitClassNames(String csv) {
-        if (csv == null || csv.isBlank()) {
-            return List.of();
-        }
-        return Arrays.stream(csv.split(",")).map(String::strip).filter(s -> !s.isEmpty()).distinct().toList();
-    }
-
     private boolean belongsToCollege(String classNamesCsv, String college) {
-        List<String> names = splitClassNames(classNamesCsv);
+        List<String> names = ClassNameUtil.splitClassNames(classNamesCsv);
         if (names.isEmpty()) {
             return false;
         }
