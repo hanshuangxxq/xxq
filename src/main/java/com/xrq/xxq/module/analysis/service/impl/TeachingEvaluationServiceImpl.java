@@ -4,7 +4,6 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -40,8 +39,10 @@ import com.xrq.xxq.module.analysis.mapper.TeachingEvaluationScoreMapper;
 import com.xrq.xxq.module.analysis.service.EvaluationTemplateService;
 import com.xrq.xxq.module.analysis.service.ProgressService;
 import com.xrq.xxq.module.analysis.service.TeachingEvaluationService;
+import com.xrq.xxq.module.analysis.util.ScoreStats;
 import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
+import com.xrq.xxq.module.clazz.util.ClassNameUtil;
 import com.xrq.xxq.module.course.mapper.CourseMapper;
 import com.xrq.xxq.module.course.service.CourseInfoResolver;
 import com.xrq.xxq.module.score.entity.Score;
@@ -65,6 +66,7 @@ import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.module.user.mapper.TeacherMapper;
 import com.xrq.xxq.module.user.mapper.UserMapper;
 import com.xrq.xxq.util.DistributedLock;
+import com.xrq.xxq.util.ParamValidator;
 import com.xrq.xxq.util.ReferenceValidator;
 import com.xrq.xxq.util.auth.AuthFacade;
 
@@ -80,8 +82,6 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @RequiredArgsConstructor
 public class TeachingEvaluationServiceImpl implements TeachingEvaluationService {
-
-    private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
 
     private final TeachingEvaluationMapper evaluationMapper;
     private final TeachingEvaluationScoreMapper scoreDetailMapper;
@@ -110,9 +110,7 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
     @Override
     @Transactional
     public TeachingEvaluationView submit(EvaluationSubmitRequest req, Long studentUserId) {
-        if (req.getTeachInfoId() == null) {
-            throw new BusinessException(400, "授课安排ID不能为空");
-        }
+        ParamValidator.requireNonNull(req.getTeachInfoId(), "授课安排ID");
         if (req.getScores() == null || req.getScores().isEmpty()) {
             throw new BusinessException(400, "至少需要 1 项评分");
         }
@@ -239,7 +237,7 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
             return false;
         }
         ClassName cn = classNameMapper.selectById(stu.getClassId());
-        return cn != null && splitClassNames(info.getClassName()).contains(cn.getClassName());
+        return cn != null && ClassNameUtil.splitClassNames(info.getClassName()).contains(cn.getClassName());
     }
 
     // ==================== 我的评教 ====================
@@ -416,8 +414,7 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
 
     @Override
     public TeacherQualityDto myTeacherQuality(Long callerUserId, Long semesterId) {
-        Teacher self = teacherMapper.selectOne(
-                new LambdaQueryWrapper<Teacher>().eq(Teacher::getUserId, callerUserId));
+        Teacher self = teacherMapper.findByUserId(callerUserId);
         if (self == null) {
             throw new BusinessException(404, "教师信息不存在");
         }
@@ -428,8 +425,7 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
     public List<TeacherQualityDto> listTeacherQuality(Long semesterId, Long callerUserId, String callerUserType) {
         List<Teacher> teachers = teacherMapper.selectList(new LambdaQueryWrapper<>());
         if (AuthFacade.USER_TYPE_DEPARTMENT.equals(callerUserType)) {
-            Department dept = departmentMapper.selectOne(
-                    new LambdaQueryWrapper<Department>().eq(Department::getUserId, callerUserId));
+            Department dept = departmentMapper.findByUserId(callerUserId);
             String deptName = dept != null ? dept.getDepartmentName() : null;
             teachers = teachers.stream()
                     .filter(t -> deptName != null && deptName.equals(t.getDepartment()))
@@ -462,9 +458,7 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
         Map<Long, Long> teacherUserId = teachers.stream()
                 .filter(t -> t.getUserId() != null)
                 .collect(Collectors.toMap(Teacher::getId, Teacher::getUserId, (a, b) -> a));
-        Map<Long, String> userNameMap = teacherUserId.isEmpty() ? Map.of()
-                : userMapper.selectByIds(teacherUserId.values()).stream()
-                        .collect(Collectors.toMap(User::getId, User::getName, (a, b) -> a));
+        Map<Long, String> userNameMap = userMapper.toNameMap(teacherUserId.values());
 
         List<TeacherQualityDto> result = new ArrayList<>();
         for (Teacher t : teachers) {
@@ -487,16 +481,14 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
             return;
         }
         if (AuthFacade.USER_TYPE_TEACHER.equals(callerUserType)) {
-            Teacher self = teacherMapper.selectOne(
-                    new LambdaQueryWrapper<Teacher>().eq(Teacher::getUserId, callerUserId));
+            Teacher self = teacherMapper.findByUserId(callerUserId);
             if (self == null || !self.getId().equals(teacher.getId())) {
                 throw new BusinessException(403, "权限不足");
             }
             return;
         }
         if (AuthFacade.USER_TYPE_DEPARTMENT.equals(callerUserType)) {
-            Department dept = departmentMapper.selectOne(
-                    new LambdaQueryWrapper<Department>().eq(Department::getUserId, callerUserId));
+            Department dept = departmentMapper.findByUserId(callerUserId);
             if (dept == null || !dept.getDepartmentName().equals(teacher.getDepartment())) {
                 throw new BusinessException(403, "权限不足");
             }
@@ -564,7 +556,7 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
             dto.setStudentCount(studentIds.size());
             if (scored > 0) {
                 dto.setCourseAvgScore(sum.divide(BigDecimal.valueOf(scored), 2, RoundingMode.HALF_UP));
-                dto.setCoursePassRate(BigDecimal.valueOf(pass).multiply(HUNDRED)
+                dto.setCoursePassRate(BigDecimal.valueOf(pass).multiply(ScoreStats.HUNDRED)
                         .divide(BigDecimal.valueOf(scored), 2, RoundingMode.HALF_UP));
             }
         }
@@ -594,21 +586,15 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
                 .filter(Objects::nonNull).collect(Collectors.toSet());
 
         Map<Long, String> courseNames = new HashMap<>();
-        courseInfoResolver.resolveCourses(courseIds)
-                .forEach((id, info) -> courseNames.put(id, info.getCourseName()));
-        courseInfoResolver.resolveCampaigns(campaignIds)
-                .forEach((id, info) -> courseNames.put(id, info.getCourseName()));
+        courseNames.putAll(courseInfoResolver.resolveCourseNameMap(courseIds));
+        courseNames.putAll(courseInfoResolver.resolveCampaignNameMap(campaignIds));
         Map<Long, Long> teacherUserId = teacherIds.isEmpty() ? Map.of()
                 : teacherMapper.selectByIds(teacherIds).stream()
                         .collect(Collectors.toMap(Teacher::getId, Teacher::getUserId, (a, b) -> a));
-        Map<Long, String> userNames = teacherUserId.isEmpty() ? Map.of()
-                : userMapper.selectByIds(teacherUserId.values()).stream()
-                        .collect(Collectors.toMap(User::getId, User::getName, (a, b) -> a));
+        Map<Long, String> userNames = userMapper.toNameMap(teacherUserId.values());
         Map<Long, String> teacherNames = new HashMap<>();
         teacherUserId.forEach((tid, uid) -> teacherNames.put(tid, userNames.get(uid)));
-        Map<Long, String> semNames = semesterIds.isEmpty() ? Map.of()
-                : semesterService.listByIds(semesterIds).stream()
-                        .collect(Collectors.toMap(Semester::getId, Semester::getName, (a, b) -> a));
+        Map<Long, String> semNames = semesterService.toNameMap(semesterIds);
         Map<Long, String> templateNames = templateIds.isEmpty() ? Map.of()
                 : evaluationTemplateMapper.selectByIds(templateIds).stream()
                         .collect(Collectors.toMap(EvaluationTemplate::getId, EvaluationTemplate::getName, (a, b) -> a));
@@ -649,12 +635,5 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
                     return sv;
                 })
                 .toList();
-    }
-
-    private List<String> splitClassNames(String csv) {
-        if (csv == null || csv.isBlank()) {
-            return List.of();
-        }
-        return Arrays.stream(csv.split(",")).map(String::strip).filter(s -> !s.isEmpty()).distinct().toList();
     }
 }
