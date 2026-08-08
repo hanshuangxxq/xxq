@@ -137,10 +137,8 @@ public class ExamController {
     public Result<List<ScoreView>> enterMakeupScores(HttpServletRequest request,
                                                      @PathVariable Long examId,
                                                      @RequestBody List<MakeupScoreEntryRequest> body) {
-        Long userId = authFacade.currentUserId(request);
-        String userType = authFacade.currentUserType(request);
-        authFacade.requireUserTypes(request,
+        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
                 AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
-        return Result.ok(scoreService.enterMakeupScore(examId, body, userId, userType));
+        return Result.ok(scoreService.enterMakeupScore(examId, body, ctx.userId(), ctx.userType()));
     }
 }
