@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.xrq.xxq.common.PageQuery;
+import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.common.Result;
 import com.xrq.xxq.module.analysis.dto.EvaluationStatusDto;
 import com.xrq.xxq.module.analysis.dto.EvaluationSubmitRequest;
@@ -103,10 +105,12 @@ public class TeacherEvaluationController {
 
     /** 教师质量列表/对比（教务全校、院系本院），可按学期过滤。 */
     @GetMapping("/teacher-quality")
-    public Result<List<TeacherQualityDto>> list(HttpServletRequest request,
-                                                @RequestParam(required = false) Long semesterId) {
+    public Result<PageResult<TeacherQualityDto>> list(HttpServletRequest request,
+                                                      @RequestParam(required = false) Long semesterId,
+                                                      @RequestParam(required = false) Integer page,
+                                                      @RequestParam(required = false) Integer pageSize) {
         AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
                 AuthFacade.USER_TYPE_ACADEMIC_ADMIN, AuthFacade.USER_TYPE_DEPARTMENT);
-        return Result.ok(evaluationService.listTeacherQuality(semesterId, ctx.userId(), ctx.userType()));
+        return Result.ok(evaluationService.listTeacherQuality(semesterId, ctx.userId(), ctx.userType(), new PageQuery(page, pageSize)));
     }
 }
