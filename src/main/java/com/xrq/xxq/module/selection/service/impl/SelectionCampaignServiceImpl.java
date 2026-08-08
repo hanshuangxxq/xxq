@@ -37,6 +37,7 @@ import com.xrq.xxq.module.selection.service.SelectionCampaignService;
 import com.xrq.xxq.module.selection.service.SelectionClassService;
 import com.xrq.xxq.module.time.entity.TimeRestriction;
 import com.xrq.xxq.module.time.mapper.TimeRestrictionMapper;
+import com.xrq.xxq.util.ParamValidator;
 
 import java.time.format.DateTimeFormatter;
 
@@ -54,7 +55,6 @@ public class SelectionCampaignServiceImpl
         extends ServiceImpl<SelectionCampaignMapper, SelectionCampaign>
         implements SelectionCampaignService {
 
-    private static final String SOURCE_SELECTION_CAMPAIGN = "SELECTION_CAMPAIGN";
     private static final int DEFAULT_START_WEEK = 1;
     private static final int DEFAULT_END_WEEK = 16;
 
@@ -473,12 +473,8 @@ public class SelectionCampaignServiceImpl
     }
 
     private void validateCourseFields(String name, String courseCode, Integer credit, Integer capacity) {
-        if (name == null || name.isBlank()) {
-            throw new BusinessException(400, "活动名称不能为空");
-        }
-        if (courseCode == null || courseCode.isBlank()) {
-            throw new BusinessException(400, "课程编号不能为空");
-        }
+        ParamValidator.requireNonBlank(name, "活动名称");
+        ParamValidator.requireNonBlank(courseCode, "课程编号");
         if (credit == null || credit < 0) {
             throw new BusinessException(400, "学分必须 >= 0");
         }
