@@ -27,9 +27,8 @@ import com.xrq.xxq.module.analysis.mapper.WarningRecordMapper;
 import com.xrq.xxq.module.analysis.service.WarningService;
 import com.xrq.xxq.module.analysis.util.CreditSource;
 import com.xrq.xxq.module.analysis.util.GpaCalculator;
-import com.xrq.xxq.module.analysis.util.StudentScopeResolver;
-import com.xrq.xxq.module.clazz.entity.ClassName;
-import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
+import com.xrq.xxq.util.StudentScopeResolver;
+import com.xrq.xxq.module.clazz.service.ClassNameService;
 import com.xrq.xxq.module.course.mapper.CourseMapper;
 import com.xrq.xxq.module.selection.mapper.SelectionCampaignMapper;
 import org.springframework.context.ApplicationEventPublisher;
@@ -40,10 +39,10 @@ import com.xrq.xxq.module.score.mapper.ScoreMapper;
 import com.xrq.xxq.module.semester.entity.Semester;
 import com.xrq.xxq.module.semester.mapper.SemesterMapper;
 import com.xrq.xxq.module.semester.service.SemesterService;
-import com.xrq.xxq.module.user.entity.User;
 import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.module.user.mapper.UserMapper;
+import com.xrq.xxq.util.ParamValidator;
 import com.xrq.xxq.util.ReferenceValidator;
 import com.xrq.xxq.util.auth.AuthFacade;
 
@@ -68,7 +67,7 @@ public class WarningServiceImpl implements WarningService {
     private final SelectionCampaignMapper selectionCampaignMapper;
     private final StudentMapper studentMapper;
     private final UserMapper userMapper;
-    private final ClassNameMapper classNameMapper;
+    private final ClassNameService classNameService;
     private final SemesterService semesterService;
     private final SemesterMapper semesterMapper;
     private final ApplicationEventPublisher eventPublisher;
@@ -87,13 +86,9 @@ public class WarningServiceImpl implements WarningService {
     @Override
     @Transactional
     public void updateConfig(List<WarningConfigDto> configs) {
-        if (configs == null || configs.isEmpty()) {
-            throw new BusinessException(400, "配置不能为空");
-        }
+        ParamValidator.requireNonEmpty(configs, "配置");
         for (WarningConfigDto dto : configs) {
-            if (dto.getLevel() == null) {
-                throw new BusinessException(400, "预警级别不能为空");
-            }
+            ParamValidator.requireNonNull(dto.getLevel(), "预警级别");
             WarningConfig exist = warningConfigMapper.selectOne(
                     new LambdaQueryWrapper<WarningConfig>().eq(WarningConfig::getLevel, dto.getLevel()));
             if (exist == null) {
@@ -295,11 +290,7 @@ public class WarningServiceImpl implements WarningService {
     @Override
     public List<WarningItemDto> list(Long semesterId, WarningLevelEnum level,
                                      Long callerUserId, String callerUserType) {
-        Long semId = semesterId;
-        if (semId == null) {
-            Semester current = semesterService.getCurrent();
-            semId = current != null ? current.getId() : null;
-        }
+        Long semId = semesterService.resolveOrDefault(semesterId);
         // 院系仅看本院学生
         List<Long> scopedStudentIds;
         if (AuthFacade.USER_TYPE_ACADEMIC_ADMIN.equals(callerUserType)) {
@@ -347,21 +338,16 @@ public class WarningServiceImpl implements WarningService {
             return List.of();
         }
         List<Long> studentUserIds = records.stream().map(WarningRecord::getStudentUserId).distinct().toList();
-        Map<Long, String> nameMap = userMapper.selectByIds(studentUserIds).stream()
-                .collect(Collectors.toMap(User::getId, User::getName, (a, b) -> a));
+        Map<Long, String> nameMap = userMapper.toNameMap(studentUserIds);
         Map<Long, Student> stuMap = studentMapper.selectList(
                         new LambdaQueryWrapper<Student>().in(Student::getUserId, studentUserIds)).stream()
                 .collect(Collectors.toMap(Student::getUserId, s -> s, (a, b) -> a));
         Set<Long> classIds = stuMap.values().stream().map(Student::getClassId)
                 .filter(Objects::nonNull).collect(Collectors.toSet());
-        Map<Long, String> classNameMap = classIds.isEmpty() ? Map.of()
-                : classNameMapper.selectByIds(classIds).stream()
-                        .collect(Collectors.toMap(ClassName::getId, ClassName::getClassName, (a, b) -> a));
+        Map<Long, String> classNameMap = classNameService.toNameMap(classIds);
         Set<Long> semesterIds = records.stream().map(WarningRecord::getSemesterId)
                 .filter(Objects::nonNull).collect(Collectors.toSet());
-        Map<Long, String> semNameMap = semesterIds.isEmpty() ? Map.of()
-                : semesterService.listByIds(semesterIds).stream()
-                        .collect(Collectors.toMap(Semester::getId, Semester::getName, (a, b) -> a));
+        Map<Long, String> semNameMap = semesterService.toNameMap(semesterIds);
 
         return records.stream().map(r -> {
             WarningItemDto dto = new WarningItemDto();
