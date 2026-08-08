@@ -2,6 +2,8 @@ package com.xrq.xxq.module.analysis.service;
 
 import java.util.List;
 
+import com.xrq.xxq.common.PageQuery;
+import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.module.analysis.dto.WarningConfigDto;
 import com.xrq.xxq.module.analysis.dto.WarningItemDto;
 import com.xrq.xxq.module.analysis.dto.WarningScanResultDto;
@@ -25,7 +27,7 @@ public interface WarningService {
     WarningScanResultDto scan(Long callerUserId);
 
     /** 预警看板：教务全校、院系本院；按学期/级别过滤。 */
-    List<WarningItemDto> list(Long semesterId, WarningLevelEnum level, Long callerUserId, String callerUserType);
+    PageResult<WarningItemDto> list(Long semesterId, WarningLevelEnum level, Long callerUserId, String callerUserType, PageQuery pageQuery);
 
     /** 学生查询本人生效中的预警。 */
     List<WarningItemDto> myWarnings(Long studentUserId);
