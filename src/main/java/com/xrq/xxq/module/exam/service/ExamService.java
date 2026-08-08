@@ -3,6 +3,8 @@ package com.xrq.xxq.module.exam.service;
 import java.util.List;
 
 import com.baomidou.mybatisplus.spring.service.IService;
+import com.xrq.xxq.common.PageQuery;
+import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.module.exam.dto.ClassCourseOptionDto;
 import com.xrq.xxq.module.exam.dto.ExamCreateRequest;
 import com.xrq.xxq.module.exam.dto.ExamView;
@@ -26,7 +28,7 @@ public interface ExamService extends IService<Exam> {
     void delete(Long id, Long userId);
 
     /** 教务查询考试列表（可按学期/课程/类型过滤；source=SELECTION_CAMPAIGN 时 courseId 按 campaignId 过滤）。 */
-    List<ExamView> list(Long semesterId, Long courseId, String source, ExamTypeEnum examType);
+    PageResult<ExamView> list(Long semesterId, Long courseId, String source, ExamTypeEnum examType, PageQuery pageQuery);
 
     /** 教师查询自己课程相关的考试。 */
     List<ExamView> listForTeacher(Long userId);
