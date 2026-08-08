@@ -21,7 +21,6 @@ import com.xrq.xxq.module.analysis.util.ScoreStats;
 import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
 import com.xrq.xxq.module.clazz.util.ClassNameUtil;
-import com.xrq.xxq.module.course.mapper.CourseMapper;
 import com.xrq.xxq.module.course.service.CourseInfoResolver;
 import com.xrq.xxq.module.course.util.CourseRouting;
 import com.xrq.xxq.module.exam.dto.MakeupScoreEntryRequest;
@@ -42,23 +41,19 @@ import com.xrq.xxq.module.score.service.ScoreService;
 import com.xrq.xxq.module.semester.mapper.SemesterMapper;
 import org.springframework.context.ApplicationEventPublisher;
 import com.xrq.xxq.common.event.GradeFailedEvent;
-import com.xrq.xxq.module.selection.entity.SelectionClass;
-import com.xrq.xxq.module.selection.entity.SelectionClassMember;
-import com.xrq.xxq.module.selection.mapper.SelectionClassMapper;
-import com.xrq.xxq.module.selection.mapper.SelectionClassMemberMapper;
 import com.xrq.xxq.module.semester.entity.Semester;
 import com.xrq.xxq.module.semester.service.SemesterService;
 import com.xrq.xxq.module.teachinfo.entity.TeachInfo;
 import com.xrq.xxq.module.teachinfo.mapper.TeachInfoMapper;
 import com.xrq.xxq.module.user.entity.User;
 import com.xrq.xxq.module.user.entity.user.Department;
-import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.entity.user.Teacher;
 import com.xrq.xxq.module.user.mapper.DepartmentMapper;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.module.user.mapper.TeacherMapper;
 import com.xrq.xxq.module.user.mapper.UserMapper;
 import com.xrq.xxq.util.ReferenceValidator;
+import com.xrq.xxq.util.StudentEnrollmentResolver;
 import com.xrq.xxq.util.StudentScopeResolver;
 import com.xrq.xxq.util.auth.AuthFacade;
 
@@ -74,15 +69,12 @@ import lombok.extern.slf4j.Slf4j;
 public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements ScoreService {
 
     private final TeachInfoMapper teachInfoMapper;
-    private final CourseMapper courseMapper;
     private final CourseInfoResolver courseInfoResolver;
     private final StudentMapper studentMapper;
     private final ClassNameMapper classNameMapper;
     private final UserMapper userMapper;
     private final TeacherMapper teacherMapper;
     private final DepartmentMapper departmentMapper;
-    private final SelectionClassMapper selectionClassMapper;
-    private final SelectionClassMemberMapper selectionClassMemberMapper;
     private final ScoreConfigMapper scoreConfigMapper;
     private final ApplicationEventPublisher eventPublisher;
     private final ExamMapper examMapper;
@@ -90,6 +82,7 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
     private final SemesterMapper semesterMapper;
     private final ReferenceValidator referenceValidator;
     private final StudentScopeResolver studentScopeResolver;
+    private final StudentEnrollmentResolver enrollmentResolver;
 
     // ==================== 权限 ====================
 
@@ -146,7 +139,7 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
             throw new BusinessException(404, "授课安排不存在");
         }
         String scopeClassName = resolveExamScopeClassName(examId, info);
-        List<Long> studentUserIds = resolveRosterUserIds(info, scopeClassName);
+        List<Long> studentUserIds = enrollmentResolver.rosterUserIds(info.getId(), scopeClassName);
         if (studentUserIds.isEmpty()) {
             return List.of();
         }
@@ -159,41 +152,6 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
             dto.setStudentNo(noMap.get(uid));
             return dto;
         }).toList();
-    }
-
-    /**
-     * 解析授课安排的学生 user.id 列表：公选课班走选课成员，常规班走班级名册。
-     * <p>合班时若传入 scopeClassName（考试排考班级），则仅返回该班级学生，避免把未参加考试的学生纳入名单。
-     */
-    private List<Long> resolveRosterUserIds(TeachInfo info, String scopeClassName) {
-        List<SelectionClass> selClasses = selectionClassMapper.selectList(
-                new LambdaQueryWrapper<SelectionClass>().eq(SelectionClass::getTeachInfoId, info.getId()));
-        if (!selClasses.isEmpty()) {
-            List<Long> classIds = selClasses.stream().map(SelectionClass::getId).toList();
-            return selectionClassMemberMapper.selectList(
-                            new LambdaQueryWrapper<SelectionClassMember>().in(SelectionClassMember::getClassId, classIds))
-                    .stream().map(SelectionClassMember::getStudentId).distinct().toList();
-        }
-        List<String> classNames = ClassNameUtil.splitClassNames(info.getClassName());
-        if (classNames.isEmpty()) {
-            return List.of();
-        }
-        // 合班且指定考试排考班级：只取该班级名册，杜绝未参加考试的班级学生混入
-        if (scopeClassName != null && !scopeClassName.isBlank()) {
-            if (!classNames.contains(scopeClassName)) {
-                throw new BusinessException(400, "考试排考班级不在该授课安排的合班范围内");
-            }
-            classNames = List.of(scopeClassName);
-        }
-        List<Long> classIds = classNameMapper.selectList(
-                        new LambdaQueryWrapper<ClassName>().in(ClassName::getClassName, classNames)).stream()
-                .map(ClassName::getId).toList();
-        if (classIds.isEmpty()) {
-            return List.of();
-        }
-        return studentMapper.selectList(
-                        new LambdaQueryWrapper<Student>().in(Student::getClassId, classIds)).stream()
-                .map(Student::getUserId).distinct().toList();
     }
 
     /**
@@ -238,7 +196,7 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
         // 合班时按考试排考班级限定可录入学生，避免给未参加考试的班级录入成绩
         String scopeClassName = resolveExamScopeClassName(request.getExamId(), info);
         Set<Long> allowedUserIds = scopeClassName != null
-                ? new HashSet<>(resolveRosterUserIds(info, scopeClassName))
+                ? new HashSet<>(enrollmentResolver.rosterUserIds(info.getId(), scopeClassName))
                 : null;
 
         ScoreConfig config = scoreConfigMapper.selectOne(
