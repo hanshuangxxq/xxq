@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
+import com.xrq.xxq.common.PageQuery;
+import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.module.notification.dto.NotificationResponse;
 import com.xrq.xxq.module.notification.dto.SendNotificationRequest;
 import com.xrq.xxq.module.notification.entity.Notification;
@@ -58,7 +60,7 @@ public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Not
     }
 
     @Override
-    public List<NotificationResponse> listByUser(Long userId, String userType, String status) {
+    public PageResult<NotificationResponse> listByUser(Long userId, String userType, String status, PageQuery pageQuery) {
         // 单点通知
         LambdaQueryWrapper<Notification> wrapper = new LambdaQueryWrapper<Notification>()
                 .eq(Notification::getUserId, userId)
@@ -76,11 +78,12 @@ public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Not
                 Comparator.nullsLast(Comparator.reverseOrder())));
 
         if ("unread".equalsIgnoreCase(status)) {
-            return all.stream().filter(r -> r.getIsRead() == null || r.getIsRead() == 0).toList();
+            all = new ArrayList<>(all.stream().filter(r -> r.getIsRead() == null || r.getIsRead() == 0).toList());
         } else if ("read".equalsIgnoreCase(status)) {
-            return all.stream().filter(r -> r.getIsRead() != null && r.getIsRead() == 1).toList();
+            all = new ArrayList<>(all.stream().filter(r -> r.getIsRead() != null && r.getIsRead() == 1).toList());
         }
-        return all;
+        // 单点+广播合并视图无法将分页下推到 SQL，全局排序后内存切片
+        return PageResult.slice(all, pageQuery);
     }
 
     // ==================== 单点消息 ====================
