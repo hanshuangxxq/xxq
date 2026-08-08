@@ -21,19 +21,19 @@ import com.xrq.xxq.module.analysis.dto.ScoreDistributionDto;
 import com.xrq.xxq.module.analysis.dto.ScoreTrendDto;
 import com.xrq.xxq.module.analysis.dto.ScoreTrendDto.SemesterPoint;
 import com.xrq.xxq.module.analysis.service.ScoreAnalysisService;
-import com.xrq.xxq.module.analysis.util.StudentScopeResolver;
-import com.xrq.xxq.module.clazz.entity.ClassName;
-import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
-import com.xrq.xxq.module.course.entity.Course;
+import com.xrq.xxq.module.analysis.util.ScoreStats;
+import com.xrq.xxq.util.StudentScopeResolver;
+import com.xrq.xxq.module.clazz.service.ClassNameService;
 import com.xrq.xxq.module.course.mapper.CourseMapper;
 import com.xrq.xxq.module.course.service.CourseInfoResolver;
 import com.xrq.xxq.module.score.entity.Score;
-import com.xrq.xxq.module.score.entity.ScoreTypeEnum;
 import com.xrq.xxq.module.score.mapper.ScoreMapper;
+import com.xrq.xxq.module.score.util.ScoreQueries;
 import com.xrq.xxq.module.semester.entity.Semester;
 import com.xrq.xxq.module.semester.service.SemesterService;
 import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
+import com.xrq.xxq.util.ParamValidator;
 import com.xrq.xxq.util.auth.AuthFacade;
 
 import lombok.RequiredArgsConstructor;
@@ -45,34 +45,24 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ScoreAnalysisServiceImpl implements ScoreAnalysisService {
 
-    private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
-
     private final ScoreMapper scoreMapper;
     private final CourseMapper courseMapper;
     private final CourseInfoResolver courseInfoResolver;
     private final StudentMapper studentMapper;
-    private final ClassNameMapper classNameMapper;
+    private final ClassNameService classNameService;
     private final SemesterService semesterService;
     private final StudentScopeResolver scopeResolver;
 
     @Override
     public ScoreDistributionDto distribution(Long courseId, String source, String className, Long semesterId,
                                              Long callerUserId, String callerUserType) {
-        if (courseId == null) {
-            throw new BusinessException(400, "课程ID不能为空");
-        }
-        Long semId = resolveSemesterId(semesterId);
+        ParamValidator.requireNonNull(courseId, "课程ID");
+        Long semId = semesterService.resolveOrDefault(semesterId);
         List<Long> studentUserIds = resolveScopeForCourse(courseId, source, className, callerUserId, callerUserType);
         if (studentUserIds != null && studentUserIds.isEmpty()) {
             return emptyDistribution(courseId);
         }
-        LambdaQueryWrapper<Score> w = new LambdaQueryWrapper<Score>()
-                .eq(Score::getScoreType, ScoreTypeEnum.REGULAR);
-        if (Course.SOURCE_SELECTION_CAMPAIGN.equals(source)) {
-            w.eq(Score::getCampaignId, courseId);
-        } else {
-            w.eq(Score::getCourseId, courseId);
-        }
+        LambdaQueryWrapper<Score> w = ScoreQueries.regularByCourseOrCampaign(courseId, source);
         if (semId != null) {
             w.eq(Score::getSemesterId, semId);
         }
@@ -84,24 +74,16 @@ public class ScoreAnalysisServiceImpl implements ScoreAnalysisService {
 
     @Override
     public ScoreTrendDto trend(Long courseId, String source, String className, Long callerUserId, String callerUserType) {
-        if (courseId == null) {
-            throw new BusinessException(400, "课程ID不能为空");
-        }
+        ParamValidator.requireNonNull(courseId, "课程ID");
         List<Long> studentUserIds = resolveScopeForCourse(courseId, source, className, callerUserId, callerUserType);
         ScoreTrendDto dto = new ScoreTrendDto();
         dto.setCourseId(courseId);
-        dto.setCourseName(resolveCourseName(courseId));
+        dto.setCourseName(courseInfoResolver.resolveNameByEitherId(courseId));
         if (studentUserIds != null && studentUserIds.isEmpty()) {
             dto.setPoints(List.of());
             return dto;
         }
-        LambdaQueryWrapper<Score> w = new LambdaQueryWrapper<Score>()
-                .eq(Score::getScoreType, ScoreTypeEnum.REGULAR);
-        if (Course.SOURCE_SELECTION_CAMPAIGN.equals(source)) {
-            w.eq(Score::getCampaignId, courseId);
-        } else {
-            w.eq(Score::getCourseId, courseId);
-        }
+        LambdaQueryWrapper<Score> w = ScoreQueries.regularByCourseOrCampaign(courseId, source);
         if (studentUserIds != null) {
             w.in(Score::getStudentUserId, studentUserIds);
         }
@@ -113,17 +95,15 @@ public class ScoreAnalysisServiceImpl implements ScoreAnalysisService {
             dto.setPoints(List.of());
             return dto;
         }
-        Map<Long, Semester> semMap = semesterService.listByIds(bySem.keySet()).stream()
-                .collect(Collectors.toMap(Semester::getId, s -> s, (a, b) -> a));
+        Map<Long, String> semNameMap = semesterService.toNameMap(bySem.keySet());
         List<SemesterPoint> points = new ArrayList<>();
         for (Map.Entry<Long, List<Score>> e : bySem.entrySet()) {
             SemesterPoint p = new SemesterPoint();
             p.setSemesterId(e.getKey());
-            Semester sem = semMap.get(e.getKey());
-            p.setSemesterName(sem != null ? sem.getName() : null);
+            p.setSemesterName(semNameMap.get(e.getKey()));
             p.setTotalCount(e.getValue().size());
-            p.setAvgScore(avgOf(e.getValue()));
-            p.setPassRate(passRateOf(e.getValue()));
+            p.setAvgScore(ScoreStats.avg(e.getValue().stream().map(Score::getTotalScore).filter(Objects::nonNull).toList()));
+            p.setPassRate(ScoreStats.passRate(e.getValue().stream().map(Score::getTotalScore).filter(Objects::nonNull).toList()));
             points.add(p);
         }
         points.sort(Comparator.comparing(SemesterPoint::getSemesterId));
@@ -134,14 +114,12 @@ public class ScoreAnalysisServiceImpl implements ScoreAnalysisService {
     @Override
     public ScoreComparisonDto comparison(Long courseId, String source, Long semesterId,
                                          Long callerUserId, String callerUserType) {
-        if (courseId == null) {
-            throw new BusinessException(400, "课程ID不能为空");
-        }
-        Long semId = resolveSemesterId(semesterId);
+        ParamValidator.requireNonNull(courseId, "课程ID");
+        Long semId = semesterService.resolveOrDefault(semesterId);
         List<Long> studentUserIds = resolveScopeForCourse(courseId, source, null, callerUserId, callerUserType);
         ScoreComparisonDto dto = new ScoreComparisonDto();
         dto.setCourseId(courseId);
-        dto.setCourseName(resolveCourseName(courseId));
+        dto.setCourseName(courseInfoResolver.resolveNameByEitherId(courseId));
         dto.setSemesterId(semId);
         Semester sem = semId == null ? null : semesterService.getById(semId);
         dto.setSemesterName(sem != null ? sem.getName() : null);
@@ -149,13 +127,7 @@ public class ScoreAnalysisServiceImpl implements ScoreAnalysisService {
             dto.setClasses(List.of());
             return dto;
         }
-        LambdaQueryWrapper<Score> w = new LambdaQueryWrapper<Score>()
-                .eq(Score::getScoreType, ScoreTypeEnum.REGULAR);
-        if (Course.SOURCE_SELECTION_CAMPAIGN.equals(source)) {
-            w.eq(Score::getCampaignId, courseId);
-        } else {
-            w.eq(Score::getCourseId, courseId);
-        }
+        LambdaQueryWrapper<Score> w = ScoreQueries.regularByCourseOrCampaign(courseId, source);
         if (semId != null) {
             w.eq(Score::getSemesterId, semId);
         }
@@ -179,27 +151,10 @@ public class ScoreAnalysisServiceImpl implements ScoreAnalysisService {
         return scopeResolver.resolveScopedStudentUserIds(callerUserType, callerUserId, className);
     }
 
-    private Long resolveSemesterId(Long semesterId) {
-        if (semesterId != null) {
-            return semesterId;
-        }
-        Semester current = semesterService.getCurrent();
-        return current != null ? current.getId() : null;
-    }
-
-    /** 解析课程名：courseId 可能是常规课 course.id 或公选课 selection_campaign.id，两表依次尝试。 */
-    private String resolveCourseName(Long courseId) {
-        CourseInfoResolver.CourseInfo info = courseInfoResolver.resolveOne(courseId, null);
-        if (info == null) {
-            info = courseInfoResolver.resolveOne(null, courseId);
-        }
-        return info != null ? info.getCourseName() : null;
-    }
-
     private ScoreDistributionDto emptyDistribution(Long courseId) {
         ScoreDistributionDto dto = new ScoreDistributionDto();
         dto.setCourseId(courseId);
-        dto.setCourseName(resolveCourseName(courseId));
+        dto.setCourseName(courseInfoResolver.resolveNameByEitherId(courseId));
         dto.setTotalCount(0);
         dto.setSeg0to59(0);
         dto.setSeg60to69(0);
@@ -212,7 +167,7 @@ public class ScoreAnalysisServiceImpl implements ScoreAnalysisService {
     private ScoreDistributionDto buildDistribution(Long courseId, List<Score> grades) {
         ScoreDistributionDto dto = new ScoreDistributionDto();
         dto.setCourseId(courseId);
-        dto.setCourseName(resolveCourseName(courseId));
+        dto.setCourseName(courseInfoResolver.resolveNameByEitherId(courseId));
         int s0 = 0, s6 = 0, s7 = 0, s8 = 0, s9 = 0;
         BigDecimal sum = BigDecimal.ZERO;
         int scored = 0;
@@ -260,9 +215,9 @@ public class ScoreAnalysisServiceImpl implements ScoreAnalysisService {
         if (scored > 0) {
             BigDecimal avg = sum.divide(BigDecimal.valueOf(scored), 2, RoundingMode.HALF_UP);
             dto.setAvgScore(avg);
-            dto.setPassRate(BigDecimal.valueOf(pass).multiply(HUNDRED)
+            dto.setPassRate(BigDecimal.valueOf(pass).multiply(ScoreStats.HUNDRED)
                     .divide(BigDecimal.valueOf(scored), 2, RoundingMode.HALF_UP));
-            dto.setStddev(stddev(vals, avg));
+            dto.setStddev(ScoreStats.stddev(vals, avg));
         }
         return dto;
     }
@@ -277,9 +232,7 @@ public class ScoreAnalysisServiceImpl implements ScoreAnalysisService {
                 .filter(s -> s.getClassId() != null)
                 .collect(Collectors.toMap(Student::getUserId, Student::getClassId, (a, b) -> a));
         Set<Long> classIds = Set.copyOf(userClassId.values());
-        Map<Long, String> classNameMap = classIds.isEmpty() ? Map.of()
-                : classNameMapper.selectByIds(classIds).stream()
-                        .collect(Collectors.toMap(ClassName::getId, ClassName::getClassName, (a, b) -> a));
+        Map<Long, String> classNameMap = classNameService.toNameMap(classIds);
         Map<String, List<Score>> byClass = new LinkedHashMap<>();
         for (Score g : grades) {
             Long cid = userClassId.get(g.getStudentUserId());
@@ -292,50 +245,11 @@ public class ScoreAnalysisServiceImpl implements ScoreAnalysisService {
             p.setClassName(e.getKey());
             List<Score> ss = e.getValue();
             p.setTotalCount(ss.size());
-            p.setAvgScore(avgOf(ss));
-            p.setPassRate(passRateOf(ss));
-            p.setFailCount((int) ss.stream().filter(this::isFail).count());
+            p.setAvgScore(ScoreStats.avg(ss.stream().map(Score::getTotalScore).filter(Objects::nonNull).toList()));
+            p.setPassRate(ScoreStats.passRate(ss.stream().map(Score::getTotalScore).filter(Objects::nonNull).toList()));
+            p.setFailCount((int) ss.stream().filter(s -> ScoreStats.isFail(s.getTotalScore())).count());
             result.add(p);
         }
         return result;
-    }
-
-    private boolean isFail(Score s) {
-        return s.getTotalScore() != null && s.getTotalScore().doubleValue() < 60;
-    }
-
-    private BigDecimal avgOf(List<Score> scores) {
-        List<BigDecimal> vals = scores.stream().map(Score::getTotalScore).filter(Objects::nonNull).toList();
-        if (vals.isEmpty()) {
-            return null;
-        }
-        BigDecimal sum = BigDecimal.ZERO;
-        for (BigDecimal v : vals) {
-            sum = sum.add(v);
-        }
-        return sum.divide(BigDecimal.valueOf(vals.size()), 2, RoundingMode.HALF_UP);
-    }
-
-    private BigDecimal passRateOf(List<Score> scores) {
-        List<BigDecimal> vals = scores.stream().map(Score::getTotalScore).filter(Objects::nonNull).toList();
-        if (vals.isEmpty()) {
-            return null;
-        }
-        long pass = vals.stream().filter(v -> v.doubleValue() >= 60).count();
-        return BigDecimal.valueOf(pass).multiply(HUNDRED)
-                .divide(BigDecimal.valueOf(vals.size()), 2, RoundingMode.HALF_UP);
-    }
-
-    private BigDecimal stddev(List<BigDecimal> vals, BigDecimal avg) {
-        if (vals == null || vals.size() < 2 || avg == null) {
-            return null;
-        }
-        BigDecimal sqSum = BigDecimal.ZERO;
-        for (BigDecimal v : vals) {
-            BigDecimal diff = v.subtract(avg);
-            sqSum = sqSum.add(diff.multiply(diff));
-        }
-        double variance = sqSum.divide(BigDecimal.valueOf(vals.size()), 6, RoundingMode.HALF_UP).doubleValue();
-        return BigDecimal.valueOf(Math.sqrt(variance)).setScale(2, RoundingMode.HALF_UP);
     }
 }
