@@ -1,6 +1,7 @@
 package com.xrq.xxq.module.course.controller;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,6 +17,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.xrq.xxq.common.PageQuery;
+import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.common.Result;
 import com.xrq.xxq.module.course.entity.Course;
 import com.xrq.xxq.module.course.service.CourseService;
@@ -42,14 +45,19 @@ public class CourseController {
     private final AuthFacade authFacade;
 
     @GetMapping
-    public Result<List<Course>> list(HttpServletRequest request) {
+    public Result<PageResult<Course>> list(HttpServletRequest request,
+                                           @RequestParam(required = false) Integer page,
+                                           @RequestParam(required = false) Integer pageSize) {
         String userType = authFacade.currentUserType(request);
+        PageQuery pageQuery = new PageQuery(page, pageSize);
         List<Course> courses = new ArrayList<>(courseService.list());
         // 公选课不在 course 表，教务管理者视图追加由 selection_campaign 合成的公选课条目
         if (!AuthFacade.USER_TYPE_DEPARTMENT.equals(userType)) {
             courses.addAll(synthesizePublicCourses());
         }
-        return Result.ok(courses);
+        // 多源合并后按 id 排序保证分页稳定，再内存切片
+        courses.sort(Comparator.comparing(Course::getId));
+        return Result.ok(PageResult.slice(courses, pageQuery));
     }
 
     @GetMapping("/{id}")
