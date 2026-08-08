@@ -1,6 +1,8 @@
 package com.xrq.xxq.module.user.service;
 
 import com.baomidou.mybatisplus.spring.service.IService;
+import com.xrq.xxq.common.PageQuery;
+import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.module.user.dto.StudentDto;
 import com.xrq.xxq.module.user.dto.UpdateStudentRequest;
 import com.xrq.xxq.module.user.entity.user.Student;
@@ -15,7 +17,7 @@ import java.util.List;
  */
 public interface StudentService extends IService<Student> {
 
-    List<StudentDto> queryStudents(Long gradeId, List<Long> classIds, List<Long> majorIds, Boolean unassigned, String name);
+    PageResult<StudentDto> queryStudents(Long gradeId, List<Long> classIds, List<Long> majorIds, Boolean unassigned, String name, PageQuery pageQuery);
 
     boolean updateStudentInfo(Long studentId, UpdateStudentRequest request);
 }
