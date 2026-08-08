@@ -1,7 +1,5 @@
 package com.xrq.xxq.module.analysis.service.impl;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -20,9 +18,9 @@ import com.xrq.xxq.module.analysis.dto.ClassTrendDto;
 import com.xrq.xxq.module.analysis.service.ClassAnalysisService;
 import com.xrq.xxq.module.analysis.util.CreditSource;
 import com.xrq.xxq.module.analysis.util.GpaCalculator;
-import com.xrq.xxq.module.analysis.util.StudentScopeResolver;
-import com.xrq.xxq.module.clazz.entity.ClassName;
-import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
+import com.xrq.xxq.module.analysis.util.ScoreStats;
+import com.xrq.xxq.util.StudentScopeResolver;
+import com.xrq.xxq.module.clazz.service.ClassNameService;
 import com.xrq.xxq.module.course.mapper.CourseMapper;
 import com.xrq.xxq.module.course.service.CourseInfoResolver;
 import com.xrq.xxq.module.mojor.entity.Major;
@@ -30,7 +28,6 @@ import com.xrq.xxq.module.mojor.mapper.MajorMapper;
 import com.xrq.xxq.module.score.entity.Score;
 import com.xrq.xxq.module.score.entity.ScoreTypeEnum;
 import com.xrq.xxq.module.score.mapper.ScoreMapper;
-import com.xrq.xxq.module.semester.entity.Semester;
 import com.xrq.xxq.module.semester.service.SemesterService;
 import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
@@ -45,13 +42,11 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ClassAnalysisServiceImpl implements ClassAnalysisService {
 
-    private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
-
     private final ScoreMapper scoreMapper;
     private final CourseMapper courseMapper;
     private final CourseInfoResolver courseInfoResolver;
     private final StudentMapper studentMapper;
-    private final ClassNameMapper classNameMapper;
+    private final ClassNameService classNameService;
     private final MajorMapper majorMapper;
     private final SemesterService semesterService;
     private final StudentScopeResolver scopeResolver;
@@ -63,7 +58,7 @@ public class ClassAnalysisServiceImpl implements ClassAnalysisService {
         if (scopedStudentIds != null && scopedStudentIds.isEmpty()) {
             return List.of();
         }
-        Long semId = resolveSemesterId(semesterId);
+        Long semId = semesterService.resolveOrDefault(semesterId);
         LambdaQueryWrapper<Score> w = new LambdaQueryWrapper<Score>()
                 .eq(Score::getScoreType, ScoreTypeEnum.REGULAR);
         if (semId != null) {
@@ -134,19 +129,16 @@ public class ClassAnalysisServiceImpl implements ClassAnalysisService {
         Map<Long, List<Score>> bySem = scores.stream()
                 .filter(s -> s.getSemesterId() != null)
                 .collect(Collectors.groupingBy(Score::getSemesterId));
-        Map<Long, Semester> semMap = bySem.isEmpty() ? Map.of()
-                : semesterService.listByIds(bySem.keySet()).stream()
-                        .collect(Collectors.toMap(Semester::getId, s -> s, (a, b) -> a));
+        Map<Long, String> semNameMap = semesterService.toNameMap(bySem.keySet());
 
         List<ClassTrendDto.SemesterPoint> points = new ArrayList<>();
         for (Map.Entry<Long, List<Score>> e : bySem.entrySet()) {
             ClassTrendDto.SemesterPoint p = new ClassTrendDto.SemesterPoint();
             p.setSemesterId(e.getKey());
-            Semester sem = semMap.get(e.getKey());
-            p.setSemesterName(sem != null ? sem.getName() : null);
-            p.setAvgScore(avgOf(e.getValue()));
+            p.setSemesterName(semNameMap.get(e.getKey()));
+            p.setAvgScore(ScoreStats.avg(e.getValue().stream().map(Score::getTotalScore).filter(Objects::nonNull).toList()));
             p.setGpa(GpaCalculator.weightedGpa(e.getValue(), creditSource));
-            p.setPassRate(passRateOf(e.getValue()));
+            p.setPassRate(ScoreStats.passRate(e.getValue().stream().map(Score::getTotalScore).filter(Objects::nonNull).toList()));
             p.setStudentCount((int) e.getValue().stream().map(Score::getStudentUserId).distinct().count());
             points.add(p);
         }
@@ -156,14 +148,6 @@ public class ClassAnalysisServiceImpl implements ClassAnalysisService {
     }
 
     // ==================== 内部计算 ====================
-
-    private Long resolveSemesterId(Long semesterId) {
-        if (semesterId != null) {
-            return semesterId;
-        }
-        Semester current = semesterService.getCurrent();
-        return current != null ? current.getId() : null;
-    }
 
     /** userId -&gt; 组名（班级名或专业名）；无法确定的用户不进入映射。 */
     private Map<Long, String> loadGroupMap(List<Long> userIds, String groupBy) {
@@ -184,9 +168,7 @@ public class ClassAnalysisServiceImpl implements ClassAnalysisService {
         }
         Set<Long> classIds = students.stream().map(Student::getClassId)
                 .filter(Objects::nonNull).collect(Collectors.toSet());
-        Map<Long, String> className = classIds.isEmpty() ? Map.of()
-                : classNameMapper.selectByIds(classIds).stream()
-                        .collect(Collectors.toMap(ClassName::getId, ClassName::getClassName, (a, b) -> a));
+        Map<Long, String> className = classNameService.toNameMap(classIds);
         return students.stream().filter(s -> s.getClassId() != null)
                 .collect(Collectors.toMap(Student::getUserId,
                         s -> className.getOrDefault(s.getClassId(), "未知班级"), (a, b) -> a));
@@ -218,9 +200,9 @@ public class ClassAnalysisServiceImpl implements ClassAnalysisService {
         dto.setStudentCount((int) scores.stream().map(Score::getStudentUserId).distinct().count());
         dto.setScoreCount(scores.size());
         dto.setGpa(GpaCalculator.weightedGpa(scores, creditSource));
-        dto.setAvgScore(avgOf(scores));
-        dto.setPassRate(passRateOf(scores));
-        dto.setFailCount((int) scores.stream().filter(this::isFail).count());
+        dto.setAvgScore(ScoreStats.avg(scores.stream().map(Score::getTotalScore).filter(Objects::nonNull).toList()));
+        dto.setPassRate(ScoreStats.passRate(scores.stream().map(Score::getTotalScore).filter(Objects::nonNull).toList()));
+        dto.setFailCount((int) scores.stream().filter(s -> ScoreStats.isFail(s.getTotalScore())).count());
         dto.setLevelDistribution(levelDistribution(scores));
         return dto;
     }
@@ -239,31 +221,5 @@ public class ClassAnalysisServiceImpl implements ClassAnalysisService {
             }
         }
         return dist;
-    }
-
-    private boolean isFail(Score s) {
-        return s.getTotalScore() != null && s.getTotalScore().doubleValue() < 60;
-    }
-
-    private BigDecimal avgOf(List<Score> scores) {
-        List<BigDecimal> vals = scores.stream().map(Score::getTotalScore).filter(Objects::nonNull).toList();
-        if (vals.isEmpty()) {
-            return null;
-        }
-        BigDecimal sum = BigDecimal.ZERO;
-        for (BigDecimal v : vals) {
-            sum = sum.add(v);
-        }
-        return sum.divide(BigDecimal.valueOf(vals.size()), 2, RoundingMode.HALF_UP);
-    }
-
-    private BigDecimal passRateOf(List<Score> scores) {
-        List<BigDecimal> vals = scores.stream().map(Score::getTotalScore).filter(Objects::nonNull).toList();
-        if (vals.isEmpty()) {
-            return null;
-        }
-        long pass = vals.stream().filter(v -> v.doubleValue() >= 60).count();
-        return BigDecimal.valueOf(pass).multiply(HUNDRED)
-                .divide(BigDecimal.valueOf(vals.size()), 2, RoundingMode.HALF_UP);
     }
 }
