@@ -9,7 +9,6 @@ import org.springframework.stereotype.Service;
 
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.xrq.xxq.module.clazz.entity.ClassName;
-import com.xrq.xxq.module.course.entity.Course;
 import com.xrq.xxq.module.semester.entity.Semester;
 import com.xrq.xxq.module.selection.entity.SelectionClass;
 import com.xrq.xxq.module.selection.entity.SelectionClassMember;
@@ -19,7 +18,6 @@ import com.xrq.xxq.module.teachinfo.entity.TeachInfo;
 import com.xrq.xxq.module.time.entity.Time;
 import com.xrq.xxq.module.time.entity.TimeRestriction;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
-import com.xrq.xxq.module.course.mapper.CourseMapper;
 import com.xrq.xxq.module.course.service.CourseInfoResolver;
 import com.xrq.xxq.module.local.mapper.LocalMapper;
 import com.xrq.xxq.module.teachinfo.mapper.TeachInfoMapper;
@@ -77,7 +75,6 @@ public class SchedulingServiceImpl implements SchedulingService {
     private final TeachInfoMapper teachInfoMapper;
     private final TimeMapper timeMapper;
     private final LocalMapper localMapper;
-    private final CourseMapper courseMapper;
     private final CourseInfoResolver courseInfoResolver;
     private final TeacherMapper teacherMapper;
     private final UserMapper userMapper;
@@ -211,10 +208,8 @@ public class SchedulingServiceImpl implements SchedulingService {
         // 课程名：常规课走 course 表，公选课走 selection_campaign
         List<Long> courseIds = teachInfos.stream().map(TeachInfo::getCourseId).filter(Objects::nonNull).distinct().toList();
         List<Long> campaignIds = teachInfos.stream().map(TeachInfo::getCampaignId).filter(Objects::nonNull).distinct().toList();
-        Map<Long, String> courseNameByCourse = courseInfoResolver.resolveCourses(courseIds).entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getCourseName()));
-        Map<Long, String> courseNameByCampaign = courseInfoResolver.resolveCampaigns(campaignIds).entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getCourseName()));
+        Map<Long, String> courseNameByCourse = courseInfoResolver.resolveCourseNameMap(courseIds);
+        Map<Long, String> courseNameByCampaign = courseInfoResolver.resolveCampaignNameMap(campaignIds);
         Map<Long, String> teacherNames = loadTeacherNames();
 
         CourseSchedule schedule = new CourseSchedule();
@@ -452,11 +447,6 @@ public class SchedulingServiceImpl implements SchedulingService {
                     initialRoom));
         }
         return lessons;
-    }
-
-    private Map<Long, String> loadCourseNames() {
-        return courseMapper.selectList(null).stream()
-                .collect(Collectors.toMap(Course::getId, Course::getCourseName));
     }
 
     /**
