@@ -37,10 +37,8 @@ public class StudentProfileController {
     @GetMapping("/{studentUserId}")
     public Result<StudentProfileDto> profile(HttpServletRequest request,
                                              @PathVariable Long studentUserId) {
-        Long userId = authFacade.currentUserId(request);
-        String userType = authFacade.currentUserType(request);
-        authFacade.requireUserTypes(request,
+        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
                 AuthFacade.USER_TYPE_ACADEMIC_ADMIN, AuthFacade.USER_TYPE_DEPARTMENT);
-        return Result.ok(studentProfileService.getProfile(studentUserId, userId, userType));
+        return Result.ok(studentProfileService.getProfile(studentUserId, ctx.userId(), ctx.userType()));
     }
 }
