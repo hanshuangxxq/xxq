@@ -86,6 +86,33 @@ public class CourseInfoResolver {
                 .collect(Collectors.toMap(SelectionCampaign::getId, CourseInfoResolver::toInfo, (a, b) -> a));
     }
 
+    /** 按 course.id 批量解析名称 Map（常规课）。空集合或全不存在返回空 Map。 */
+    public Map<Long, String> resolveCourseNameMap(Collection<Long> courseIds) {
+        return resolveCourses(courseIds).entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getCourseName(), (a, b) -> a));
+    }
+
+    /** 按 selection_campaign.id 批量解析名称 Map（公选课）。空集合或全不存在返回空 Map。 */
+    public Map<Long, String> resolveCampaignNameMap(Collection<Long> campaignIds) {
+        return resolveCampaigns(campaignIds).entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getCourseName(), (a, b) -> a));
+    }
+
+    /**
+     * 单 id 模糊解析课程名：先按 course.id 查，未命中再按 campaign.id 查（公选课）。
+     * 用于「只有一个 id、不确定来自哪张表」的场景。
+     */
+    public String resolveNameByEitherId(Long id) {
+        if (id == null) {
+            return null;
+        }
+        CourseInfo info = resolveOne(id, null);
+        if (info == null) {
+            info = resolveOne(null, id);
+        }
+        return info != null ? info.getCourseName() : null;
+    }
+
     private static CourseInfo toInfo(Course c) {
         return new CourseInfo(c.getCourseName(), c.getCourseCode(), c.getCredit(),
                 c.getCourseHour(), c.getCourseType(), c.getDescription());
