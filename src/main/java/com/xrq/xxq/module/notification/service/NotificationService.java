@@ -1,6 +1,8 @@
 package com.xrq.xxq.module.notification.service;
 
 import com.baomidou.mybatisplus.spring.service.IService;
+import com.xrq.xxq.common.PageQuery;
+import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.module.notification.dto.NotificationResponse;
 import com.xrq.xxq.module.notification.dto.SendNotificationRequest;
 import com.xrq.xxq.module.notification.entity.Notification;
@@ -32,7 +34,7 @@ public interface NotificationService extends IService<Notification> {
     /**
      * 当前用户消息列表（单点 + 广播合并），status 可选 read/unread，不传则全部。
      */
-    List<NotificationResponse> listByUser(Long userId, String userType, String status);
+    PageResult<NotificationResponse> listByUser(Long userId, String userType, String status, PageQuery pageQuery);
 
     /** 标记单条已读（校验归属）。 */
     void markRead(Long userId, String userType, Long id);
