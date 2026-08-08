@@ -31,6 +31,7 @@ import com.xrq.xxq.module.analysis.mapper.TeachingEvaluationMapper;
 import com.xrq.xxq.module.analysis.service.EvaluationTemplateService;
 import com.xrq.xxq.module.teachinfo.mapper.TeachInfoMapper;
 import com.xrq.xxq.module.user.mapper.UserMapper;
+import com.xrq.xxq.util.ParamValidator;
 import com.xrq.xxq.util.ReferenceValidator;
 
 import lombok.RequiredArgsConstructor;
@@ -58,9 +59,7 @@ public class EvaluationTemplateServiceImpl implements EvaluationTemplateService 
     @Override
     @Transactional
     public TemplateResponse createTemplate(TemplateCreateRequest req, Long userId) {
-        if (req.getName() == null || req.getName().isBlank()) {
-            throw new BusinessException(400, "模板名称不能为空");
-        }
+        ParamValidator.requireNonBlank(req.getName(), "模板名称");
         List<EvaluationItem> items = validateItems(req.getItems());
 
         EvaluationTemplate t = new EvaluationTemplate();
@@ -101,9 +100,7 @@ public class EvaluationTemplateServiceImpl implements EvaluationTemplateService 
             throw new BusinessException(404, "模板不存在");
         }
         if (req.getName() != null) {
-            if (req.getName().isBlank()) {
-                throw new BusinessException(400, "模板名称不能为空");
-            }
+            ParamValidator.requireNonBlank(req.getName(), "模板名称");
             t.setName(req.getName());
         }
         if (req.getDescription() != null) {
