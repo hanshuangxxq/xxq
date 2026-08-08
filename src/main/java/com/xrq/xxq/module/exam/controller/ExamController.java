@@ -14,6 +14,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.xrq.xxq.common.PageQuery;
+import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.common.Result;
 import com.xrq.xxq.module.exam.dto.ClassCourseOptionDto;
 import com.xrq.xxq.module.exam.dto.ExamCreateRequest;
@@ -71,13 +73,15 @@ public class ExamController {
 
     /** 教务查询考试列表（可按学期/课程/类型过滤；source=SELECTION_CAMPAIGN 时按公选课过滤）。 */
     @GetMapping
-    public Result<List<ExamView>> list(HttpServletRequest request,
-                                       @RequestParam(required = false) Long semesterId,
-                                       @RequestParam(required = false) Long courseId,
-                                       @RequestParam(required = false) String source,
-                                       @RequestParam(required = false) ExamTypeEnum examType) {
+    public Result<PageResult<ExamView>> list(HttpServletRequest request,
+                                             @RequestParam(required = false) Long semesterId,
+                                             @RequestParam(required = false) Long courseId,
+                                             @RequestParam(required = false) String source,
+                                             @RequestParam(required = false) ExamTypeEnum examType,
+                                             @RequestParam(required = false) Integer page,
+                                             @RequestParam(required = false) Integer pageSize) {
         authFacade.requireAcademicAdmin(request);
-        return Result.ok(examService.list(semesterId, courseId, source, examType));
+        return Result.ok(examService.list(semesterId, courseId, source, examType, new PageQuery(page, pageSize)));
     }
 
     /** 教务按班级查询可排考的课程（建考用，合班自动命中）。 */
