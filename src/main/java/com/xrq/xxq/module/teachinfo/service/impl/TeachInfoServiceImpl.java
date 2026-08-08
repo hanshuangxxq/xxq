@@ -21,10 +21,7 @@ import com.xrq.xxq.module.exam.mapper.ExamMapper;
 import com.xrq.xxq.module.local.entity.Local;
 import com.xrq.xxq.module.selection.entity.SelectionCampaign;
 import com.xrq.xxq.module.selection.entity.SelectionClass;
-import com.xrq.xxq.module.selection.entity.SelectionClassMember;
 import com.xrq.xxq.module.selection.mapper.SelectionCampaignMapper;
-import com.xrq.xxq.module.selection.mapper.SelectionClassMapper;
-import com.xrq.xxq.module.selection.mapper.SelectionClassMemberMapper;
 import com.xrq.xxq.module.score.entity.Score;
 import com.xrq.xxq.module.score.mapper.ScoreMapper;
 import com.xrq.xxq.module.semester.entity.Semester;
@@ -38,15 +35,15 @@ import com.xrq.xxq.module.local.mapper.LocalMapper;
 import com.xrq.xxq.module.teachinfo.mapper.TeachInfoMapper;
 import com.xrq.xxq.module.semester.service.SemesterService;
 import com.xrq.xxq.module.teachinfo.service.TeachInfoService;
-import com.xrq.xxq.module.user.entity.User;
 import com.xrq.xxq.module.user.entity.user.Department;
 import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.entity.user.Teacher;
 import com.xrq.xxq.module.user.mapper.DepartmentMapper;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.module.user.mapper.TeacherMapper;
-import com.xrq.xxq.module.user.mapper.UserMapper;
 import com.xrq.xxq.util.ReferenceValidator;
+import com.xrq.xxq.util.StudentEnrollmentResolver;
+import com.xrq.xxq.util.TeacherNameResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -67,7 +64,6 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
     private final TeachInfoMapper teachInfoMapper;
     private final CourseMapper courseMapper;
     private final TeacherMapper teacherMapper;
-    private final UserMapper userMapper;
     private final ClassNameMapper classNameMapper;
     private final StudentMapper studentMapper;
     private final DepartmentMapper departmentMapper;
@@ -75,13 +71,13 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
     private final TimeMapper timeMapper;
     private final ClassScheduleCacheManager cacheManager;
     private final SemesterService semesterService;
-    private final SelectionClassMapper selectionClassMapper;
-    private final SelectionClassMemberMapper selectionClassMemberMapper;
     private final SelectionCampaignMapper selectionCampaignMapper;
     private final ExamMapper examMapper;
     private final ScoreMapper scoreMapper;
     private final ReferenceValidator referenceValidator;
     private final SemesterMapper semesterMapper;
+    private final StudentEnrollmentResolver enrollmentResolver;
+    private final TeacherNameResolver teacherNameResolver;
 
     @Override
     public CourseDto getDetailById(Long id, Long userId, String userType) {
@@ -217,9 +213,7 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
         if (scoreCount != null && scoreCount > 0) {
             throw new BusinessException(409, "该授课安排已录入成绩，无法删除");
         }
-        Long selClassCount = selectionClassMapper.selectCount(
-                new LambdaQueryWrapper<SelectionClass>().eq(SelectionClass::getTeachInfoId, id));
-        if (selClassCount != null && selClassCount > 0) {
+        if (enrollmentResolver.hasSelectionClass((Long) id)) {
             throw new BusinessException(409, "该授课安排关联选课班，无法删除");
         }
         boolean ok = super.removeById(id);
@@ -259,7 +253,7 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
                     return null;
                 }
                 // 学生加入的选课班对应的 teachInfoId（选课班 className 是虚拟名，FIND_IN_SET 查不到）
-                List<Long> selectionTeachInfoIds = listSelectionTeachInfoIds(userId);
+                List<Long> selectionTeachInfoIds = enrollmentResolver.selectionTeachInfoIds(userId);
                 if (selectionTeachInfoIds.isEmpty()) {
                     wrapper.apply("FIND_IN_SET({0}, class_name) > 0", cls.getClassName());
                 } else {
@@ -330,32 +324,11 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
                         .forEach(t -> regular.add(t.getId()));
             }
         }
-        java.util.List<Long> selection = listSelectionTeachInfoIds(studentUserId);
+        java.util.List<Long> selection = enrollmentResolver.selectionTeachInfoIds(studentUserId);
         java.util.List<Long> all = new java.util.ArrayList<>(regular.size() + selection.size());
         all.addAll(regular);
         all.addAll(selection);
         return all.stream().distinct().toList();
-    }
-
-    /** 查询学生加入的选课班对应的 teachInfoId 列表。 */
-    private List<Long> listSelectionTeachInfoIds(Long studentUserId) {
-        List<SelectionClassMember> members = selectionClassMemberMapper.selectList(
-                new LambdaQueryWrapper<SelectionClassMember>()
-                        .eq(SelectionClassMember::getStudentId, studentUserId));
-        if (members.isEmpty()) {
-            return List.of();
-        }
-        List<Long> selectionClassIds = members.stream()
-                .map(SelectionClassMember::getClassId)
-                .distinct()
-                .toList();
-        return selectionClassMapper.selectList(
-                        new LambdaQueryWrapper<SelectionClass>()
-                                .in(SelectionClass::getId, selectionClassIds))
-                .stream()
-                .map(SelectionClass::getTeachInfoId)
-                .filter(Objects::nonNull)
-                .toList();
     }
 
     private List<CourseDto> assembleDto(List<TeachInfo> list) {
@@ -389,21 +362,12 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
                 : timeMapper.selectByIds(timeIds).stream()
                         .collect(Collectors.toMap(Time::getId, identity(), (a, b) -> a));
 
-        List<Long> userIds = teacherMap.values().stream().map(Teacher::getUserId).toList();
-        Map<Long, User> userMap = userIds.isEmpty()
-                ? Map.of()
-                : userMapper.selectByIds(userIds).stream()
-                        .collect(Collectors.toMap(User::getId, identity(), (a, b) -> a));
+        Map<Long, String> teacherNameMap = teacherNameResolver.namesForTeachers(teacherMap.values());
 
         // 选课班及其活动：teachInfoId -> SelectionClass，campaignId -> SelectionCampaign
         // 用于公选课（PUBLIC）富化选课活动专属字段，前端无需再调 selection 接口合并
         List<Long> teachInfoIds = list.stream().map(TeachInfo::getId).filter(Objects::nonNull).distinct().toList();
-        Map<Long, SelectionClass> selectionClassByTeachInfoId = teachInfoIds.isEmpty()
-                ? Map.of()
-                : selectionClassMapper.selectList(new LambdaQueryWrapper<SelectionClass>()
-                        .in(SelectionClass::getTeachInfoId, teachInfoIds))
-                        .stream()
-                        .collect(Collectors.toMap(SelectionClass::getTeachInfoId, sc -> sc, (a, b) -> a));
+        Map<Long, SelectionClass> selectionClassByTeachInfoId = enrollmentResolver.selectionClassByTeachInfoIds(teachInfoIds);
         List<Long> campaignIds = list.stream()
                 .map(TeachInfo::getCampaignId).filter(Objects::nonNull).distinct().toList();
         Map<Long, SelectionCampaign> campaignMap = campaignIds.isEmpty()
@@ -437,10 +401,7 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
             Teacher teacher = teacherMap.get(info.getTeacherId());
             if (teacher != null) {
                 resp.setDepartment(teacher.getDepartment());
-                User user = userMap.get(teacher.getUserId());
-                if (user != null) {
-                    resp.setTeacherName(user.getName());
-                }
+                resp.setTeacherName(teacherNameMap.get(info.getTeacherId()));
             }
 
             resp.setClassName(info.getClassName());
