@@ -4,7 +4,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
+import com.xrq.xxq.common.PageQuery;
+import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.module.user.dto.TeacherDto;
 import com.xrq.xxq.module.user.entity.User;
 import com.xrq.xxq.module.user.entity.user.Teacher;
@@ -21,11 +25,17 @@ public class TeacherServiceImpl extends ServiceImpl<TeacherMapper, Teacher> impl
     private final UserMapper userMapper;
 
     @Override
-    public List<TeacherDto> listTeachers() {
+    public PageResult<TeacherDto> listTeachers(PageQuery pageQuery) {
+        Page<Teacher> page = teacherMapper.selectPage(pageQuery.toPage(),
+                new LambdaQueryWrapper<Teacher>().orderByAsc(Teacher::getId));
+        List<Teacher> teachers = page.getRecords();
+        if (teachers.isEmpty()) {
+            return PageResult.of(page, List.of());
+        }
         Map<Long, String> userIdToName = userMapper.selectList(null).stream()
                 .collect(Collectors.toMap(User::getId, User::getName, (a, b) -> a));
 
-        return teacherMapper.selectList(null).stream()
+        List<TeacherDto> records = teachers.stream()
                 .map(t -> {
                     TeacherDto dto = new TeacherDto();
                     dto.setId(t.getId());
@@ -36,5 +46,6 @@ public class TeacherServiceImpl extends ServiceImpl<TeacherMapper, Teacher> impl
                     return dto;
                 })
                 .toList();
+        return PageResult.of(page, records);
     }
 }
