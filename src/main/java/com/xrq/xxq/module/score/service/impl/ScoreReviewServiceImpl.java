@@ -12,8 +12,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
+import com.xrq.xxq.common.PageQuery;
+import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.module.analysis.util.ScoreStats;
 import com.xrq.xxq.module.course.mapper.CourseMapper;
 import com.xrq.xxq.module.course.service.CourseInfoResolver;
@@ -97,7 +100,7 @@ public class ScoreReviewServiceImpl extends ServiceImpl<ScoreReviewMapper, Score
     }
 
     @Override
-    public List<ReviewView> listForHandler(Long userId, String userType, ReviewStatusEnum status) {
+    public PageResult<ReviewView> listForHandler(Long userId, String userType, ReviewStatusEnum status, PageQuery pageQuery) {
         LambdaQueryWrapper<ScoreReview> w = new LambdaQueryWrapper<ScoreReview>()
                 .orderByDesc(ScoreReview::getCreateTime);
         if (AuthFacade.USER_TYPE_ACADEMIC_ADMIN.equals(userType)) {
@@ -105,13 +108,13 @@ public class ScoreReviewServiceImpl extends ServiceImpl<ScoreReviewMapper, Score
         } else if (AuthFacade.USER_TYPE_TEACHER.equals(userType)) {
             Teacher t = teacherMapper.findByUserId(userId);
             if (t == null) {
-                return List.of();
+                return new PageResult<>(List.of(), 0, pageQuery.resolvedPage(), pageQuery.resolvedSize(), 0);
             }
             List<Long> scoreIds = scoreMapper.selectList(
                             new LambdaQueryWrapper<Score>().eq(Score::getTeacherId, t.getId()))
                     .stream().map(Score::getId).toList();
             if (scoreIds.isEmpty()) {
-                return List.of();
+                return new PageResult<>(List.of(), 0, pageQuery.resolvedPage(), pageQuery.resolvedSize(), 0);
             }
             w.in(ScoreReview::getScoreId, scoreIds);
         } else {
@@ -120,7 +123,8 @@ public class ScoreReviewServiceImpl extends ServiceImpl<ScoreReviewMapper, Score
         if (status != null) {
             w.eq(ScoreReview::getStatus, status);
         }
-        return toViews(baseMapper.selectList(w));
+        Page<ScoreReview> page = baseMapper.selectPage(pageQuery.toPage(), w);
+        return PageResult.of(page, toViews(page.getRecords()));
     }
 
     // ==================== 教师回复 ====================
