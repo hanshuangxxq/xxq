@@ -11,8 +11,11 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.xrq.xxq.common.PageQuery;
+import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.common.Result;
 import com.xrq.xxq.module.selection.dto.CampaignResponse;
 import com.xrq.xxq.module.selection.dto.SelectionGroupCreateRequest;
@@ -49,9 +52,11 @@ public class SelectionGroupController {
     }
 
     @GetMapping
-    public Result<List<SelectionGroupResponse>> list(HttpServletRequest httpRequest) {
+    public Result<PageResult<SelectionGroupResponse>> list(HttpServletRequest httpRequest,
+                                                           @RequestParam(required = false) Integer page,
+                                                           @RequestParam(required = false) Integer pageSize) {
         authFacade.requireAcademicAdmin(httpRequest);
-        return Result.ok(groupService.listAll());
+        return Result.ok(groupService.listAll(new PageQuery(page, pageSize)));
     }
 
     @GetMapping("/{groupId}")
