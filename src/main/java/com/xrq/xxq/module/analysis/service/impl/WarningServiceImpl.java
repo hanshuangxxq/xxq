@@ -14,7 +14,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.xrq.xxq.common.BusinessException;
+import com.xrq.xxq.common.PageQuery;
+import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.module.analysis.dto.WarningConfigDto;
 import com.xrq.xxq.module.analysis.dto.WarningItemDto;
 import com.xrq.xxq.module.analysis.dto.WarningScanResultDto;
@@ -288,8 +291,8 @@ public class WarningServiceImpl implements WarningService {
     // ==================== 看板 / 查询 ====================
 
     @Override
-    public List<WarningItemDto> list(Long semesterId, WarningLevelEnum level,
-                                     Long callerUserId, String callerUserType) {
+    public PageResult<WarningItemDto> list(Long semesterId, WarningLevelEnum level,
+                                           Long callerUserId, String callerUserType, PageQuery pageQuery) {
         Long semId = semesterService.resolveOrDefault(semesterId);
         // 院系仅看本院学生
         List<Long> scopedStudentIds;
@@ -302,8 +305,7 @@ public class WarningServiceImpl implements WarningService {
         }
 
         LambdaQueryWrapper<WarningRecord> w = new LambdaQueryWrapper<WarningRecord>()
-                .eq(WarningRecord::getStatus, WarningStatusEnum.ACTIVE)
-                .orderByDesc(WarningRecord::getUpdateTime);
+                .eq(WarningRecord::getStatus, WarningStatusEnum.ACTIVE);
         if (semId != null) {
             w.eq(WarningRecord::getSemesterId, semId);
         }
@@ -312,14 +314,14 @@ public class WarningServiceImpl implements WarningService {
         }
         if (scopedStudentIds != null) {
             if (scopedStudentIds.isEmpty()) {
-                return List.of();
+                return new PageResult<>(List.of(), 0, pageQuery.resolvedPage(), pageQuery.resolvedSize(), 0);
             }
             w.in(WarningRecord::getStudentUserId, scopedStudentIds);
         }
-        List<WarningRecord> records = warningRecordMapper.selectList(w);
-        // 按级别严重程度降序（红>橙>黄）；稳定排序保留 DB 内 updateTime 降序
-        records.sort(Comparator.comparingInt((WarningRecord r) -> r.getLevel().ordinal()).reversed());
-        return enrich(records);
+        // 红色 > 橙色 > 黄色，同级按更新时间降序：下推到 SQL 以保证分页全局有序
+        w.last("ORDER BY FIELD(level, 'RED', 'ORANGE', 'YELLOW'), update_time DESC");
+        Page<WarningRecord> page = warningRecordMapper.selectPage(pageQuery.toPage(), w);
+        return PageResult.of(page, enrich(page.getRecords()));
     }
 
     @Override
