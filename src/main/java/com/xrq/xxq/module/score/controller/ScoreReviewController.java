@@ -55,11 +55,9 @@ public class ScoreReviewController {
     @GetMapping
     public Result<List<ReviewView>> listForHandler(HttpServletRequest request,
                                                    @RequestParam(required = false) ReviewStatusEnum status) {
-        Long userId = authFacade.currentUserId(request);
-        String userType = authFacade.currentUserType(request);
-        authFacade.requireUserTypes(request,
+        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
                 AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
-        return Result.ok(scoreReviewService.listForHandler(userId, userType, status));
+        return Result.ok(scoreReviewService.listForHandler(ctx.userId(), ctx.userType(), status));
     }
 
     /** 教师回复复核申请（可调分）。 */
@@ -67,10 +65,8 @@ public class ScoreReviewController {
     public Result<ReviewView> teacherReply(HttpServletRequest request,
                                            @PathVariable Long id,
                                            @RequestBody ReviewReplyRequest body) {
-        Long userId = authFacade.currentUserId(request);
-        String userType = authFacade.currentUserType(request);
-        authFacade.requireTeacher(request);
-        return Result.ok(scoreReviewService.teacherReply(id, body, userId, userType));
+        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request, AuthFacade.USER_TYPE_TEACHER);
+        return Result.ok(scoreReviewService.teacherReply(id, body, ctx.userId(), ctx.userType()));
     }
 
     /** 学生升级到教务。 */
