@@ -40,18 +40,10 @@ import com.xrq.xxq.module.analysis.service.EvaluationTemplateService;
 import com.xrq.xxq.module.analysis.service.ProgressService;
 import com.xrq.xxq.module.analysis.service.TeachingEvaluationService;
 import com.xrq.xxq.module.analysis.util.ScoreStats;
-import com.xrq.xxq.module.clazz.entity.ClassName;
-import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
-import com.xrq.xxq.module.clazz.util.ClassNameUtil;
-import com.xrq.xxq.module.course.mapper.CourseMapper;
 import com.xrq.xxq.module.course.service.CourseInfoResolver;
 import com.xrq.xxq.module.score.entity.Score;
 import com.xrq.xxq.module.score.entity.ScoreTypeEnum;
 import com.xrq.xxq.module.score.mapper.ScoreMapper;
-import com.xrq.xxq.module.selection.entity.SelectionClass;
-import com.xrq.xxq.module.selection.entity.SelectionClassMember;
-import com.xrq.xxq.module.selection.mapper.SelectionClassMapper;
-import com.xrq.xxq.module.selection.mapper.SelectionClassMemberMapper;
 import com.xrq.xxq.module.semester.entity.Semester;
 import com.xrq.xxq.module.semester.mapper.SemesterMapper;
 import com.xrq.xxq.module.semester.service.SemesterService;
@@ -59,15 +51,15 @@ import com.xrq.xxq.module.teachinfo.entity.TeachInfo;
 import com.xrq.xxq.module.teachinfo.mapper.TeachInfoMapper;
 import com.xrq.xxq.module.user.entity.User;
 import com.xrq.xxq.module.user.entity.user.Department;
-import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.entity.user.Teacher;
 import com.xrq.xxq.module.user.mapper.DepartmentMapper;
-import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.module.user.mapper.TeacherMapper;
 import com.xrq.xxq.module.user.mapper.UserMapper;
 import com.xrq.xxq.util.DistributedLock;
 import com.xrq.xxq.util.ParamValidator;
 import com.xrq.xxq.util.ReferenceValidator;
+import com.xrq.xxq.util.StudentEnrollmentResolver;
+import com.xrq.xxq.util.TeacherNameResolver;
 import com.xrq.xxq.util.auth.AuthFacade;
 
 import lombok.RequiredArgsConstructor;
@@ -89,21 +81,18 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
     private final EvaluationTemplateMapper evaluationTemplateMapper;
     private final EvaluationTemplateService evaluationTemplateService;
     private final TeachInfoMapper teachInfoMapper;
-    private final CourseMapper courseMapper;
     private final CourseInfoResolver courseInfoResolver;
     private final TeacherMapper teacherMapper;
-    private final StudentMapper studentMapper;
     private final UserMapper userMapper;
     private final DepartmentMapper departmentMapper;
-    private final ClassNameMapper classNameMapper;
     private final ScoreMapper scoreMapper;
-    private final SelectionClassMapper selectionClassMapper;
-    private final SelectionClassMemberMapper selectionClassMemberMapper;
     private final SemesterService semesterService;
     private final ProgressService progressService;
     private final ReferenceValidator referenceValidator;
     private final DistributedLock distributedLock;
     private final SemesterMapper semesterMapper;
+    private final StudentEnrollmentResolver enrollmentResolver;
+    private final TeacherNameResolver teacherNameResolver;
 
     // ==================== 评教提交 ====================
 
@@ -124,9 +113,7 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
         referenceValidator.requireExists(semesterMapper, info.getSemesterId(), "学期");
         referenceValidator.requireExists(userMapper, studentUserId, "用户");
         assertPeriodOpen(info.getSemesterId());
-        Student stu = studentMapper.selectOne(
-                new LambdaQueryWrapper<Student>().eq(Student::getUserId, studentUserId));
-        if (stu == null || !isStudentEnrolled(info, studentUserId, stu)) {
+        if (!enrollmentResolver.isEnrolled(info.getId(), studentUserId)) {
             throw new BusinessException(403, "权限不足");
         }
 
@@ -220,24 +207,6 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
             }
             return toView(ev, loadNameMaps(List.of(ev)));
         });
-    }
-
-    /** 校验学生是否选修该授课安排（公选走选课班成员，常规班走班级名册）。 */
-    private boolean isStudentEnrolled(TeachInfo info, Long studentUserId, Student stu) {
-        List<SelectionClass> selClasses = selectionClassMapper.selectList(
-                new LambdaQueryWrapper<SelectionClass>().eq(SelectionClass::getTeachInfoId, info.getId()));
-        if (!selClasses.isEmpty()) {
-            List<Long> classIds = selClasses.stream().map(SelectionClass::getId).toList();
-            Long count = selectionClassMemberMapper.selectCount(new LambdaQueryWrapper<SelectionClassMember>()
-                    .in(SelectionClassMember::getClassId, classIds)
-                    .eq(SelectionClassMember::getStudentId, studentUserId));
-            return count != null && count > 0;
-        }
-        if (stu.getClassId() == null) {
-            return false;
-        }
-        ClassName cn = classNameMapper.selectById(stu.getClassId());
-        return cn != null && ClassNameUtil.splitClassNames(info.getClassName()).contains(cn.getClassName());
     }
 
     // ==================== 我的评教 ====================
@@ -588,12 +557,7 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
         Map<Long, String> courseNames = new HashMap<>();
         courseNames.putAll(courseInfoResolver.resolveCourseNameMap(courseIds));
         courseNames.putAll(courseInfoResolver.resolveCampaignNameMap(campaignIds));
-        Map<Long, Long> teacherUserId = teacherIds.isEmpty() ? Map.of()
-                : teacherMapper.selectByIds(teacherIds).stream()
-                        .collect(Collectors.toMap(Teacher::getId, Teacher::getUserId, (a, b) -> a));
-        Map<Long, String> userNames = userMapper.toNameMap(teacherUserId.values());
-        Map<Long, String> teacherNames = new HashMap<>();
-        teacherUserId.forEach((tid, uid) -> teacherNames.put(tid, userNames.get(uid)));
+        Map<Long, String> teacherNames = teacherNameResolver.namesByIds(teacherIds);
         Map<Long, String> semNames = semesterService.toNameMap(semesterIds);
         Map<Long, String> templateNames = templateIds.isEmpty() ? Map.of()
                 : evaluationTemplateMapper.selectByIds(templateIds).stream()
