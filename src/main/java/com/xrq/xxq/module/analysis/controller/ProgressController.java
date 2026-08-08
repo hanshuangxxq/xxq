@@ -37,10 +37,8 @@ public class ProgressController {
     @GetMapping("/{studentUserId}")
     public Result<LearningProgressDto> progress(HttpServletRequest request,
                                                 @PathVariable Long studentUserId) {
-        Long userId = authFacade.currentUserId(request);
-        String userType = authFacade.currentUserType(request);
-        authFacade.requireUserTypes(request,
+        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
                 AuthFacade.USER_TYPE_ACADEMIC_ADMIN, AuthFacade.USER_TYPE_DEPARTMENT);
-        return Result.ok(progressService.getProgress(studentUserId, userId, userType));
+        return Result.ok(progressService.getProgress(studentUserId, ctx.userId(), ctx.userType()));
     }
 }
