@@ -1,5 +1,7 @@
 package com.xrq.xxq.module.user.controller;
 
+import com.xrq.xxq.common.PageQuery;
+import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.common.Result;
 import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.clazz.service.ClassNameService;
@@ -37,12 +39,14 @@ public class StudentController {
      * 支持按年级、班级、专业、姓名筛选，以及未分班学生查询。
      */
     @GetMapping
-    public Result<List<StudentDto>> list(HttpServletRequest request,
-                                         @RequestParam(required = false) Long gradeId,
-                                         @RequestParam(required = false) String className,
-                                         @RequestParam(required = false) String major,
-                                         @RequestParam(required = false) Boolean unassigned,
-                                         @RequestParam(required = false) String name) {
+    public Result<PageResult<StudentDto>> list(HttpServletRequest request,
+                                               @RequestParam(required = false) Long gradeId,
+                                               @RequestParam(required = false) String className,
+                                               @RequestParam(required = false) String major,
+                                               @RequestParam(required = false) Boolean unassigned,
+                                               @RequestParam(required = false) String name,
+                                               @RequestParam(required = false) Integer page,
+                                               @RequestParam(required = false) Integer pageSize) {
         authFacade.requireAcademicAdmin(request);
 
         List<Long> classIds = Collections.emptyList();
@@ -68,7 +72,7 @@ public class StudentController {
                     .toList ();
         }
 
-        return Result.ok(studentService.queryStudents(gradeId, classIds, majorIds, unassigned, name));
+        return Result.ok(studentService.queryStudents(gradeId, classIds, majorIds, unassigned, name, new PageQuery(page, pageSize)));
     }
 
     /** 修改学生信息（学号、班级、专业、入学年份）。仅教务管理员可用。 */
