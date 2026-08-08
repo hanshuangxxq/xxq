@@ -14,12 +14,10 @@ import org.springframework.stereotype.Component;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.xrq.xxq.module.clazz.entity.ClassName;
-import com.xrq.xxq.module.course.entity.Course;
+import com.xrq.xxq.module.clazz.util.ClassNameUtil;
 import com.xrq.xxq.module.teachinfo.entity.TeachInfo;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
-import com.xrq.xxq.module.course.mapper.CourseMapper;
 import com.xrq.xxq.module.course.service.CourseInfoResolver;
-import com.xrq.xxq.module.user.entity.User;
 import com.xrq.xxq.module.user.entity.user.Teacher;
 import com.xrq.xxq.module.user.mapper.TeacherMapper;
 import com.xrq.xxq.module.user.mapper.UserMapper;
@@ -47,7 +45,6 @@ public class DraftCacheManager {
 
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
-    private final CourseMapper courseMapper;
     private final CourseInfoResolver courseInfoResolver;
     private final TeacherMapper teacherMapper;
     private final UserMapper userMapper;
@@ -118,18 +115,7 @@ public class DraftCacheManager {
     public List<DraftItem> getDraftsByCollege(String collegeName) {
         synchronized (drafts) {
             return drafts.stream()
-                    .filter(d -> {
-                        String c = d.getCollege();
-                        if (c == null || c.isEmpty()) {
-                            return false;
-                        }
-                        for (String part : c.split(",")) {
-                            if (part.strip().equals(collegeName)) {
-                                return true;
-                            }
-                        }
-                        return false;
-                    })
+                    .filter(d -> ClassNameUtil.splitClassNames(d.getCollege()).contains(collegeName))
                     .toList();
         }
     }
@@ -170,15 +156,7 @@ public class DraftCacheManager {
     }
 
     private static boolean containsClassName(String draftClassName, String target) {
-        if (draftClassName == null) {
-            return false;
-        }
-        for (String part : draftClassName.split(",")) {
-            if (part.strip().equals(target)) {
-                return true;
-            }
-        }
-        return false;
+        return ClassNameUtil.splitClassNames(draftClassName).contains(target);
     }
 
     private static String removeClass(String className, String target) {
@@ -196,20 +174,11 @@ public class DraftCacheManager {
         if (className == null || className.isBlank()) {
             return "";
         }
-        Set<String> names = new LinkedHashSet<>();
-        for (String part : className.split(",")) {
-            String trimmed = part.strip();
-            if (!trimmed.isEmpty()) {
-                names.add(trimmed);
-            }
-        }
+        Set<String> names = new LinkedHashSet<>(ClassNameUtil.splitClassNames(className));
         if (names.isEmpty()) {
             return "";
         }
-        Map<String, String> classColleges = classNameMapper.selectList(
-                new LambdaQueryWrapper<ClassName>().in(ClassName::getClassName, names))
-                .stream()
-                .collect(Collectors.toMap(ClassName::getClassName, ClassName::getCollege, (a, b) -> a));
+        Map<String, String> classColleges = loadClassNameToCollege(names);
         Set<String> colleges = new LinkedHashSet<>();
         for (String name : names) {
             String c = classColleges.get(name);
@@ -271,17 +240,7 @@ public class DraftCacheManager {
         synchronized (drafts) {
             return drafts.stream()
                     .map(DraftItem::getClassName)
-                    .filter(name -> name != null && !name.isBlank())
-                    .flatMap(name -> {
-                        var list = new ArrayList<String>();
-                        for (String part : name.split(",")) {
-                            String trimmed = part.strip();
-                            if (!trimmed.isEmpty()) {
-                                list.add(trimmed);
-                            }
-                        }
-                        return list.stream();
-                    })
+                    .flatMap(name -> ClassNameUtil.splitClassNames(name).stream())
                     .collect(Collectors.toCollection(LinkedHashSet::new));
         }
     }
@@ -314,17 +273,12 @@ public class DraftCacheManager {
         Set<String> classNames = drafts.stream()
                 .map(TeachInfo::getClassName)
                 .filter(name -> name != null && !name.isBlank())
-                .flatMap(name -> {
-                    List<String> parts = new ArrayList<>();
-                    for (String part : name.split(",")) {
-                        String trimmed = part.strip();
-                        if (!trimmed.isEmpty()) {
-                            parts.add(trimmed);
-                        }
-                    }
-                    return parts.stream();
-                })
+                .flatMap(name -> ClassNameUtil.splitClassNames(name).stream())
                 .collect(Collectors.toSet());
+        return loadClassNameToCollege(classNames);
+    }
+
+    private Map<String, String> loadClassNameToCollege(Set<String> classNames) {
         if (classNames.isEmpty()) {
             return Map.of();
         }
@@ -336,17 +290,11 @@ public class DraftCacheManager {
 
     /** 将合班 className 解析为去重院系名，逗号分隔。 */
     private String resolveCollege(String className, Map<String, String> classColleges) {
-        if (className == null || className.isBlank()) {
-            return "";
-        }
         Set<String> colleges = new LinkedHashSet<>();
-        for (String part : className.split(",")) {
-            String trimmed = part.strip();
-            if (!trimmed.isEmpty()) {
-                String c = classColleges.get(trimmed);
-                if (c != null && !c.isEmpty()) {
-                    colleges.add(c);
-                }
+        for (String trimmed : ClassNameUtil.splitClassNames(className)) {
+            String c = classColleges.get(trimmed);
+            if (c != null && !c.isEmpty()) {
+                colleges.add(c);
             }
         }
         return String.join(",", colleges);
@@ -357,11 +305,7 @@ public class DraftCacheManager {
                 .map(TeachInfo::getCourseId)
                 .filter(id -> id != null)
                 .collect(Collectors.toSet());
-        if (courseIds.isEmpty()) {
-            return new HashMap<>();
-        }
-        return courseMapper.selectByIds(courseIds).stream()
-                .collect(Collectors.toMap(Course::getId, Course::getCourseName, (a, b) -> a));
+        return courseInfoResolver.resolveCourseNameMap(courseIds);
     }
 
     private Map<Long, String> loadCampaignNames(List<TeachInfo> drafts) {
@@ -370,8 +314,7 @@ public class DraftCacheManager {
                 .filter(id -> id != null)
                 .distinct()
                 .toList();
-        return courseInfoResolver.resolveCampaigns(campaignIds).entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getCourseName(), (a, b) -> a));
+        return courseInfoResolver.resolveCampaignNameMap(campaignIds);
     }
 
     private Map<Long, String> loadTeacherNames(List<TeachInfo> drafts) {
@@ -388,10 +331,7 @@ public class DraftCacheManager {
                 .map(Teacher::getUserId)
                 .filter(id -> id != null)
                 .collect(Collectors.toSet());
-        Map<Long, String> userIdToName = userIds.isEmpty()
-                ? new HashMap<>()
-                : userMapper.selectByIds(userIds).stream()
-                        .collect(Collectors.toMap(User::getId, User::getName, (a, b) -> a));
+        Map<Long, String> userIdToName = userMapper.toNameMap(userIds);
 
         return teachers.stream()
                 .collect(Collectors.toMap(
