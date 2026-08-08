@@ -1,10 +1,8 @@
 package com.xrq.xxq.module.analysis.service.impl;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,9 +17,10 @@ import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.module.analysis.dto.LearningProgressDto;
 import com.xrq.xxq.module.analysis.dto.LearningProgressDto.CourseProgress;
 import com.xrq.xxq.module.analysis.service.ProgressService;
-import com.xrq.xxq.module.analysis.util.StudentScopeResolver;
+import com.xrq.xxq.util.StudentScopeResolver;
 import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
+import com.xrq.xxq.module.clazz.util.ClassNameUtil;
 import com.xrq.xxq.module.course.mapper.CourseMapper;
 import com.xrq.xxq.module.course.service.CourseInfoResolver;
 import com.xrq.xxq.module.exam.entity.Exam;
@@ -112,9 +111,7 @@ public class ProgressServiceImpl implements ProgressService {
                 : teacherMapper.selectByIds(teacherIds).stream()
                         .collect(Collectors.toMap(Teacher::getId, Teacher::getUserId, (a, b) -> a));
         List<Long> teacherUserIds = new ArrayList<>(teacherUserId.values());
-        Map<Long, String> userNameMap = teacherUserIds.isEmpty() ? Map.of()
-                : userMapper.selectByIds(teacherUserIds).stream()
-                        .collect(Collectors.toMap(User::getId, User::getName, (a, b) -> a));
+        Map<Long, String> userNameMap = userMapper.toNameMap(teacherUserIds);
         List<Long> teachInfoIds = infos.stream().map(TeachInfo::getId).toList();
         Map<Long, Exam> examMap = examMapper.selectList(new LambdaQueryWrapper<Exam>()
                         .in(Exam::getTeachInfoId, teachInfoIds)
@@ -172,7 +169,7 @@ public class ProgressServiceImpl implements ProgressService {
             return;
         }
         if (AuthFacade.USER_TYPE_DEPARTMENT.equals(callerUserType)) {
-            if (!scopeResolver.departmentOwnsStudent(callerUserId, studentUserId)) {
+            if (scopeResolver.departmentOwnsStudent (callerUserId, studentUserId)) {
                 throw new BusinessException(403, "权限不足");
             }
             return;
@@ -201,7 +198,7 @@ public class ProgressServiceImpl implements ProgressService {
         // 常规班：teach_info.className（CSV 合班）含学生班级名
         if (studentClassName != null) {
             for (TeachInfo i : semInfos) {
-                if (splitClassNames(i.getClassName()).contains(studentClassName)) {
+                if (ClassNameUtil.splitClassNames(i.getClassName()).contains(studentClassName)) {
                     merged.put(i.getId(), i);
                 }
             }
@@ -239,12 +236,5 @@ public class ProgressServiceImpl implements ProgressService {
         int total = endWeek - startWeek + 1;
         int done = currentWeek - startWeek + 1;
         return Math.min(100, Math.max(0, (int) Math.round(done * 100.0 / total)));
-    }
-
-    private List<String> splitClassNames(String csv) {
-        if (csv == null || csv.isBlank()) {
-            return List.of();
-        }
-        return Arrays.stream(csv.split(",")).map(String::strip).filter(s -> !s.isEmpty()).distinct().toList();
     }
 }
