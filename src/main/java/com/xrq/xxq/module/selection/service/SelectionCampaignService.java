@@ -3,6 +3,8 @@ package com.xrq.xxq.module.selection.service;
 import java.util.List;
 
 import com.baomidou.mybatisplus.spring.service.IService;
+import com.xrq.xxq.common.PageQuery;
+import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.module.selection.dto.CampaignCreateRequest;
 import com.xrq.xxq.module.selection.dto.CampaignResponse;
 import com.xrq.xxq.module.selection.dto.CampaignUpdateRequest;
@@ -16,7 +18,7 @@ public interface SelectionCampaignService extends IService<SelectionCampaign> {
 
     CampaignResponse getDetail(Long id);
 
-    List<CampaignResponse> listAll();
+    PageResult<CampaignResponse> listAll(PageQuery pageQuery);
 
     /**
      * 列出可绑定到指定选课组的选课活动。
