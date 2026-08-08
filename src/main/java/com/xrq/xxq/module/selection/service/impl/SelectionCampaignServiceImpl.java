@@ -11,8 +11,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
+import com.xrq.xxq.common.PageQuery;
+import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.module.course.entity.Course;
 import com.xrq.xxq.module.course.mapper.CourseMapper;
 import com.xrq.xxq.module.semester.entity.Semester;
@@ -213,14 +216,17 @@ public class SelectionCampaignServiceImpl
     }
 
     @Override
-    public List<CampaignResponse> listAll() {
-        List<SelectionCampaign> list = list();
+    public PageResult<CampaignResponse> listAll(PageQuery pageQuery) {
+        Page<SelectionCampaign> page = page(pageQuery.toPage(),
+                new LambdaQueryWrapper<SelectionCampaign>().orderByAsc(SelectionCampaign::getId));
+        List<SelectionCampaign> list = page.getRecords();
         if (list.isEmpty()) {
-            return List.of();
+            return PageResult.of(page, List.of());
         }
-        return list.stream()
+        List<CampaignResponse> records = list.stream()
                 .map(c -> toResponse(c, semesterService.getById(c.getSemesterId()), true))
                 .collect(Collectors.toList());
+        return PageResult.of(page, records);
     }
 
     @Override
