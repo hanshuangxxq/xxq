@@ -20,7 +20,8 @@ public enum NotificationTypeEnum {
     COURSE("COURSE", "课程消息"),
     GRADE("GRADE", "成绩消息"),
     WARNING("WARNING", "学业预警"),
-    TEACHING_EVAL("TEACHING_EVAL", "评教消息");
+    TEACHING_EVAL("TEACHING_EVAL", "评教消息"),
+    PRACTICE("PRACTICE", "实践创新");
 
     @EnumValue
     private final String code;
