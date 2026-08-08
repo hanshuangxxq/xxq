@@ -34,11 +34,9 @@ public class ClassAnalysisController {
     public Result<List<ClassAnalysisDto>> aggregate(HttpServletRequest request,
                                                     @RequestParam(defaultValue = "class") String groupBy,
                                                     @RequestParam(required = false) Long semesterId) {
-        Long userId = authFacade.currentUserId(request);
-        String userType = authFacade.currentUserType(request);
-        authFacade.requireUserTypes(request,
+        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
                 AuthFacade.USER_TYPE_ACADEMIC_ADMIN, AuthFacade.USER_TYPE_DEPARTMENT);
-        return Result.ok(classAnalysisService.aggregate(groupBy, semesterId, userId, userType));
+        return Result.ok(classAnalysisService.aggregate(groupBy, semesterId, ctx.userId(), ctx.userType()));
     }
 
     /** 单组（班级/专业）跨学期趋势。 */
@@ -46,10 +44,8 @@ public class ClassAnalysisController {
     public Result<ClassTrendDto> trend(HttpServletRequest request,
                                        @RequestParam(defaultValue = "class") String groupBy,
                                        @RequestParam String groupKey) {
-        Long userId = authFacade.currentUserId(request);
-        String userType = authFacade.currentUserType(request);
-        authFacade.requireUserTypes(request,
+        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
                 AuthFacade.USER_TYPE_ACADEMIC_ADMIN, AuthFacade.USER_TYPE_DEPARTMENT);
-        return Result.ok(classAnalysisService.trend(groupBy, groupKey, userId, userType));
+        return Result.ok(classAnalysisService.trend(groupBy, groupKey, ctx.userId(), ctx.userType()));
     }
 }
