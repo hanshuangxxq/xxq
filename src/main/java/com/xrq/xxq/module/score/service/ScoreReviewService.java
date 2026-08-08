@@ -3,6 +3,8 @@ package com.xrq.xxq.module.score.service;
 import java.util.List;
 
 import com.baomidou.mybatisplus.spring.service.IService;
+import com.xrq.xxq.common.PageQuery;
+import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.module.score.dto.ReviewApplyRequest;
 import com.xrq.xxq.module.score.dto.ReviewReplyRequest;
 import com.xrq.xxq.module.score.dto.ReviewResolveRequest;
@@ -22,7 +24,7 @@ public interface ScoreReviewService extends IService<ScoreReview> {
     List<ReviewView> listMy(Long studentUserId);
 
     /** 处理人查询待办：教师看其课程相关，教务看全部；可按状态过滤。 */
-    List<ReviewView> listForHandler(Long userId, String userType, ReviewStatusEnum status);
+    PageResult<ReviewView> listForHandler(Long userId, String userType, ReviewStatusEnum status, PageQuery pageQuery);
 
     /** 教师回复（可调分）。 */
     ReviewView teacherReply(Long reviewId, ReviewReplyRequest request, Long userId, String userType);
