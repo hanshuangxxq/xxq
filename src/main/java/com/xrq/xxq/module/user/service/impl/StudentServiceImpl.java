@@ -13,6 +13,7 @@ import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
+import com.xrq.xxq.module.clazz.service.ClassNameService;
 import com.xrq.xxq.module.user.dto.StudentDto;
 import com.xrq.xxq.module.user.dto.UpdateStudentRequest;
 import com.xrq.xxq.module.mojor.entity.Major;
@@ -37,6 +38,7 @@ public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> impl
     private final StudentMapper studentMapper;
     private final UserMapper userMapper;
     private final ClassNameMapper classNameMapper;
+    private final ClassNameService classNameService;
     private final MajorMapper majorMapper;
     private final GradeMapper gradeMapper;
 
@@ -83,8 +85,7 @@ public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> impl
         Set<Long> queriedClassIds = students.stream()
                 .map(Student::getClassId)
                 .collect(Collectors.toSet());
-        Map<Long, String> classNameMap = classNameMapper.selectByIds(queriedClassIds).stream()
-                .collect(Collectors.toMap(ClassName::getId, ClassName::getClassName));
+        Map<Long, String> classNameMap = classNameService.toNameMap(queriedClassIds);
 
         Set<Long> queriedMajorIds = students.stream()
                 .map(Student::getMajorId)
