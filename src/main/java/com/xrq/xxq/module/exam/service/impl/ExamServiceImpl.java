@@ -13,8 +13,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
+import com.xrq.xxq.common.PageQuery;
+import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.module.analysis.util.ScoreStats;
 import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
@@ -126,7 +129,7 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements Ex
     // ==================== 查询 ====================
 
     @Override
-    public List<ExamView> list(Long semesterId, Long courseId, String source, ExamTypeEnum examType) {
+    public PageResult<ExamView> list(Long semesterId, Long courseId, String source, ExamTypeEnum examType, PageQuery pageQuery) {
         LambdaQueryWrapper<Exam> w = new LambdaQueryWrapper<Exam>().orderByDesc(Exam::getExamDate);
         if (semesterId != null) {
             w.eq(Exam::getSemesterId, semesterId);
@@ -137,7 +140,8 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements Ex
         if (examType != null) {
             w.eq(Exam::getExamType, examType);
         }
-        return toViews(baseMapper.selectList(w));
+        Page<Exam> page = baseMapper.selectPage(pageQuery.toPage(), w);
+        return PageResult.of(page, toViews(page.getRecords()));
     }
 
     @Override
