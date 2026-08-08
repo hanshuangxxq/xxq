@@ -13,6 +13,7 @@ import com.xrq.xxq.module.course.dto.UserCourseDto;
 import com.xrq.xxq.module.course.dto.WeekScheduleDto;
 import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.module.clazz.entity.ClassName;
+import com.xrq.xxq.module.clazz.util.ClassNameUtil;
 import com.xrq.xxq.module.course.entity.Course;
 import com.xrq.xxq.module.course.entity.CurseEnum;
 import com.xrq.xxq.module.exam.entity.Exam;
@@ -268,16 +269,14 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
                 }
             }
             case "teacher" -> {
-                Teacher teacher = teacherMapper.selectOne(
-                        new LambdaQueryWrapper<Teacher>().eq(Teacher::getUserId, userId));
+                Teacher teacher = teacherMapper.findByUserId(userId);
                 if (teacher == null) {
                     return null;
                 }
                 wrapper.eq(TeachInfo::getTeacherId, teacher.getId());
             }
             case "department" -> {
-                Department dept = departmentMapper.selectOne(
-                        new LambdaQueryWrapper<Department>().eq(Department::getUserId, userId));
+                Department dept = departmentMapper.findByUserId(userId);
                 if (dept == null) {
                     return null;
                 }
@@ -369,8 +368,7 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
         List<String> classNames = list.stream()
                 .map(TeachInfo::getClassName)
                 .distinct()
-                .flatMap(raw -> java.util.Arrays.stream(raw.split(",")))
-                .map(String::strip)
+                .flatMap(raw -> ClassNameUtil.splitClassNames(raw).stream())
                 .distinct()
                 .toList();
         List<Long> localIds = list.stream().map(TeachInfo::getLocalId).distinct().toList();
@@ -514,17 +512,11 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
 
     /** 合班时拆分班级名，逐个查院系后去重拼接。单班直接返回对应院系。 */
     private String resolveCollege(String className, Map<String, ClassName> classMap) {
-        if (className == null || className.isBlank()) {
-            return null;
-        }
         var colleges = new java.util.LinkedHashSet<String>();
-        for (String part : className.split(",")) {
-            String trimmed = part.strip();
-            if (!trimmed.isEmpty()) {
-                ClassName cls = classMap.get(trimmed);
-                if (cls != null && cls.getCollege() != null && !cls.getCollege().isEmpty()) {
-                    colleges.add(cls.getCollege());
-                }
+        for (String trimmed : ClassNameUtil.splitClassNames(className)) {
+            ClassName cls = classMap.get(trimmed);
+            if (cls != null && cls.getCollege() != null && !cls.getCollege().isEmpty()) {
+                colleges.add(cls.getCollege());
             }
         }
         return colleges.isEmpty() ? null : String.join(",", colleges);
