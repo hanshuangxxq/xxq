@@ -98,8 +98,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 }
             }
             case "teacher" -> {
-                Teacher teacher = teacherMapper.selectOne(new LambdaQueryWrapper<Teacher>()
-                        .eq(Teacher::getUserId, userId));
+                Teacher teacher = teacherMapper.findByUserId(userId);
                 if (teacher != null) {
                     profile.setIdentifier(teacher.getTeacherNo());
                     profile.setTitle(teacher.getTitle());
@@ -115,8 +114,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 }
             }
             case "department" -> {
-                Department dept = departmentMapper.selectOne(new LambdaQueryWrapper<Department>()
-                        .eq(Department::getUserId, userId));
+                Department dept = departmentMapper.findByUserId(userId);
                 if (dept != null) {
                     profile.setIdentifier(dept.getDepartmentNo());
                     profile.setDepartment(dept.getDepartmentName());
