@@ -7,6 +7,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import com.xrq.xxq.common.event.CampaignOpenedEvent;
 import com.xrq.xxq.common.event.GradeFailedEvent;
 import com.xrq.xxq.common.event.ReviewStatusEvent;
+import com.xrq.xxq.common.event.PracticeNoticeEvent;
 import com.xrq.xxq.common.event.WarningActivatedEvent;
 import com.xrq.xxq.module.notification.entity.NotificationTargetEnum;
 import com.xrq.xxq.module.notification.entity.NotificationTypeEnum;
@@ -73,6 +74,16 @@ public class NotificationEventListener {
                     event.senderId());
         } catch (Exception e) {
             log.warn("选课开始广播通知失败: courseName={}", event.courseName(), e);
+        }
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    public void onPracticeNotice(PracticeNoticeEvent event) {
+        try {
+            notificationService.sendToUser(event.studentUserId(), NotificationTypeEnum.PRACTICE,
+                    event.title(), event.content());
+        } catch (Exception e) {
+            log.warn("实践创新通知发送失败: studentUserId={}", event.studentUserId(), e);
         }
     }
 }
