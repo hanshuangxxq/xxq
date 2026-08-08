@@ -339,9 +339,7 @@ public class SelectionClassServiceImpl implements SelectionClassService {
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList();
-        Map<Long, String> teacherUserNameMap = teacherUserIds.isEmpty() ? Map.of()
-                : userMapper.selectByIds(teacherUserIds).stream()
-                        .collect(Collectors.toMap(User::getId, User::getName, (a, b) -> a));
+        Map<Long, String> teacherUserNameMap = userMapper.toNameMap(teacherUserIds);
 
         return classes.stream().map(c -> {
             SelectionClassResponse resp = new SelectionClassResponse();
