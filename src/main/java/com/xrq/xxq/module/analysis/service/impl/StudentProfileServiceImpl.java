@@ -1,7 +1,6 @@
 package com.xrq.xxq.module.analysis.service.impl;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -23,7 +22,8 @@ import com.xrq.xxq.module.analysis.dto.StudentProfileDto.SubjectPerformance;
 import com.xrq.xxq.module.analysis.service.StudentProfileService;
 import com.xrq.xxq.module.analysis.util.CreditSource;
 import com.xrq.xxq.module.analysis.util.GpaCalculator;
-import com.xrq.xxq.module.analysis.util.StudentScopeResolver;
+import com.xrq.xxq.module.analysis.util.ScoreStats;
+import com.xrq.xxq.util.StudentScopeResolver;
 import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
 import com.xrq.xxq.module.course.mapper.CourseMapper;
@@ -102,8 +102,8 @@ public class StudentProfileServiceImpl implements StudentProfileService {
         // 学分与挂科
         dto.setTotalCredits(sumCredits(all, creditSource, false));
         dto.setEarnedCredits(sumCredits(all, creditSource, true));
-        dto.setFailCount((int) all.stream().filter(this::isFail).count());
-        dto.setSemesterFailCount((int) semScores.stream().filter(this::isFail).count());
+        dto.setFailCount((int) all.stream().filter(s -> ScoreStats.isFail(s.getTotalScore())).count());
+        dto.setSemesterFailCount((int) semScores.stream().filter(s -> ScoreStats.isFail(s.getTotalScore())).count());
 
         dto.setLevelDistribution(levelDistribution(all));
         dto.setSemesterTrend(buildTrend(all, creditSource));
@@ -126,7 +126,7 @@ public class StudentProfileServiceImpl implements StudentProfileService {
             return;
         }
         if (AuthFacade.USER_TYPE_DEPARTMENT.equals(callerUserType)) {
-            if (!scopeResolver.departmentOwnsStudent(callerUserId, studentUserId)) {
+            if (scopeResolver.departmentOwnsStudent (callerUserId, studentUserId)) {
                 throw new BusinessException(403, "权限不足");
             }
             return;
@@ -155,10 +155,6 @@ public class StudentProfileServiceImpl implements StudentProfileService {
         return new CreditSource(cc, pc);
     }
 
-    private boolean isFail(Score s) {
-        return s.getTotalScore() != null && s.getTotalScore().doubleValue() < 60;
-    }
-
     /** 学分求和：按课程去重（碰撞安全键）；passedOnly=true 时仅计及格课程。 */
     private Integer sumCredits(List<Score> scores, CreditSource creditSource, boolean passedOnly) {
         int sum = 0;
@@ -172,7 +168,7 @@ public class StudentProfileServiceImpl implements StudentProfileService {
             if (c == null) {
                 continue;
             }
-            if (passedOnly && isFail(s)) {
+            if (passedOnly && ScoreStats.isFail(s.getTotalScore())) {
                 continue;
             }
             sum += c;
@@ -203,17 +199,15 @@ public class StudentProfileServiceImpl implements StudentProfileService {
         if (bySem.isEmpty()) {
             return List.of();
         }
-        Map<Long, Semester> semMap = semesterService.listByIds(bySem.keySet()).stream()
-                .collect(Collectors.toMap(Semester::getId, s -> s, (a, b) -> a));
+        Map<Long, String> semNameMap = semesterService.toNameMap(bySem.keySet());
         List<SemesterGpaTrend> trend = new ArrayList<>();
         for (Map.Entry<Long, List<Score>> e : bySem.entrySet()) {
             SemesterGpaTrend t = new SemesterGpaTrend();
             t.setSemesterId(e.getKey());
-            Semester sem = semMap.get(e.getKey());
-            t.setSemesterName(sem != null ? sem.getName() : null);
+            t.setSemesterName(semNameMap.get(e.getKey()));
             t.setGpa(GpaCalculator.weightedGpa(e.getValue(), creditSource));
-            t.setAvgScore(avgOf(e.getValue()));
-            t.setFailCount((int) e.getValue().stream().filter(this::isFail).count());
+            t.setAvgScore(ScoreStats.avg(e.getValue().stream().map(Score::getTotalScore).filter(Objects::nonNull).toList()));
+            t.setFailCount((int) e.getValue().stream().filter(s -> ScoreStats.isFail(s.getTotalScore())).count());
             trend.add(t);
         }
         trend.sort(Comparator.comparing(SemesterGpaTrend::getSemesterId));
@@ -282,17 +276,5 @@ public class StudentProfileServiceImpl implements StudentProfileService {
         if (myGpa != null) {
             dto.setClassRank(ahead + 1);
         }
-    }
-
-    private BigDecimal avgOf(List<Score> scores) {
-        List<BigDecimal> vals = scores.stream().map(Score::getTotalScore).filter(Objects::nonNull).toList();
-        if (vals.isEmpty()) {
-            return null;
-        }
-        BigDecimal sum = BigDecimal.ZERO;
-        for (BigDecimal v : vals) {
-            sum = sum.add(v);
-        }
-        return sum.divide(BigDecimal.valueOf(vals.size()), 2, RoundingMode.HALF_UP);
     }
 }
