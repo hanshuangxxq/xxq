@@ -119,8 +119,7 @@ public class ClassNameController {
     private Department resolveDepartment(HttpServletRequest request) {
         Long userId = authFacade.requireDepartmentUserId(request);
 
-        Department dept = departmentMapper.selectOne(
-                new LambdaQueryWrapper<Department>().eq(Department::getUserId, userId));
+        Department dept = departmentMapper.findByUserId(userId);
         if (dept == null) {
             throw new BusinessException(403, "未找到您的院系信息");
         }
