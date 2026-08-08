@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
+import com.xrq.xxq.module.analysis.util.ScoreStats;
 import com.xrq.xxq.module.course.mapper.CourseMapper;
 import com.xrq.xxq.module.course.service.CourseInfoResolver;
 import com.xrq.xxq.module.score.dto.ReviewApplyRequest;
@@ -28,12 +29,11 @@ import com.xrq.xxq.module.score.mapper.ScoreReviewMapper;
 import com.xrq.xxq.module.score.service.ScoreReviewService;
 import org.springframework.context.ApplicationEventPublisher;
 import com.xrq.xxq.common.event.ReviewStatusEvent;
-import com.xrq.xxq.module.user.entity.User;
-import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.entity.user.Teacher;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.module.user.mapper.TeacherMapper;
 import com.xrq.xxq.module.user.mapper.UserMapper;
+import com.xrq.xxq.util.ParamValidator;
 import com.xrq.xxq.util.ReferenceValidator;
 import com.xrq.xxq.util.auth.AuthFacade;
 
@@ -62,12 +62,8 @@ public class ScoreReviewServiceImpl extends ServiceImpl<ScoreReviewMapper, Score
     @Override
     @Transactional
     public ReviewView apply(ReviewApplyRequest request, Long studentUserId) {
-        if (request.getScoreId() == null) {
-            throw new BusinessException(400, "成绩ID不能为空");
-        }
-        if (request.getReason() == null || request.getReason().isBlank()) {
-            throw new BusinessException(400, "申请理由不能为空");
-        }
+        ParamValidator.requireNonNull(request.getScoreId(), "成绩ID");
+        ParamValidator.requireNonBlank(request.getReason(), "申请理由");
         Score g = scoreMapper.selectById(request.getScoreId());
         if (g == null) {
             throw new BusinessException(404, "成绩不存在");
@@ -107,8 +103,7 @@ public class ScoreReviewServiceImpl extends ServiceImpl<ScoreReviewMapper, Score
         if (AuthFacade.USER_TYPE_ACADEMIC_ADMIN.equals(userType)) {
             // 教务：全部
         } else if (AuthFacade.USER_TYPE_TEACHER.equals(userType)) {
-            Teacher t = teacherMapper.selectOne(
-                    new LambdaQueryWrapper<Teacher>().eq(Teacher::getUserId, userId));
+            Teacher t = teacherMapper.findByUserId(userId);
             if (t == null) {
                 return List.of();
             }
@@ -144,8 +139,7 @@ public class ScoreReviewServiceImpl extends ServiceImpl<ScoreReviewMapper, Score
         if (g == null) {
             throw new BusinessException(404, "成绩不存在");
         }
-        Teacher t = teacherMapper.selectOne(
-                new LambdaQueryWrapper<Teacher>().eq(Teacher::getUserId, userId));
+        Teacher t = teacherMapper.findByUserId(userId);
         if (t == null || !t.getId().equals(g.getTeacherId())) {
             throw new BusinessException(403, "权限不足");
         }
@@ -216,9 +210,9 @@ public class ScoreReviewServiceImpl extends ServiceImpl<ScoreReviewMapper, Score
         Score g = scoreMapper.selectById(r.getScoreId());
         if (g != null) {
             if (request.getNewTotalScore() != null) {
-                validateScore(request.getNewTotalScore());
+                ScoreStats.validateScore(request.getNewTotalScore());
                 g.setTotalScore(request.getNewTotalScore());
-                g.setScoreLevel(levelOf(request.getNewTotalScore()));
+                g.setScoreLevel(ScoreStats.levelOf(request.getNewTotalScore()));
             }
             g.setLocked(1); // 终审后锁定成绩
             scoreMapper.updateById(g);
@@ -230,9 +224,9 @@ public class ScoreReviewServiceImpl extends ServiceImpl<ScoreReviewMapper, Score
     // ==================== 富化与辅助 ====================
 
     private void adjustTotal(Score g, BigDecimal newTotal) {
-        validateScore(newTotal);
+        ScoreStats.validateScore(newTotal);
         g.setTotalScore(newTotal);
-        g.setScoreLevel(levelOf(newTotal));
+        g.setScoreLevel(ScoreStats.levelOf(newTotal));
         scoreMapper.updateById(g);
     }
 
@@ -248,19 +242,15 @@ public class ScoreReviewServiceImpl extends ServiceImpl<ScoreReviewMapper, Score
         List<Long> teacherIds = gradeMap.values().stream().map(Score::getTeacherId).filter(Objects::nonNull).distinct().toList();
         List<Long> studentUserIds = reviews.stream().map(ScoreReview::getStudentUserId).distinct().toList();
 
-        Map<Long, CourseInfoResolver.CourseInfo> byCourse = courseInfoResolver.resolveCourses(courseIds);
-        Map<Long, CourseInfoResolver.CourseInfo> byCampaign = courseInfoResolver.resolveCampaigns(campaignIds);
+        Map<Long, String> courseNameByCourse = courseInfoResolver.resolveCourseNameMap(courseIds);
+        Map<Long, String> courseNameByCampaign = courseInfoResolver.resolveCampaignNameMap(campaignIds);
         Map<Long, Long> teacherIdToUserId = teacherIds.isEmpty() ? Map.of()
                 : teacherMapper.selectByIds(teacherIds).stream()
                         .collect(Collectors.toMap(Teacher::getId, Teacher::getUserId, (a, b) -> a));
         List<Long> allUserIds = new ArrayList<>(studentUserIds);
         allUserIds.addAll(teacherIdToUserId.values());
-        Map<Long, String> userNameMap = allUserIds.isEmpty() ? Map.of()
-                : userMapper.selectByIds(allUserIds).stream()
-                        .collect(Collectors.toMap(User::getId, User::getName, (a, b) -> a));
-        Map<Long, String> studentNoMap = studentUserIds.isEmpty() ? Map.of()
-                : studentMapper.selectList(new LambdaQueryWrapper<Student>().in(Student::getUserId, studentUserIds))
-                        .stream().collect(Collectors.toMap(Student::getUserId, Student::getStudentNo, (a, b) -> a));
+        Map<Long, String> userNameMap = userMapper.toNameMap(allUserIds);
+        Map<Long, String> studentNoMap = studentMapper.toStudentNoMap(studentUserIds);
 
         return reviews.stream().map(r -> {
             ReviewView v = new ReviewView();
@@ -272,10 +262,9 @@ public class ScoreReviewServiceImpl extends ServiceImpl<ScoreReviewMapper, Score
             Score g = gradeMap.get(r.getScoreId());
             if (g != null) {
                 v.setCourseId(g.getCourseId());
-                CourseInfoResolver.CourseInfo ci = g.getCampaignId() != null
-                        ? byCampaign.get(g.getCampaignId())
-                        : byCourse.get(g.getCourseId());
-                v.setCourseName(ci != null ? ci.getCourseName() : null);
+                v.setCourseName(g.getCampaignId() != null
+                        ? courseNameByCampaign.get(g.getCampaignId())
+                        : courseNameByCourse.get(g.getCourseId()));
                 v.setTeacherId(g.getTeacherId());
                 Long tuid = teacherIdToUserId.get(g.getTeacherId());
                 v.setTeacherName(tuid != null ? userNameMap.get(tuid) : null);
@@ -294,23 +283,5 @@ public class ScoreReviewServiceImpl extends ServiceImpl<ScoreReviewMapper, Score
 
     private void notify(Long studentUserId, String title, String content) {
         eventPublisher.publishEvent(new ReviewStatusEvent(studentUserId, title, content));
-    }
-
-    private void validateScore(BigDecimal s) {
-        if (s == null || s.doubleValue() < 0 || s.doubleValue() > 100) {
-            throw new BusinessException(400, "成绩必须在 0-100 之间");
-        }
-    }
-
-    private String levelOf(BigDecimal total) {
-        if (total == null) {
-            return null;
-        }
-        double t = total.doubleValue();
-        if (t >= 90) return "优";
-        if (t >= 80) return "良";
-        if (t >= 70) return "中";
-        if (t >= 60) return "及格";
-        return "不及格";
     }
 }
