@@ -1266,6 +1266,24 @@ Authorization: Bearer <accessToken>
 | building | String | 教学楼 |
 | classRoom | String | 教室名称 |
 | max | Integer | 教室最大容纳人数 |
+| type | String | 教室类型，响应输出中文描述（普通教室/实验室/机房/报告厅） |
+| managerId | Long | 管理者教师 ID（FK -> teacher.id），实验室/机房必填 |
+| managerName | String | 管理者姓名（响应回显，请求时忽略） |
+
+**教室类型（LocalTypeEnum）**
+
+| name | value | description |
+|------|-------|-------------|
+| CLASSROOM | 1 | 普通教室 |
+| LABORATORY | 2 | 实验室 |
+| COMPUTER_ROOM | 3 | 机房 |
+| LECTURE_HALL | 4 | 报告厅 |
+
+> `type` 请求参数可传 name / value / description（推荐 name），响应输出 description；新增时不传默认普通教室。`GET /api/locals` 支持 `?type=` 筛选。
+>
+> 实验室/机房必须指定管理者（`managerId`），普通教室/报告厅可选；填写时校验教师是否存在。响应回显 `managerName`。
+>
+> 自动排课（`POST /api/scheduling/solve`）仅选取普通教室，实验室/机房/报告厅不参与自动排课。详细接口说明见 `docs/教室管理接口文档.md`。
 
 ---
 
