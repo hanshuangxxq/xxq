@@ -32,7 +32,7 @@ import lombok.RequiredArgsConstructor;
 /**
  * 实习项目接口。
  * <p>
- * 发布/更新/状态/删除/审核：教师（负责本人）或教务；报名/撤销/我的报名：学生。
+ * 发布/更新/状态/删除/审核：院系管理者（负责本人）或教务；报名/撤销/我的报名：学生。
  */
 @RestController
 @RequestMapping("/api/practice/internships")
@@ -45,7 +45,7 @@ public class InternshipController {
     @PostMapping
     public Result<InternshipResponse> create(HttpServletRequest request, @RequestBody InternshipCreateRequest body) {
         AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
+                AuthFacade.USER_TYPE_DEPARTMENT);
         return Result.ok(internshipService.createInternship(ctx.userId(), ctx.userType(), body));
     }
 
@@ -53,7 +53,7 @@ public class InternshipController {
     public Result<InternshipResponse> update(HttpServletRequest request, @PathVariable Long id,
                                              @RequestBody InternshipUpdateRequest body) {
         AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
+                AuthFacade.USER_TYPE_DEPARTMENT, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
         return Result.ok(internshipService.updateInternship(id, body, ctx.userId(), ctx.userType()));
     }
 
@@ -61,7 +61,7 @@ public class InternshipController {
     public Result<Void> changeStatus(HttpServletRequest request, @PathVariable Long id,
                                      @RequestParam InternshipStatusEnum status) {
         AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
+                AuthFacade.USER_TYPE_DEPARTMENT, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
         internshipService.changeInternshipStatus(id, status, ctx.userId(), ctx.userType());
         return Result.ok();
     }
@@ -73,7 +73,7 @@ public class InternshipController {
                                                        @RequestParam(required = false) Integer page,
                                                        @RequestParam(required = false) Integer pageSize) {
         AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
+                AuthFacade.USER_TYPE_DEPARTMENT, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
         return Result.ok(internshipService.listInternships(ctx.userId(), ctx.userType(),
                 supervisorId, status, new PageQuery(page, pageSize)));
     }
@@ -92,7 +92,7 @@ public class InternshipController {
     @DeleteMapping("/{id}")
     public Result<Void> delete(HttpServletRequest request, @PathVariable Long id) {
         AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
+                AuthFacade.USER_TYPE_DEPARTMENT, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
         internshipService.deleteInternship(id, ctx.userId(), ctx.userType());
         return Result.ok();
     }
@@ -115,7 +115,7 @@ public class InternshipController {
     public Result<InternshipApplicationResponse> review(HttpServletRequest request, @PathVariable Long id,
                                                         @RequestBody InternshipReviewRequest body) {
         AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
+                AuthFacade.USER_TYPE_DEPARTMENT, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
         return Result.ok(internshipService.reviewApplication(id, body, ctx.userId(), ctx.userType()));
     }
 
@@ -131,7 +131,7 @@ public class InternshipController {
                                                                                       @RequestParam(required = false) Integer page,
                                                                                       @RequestParam(required = false) Integer pageSize) {
         AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
+                AuthFacade.USER_TYPE_DEPARTMENT, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
         return Result.ok(internshipService.listApplicationsByInternship(internshipId, ctx.userId(), ctx.userType(),
                 new PageQuery(page, pageSize)));
     }
