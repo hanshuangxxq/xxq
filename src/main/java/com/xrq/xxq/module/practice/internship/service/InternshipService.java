@@ -13,7 +13,7 @@ import com.xrq.xxq.module.practice.internship.dto.InternshipUpdateRequest;
 import com.xrq.xxq.module.practice.internship.entity.InternshipStatusEnum;
 
 /**
- * 实习项目服务：发布/审核报名（教师/教务）、学生报名。
+ * 实习项目服务：发布/审核报名（院系管理者/教务）、学生报名。
  */
 public interface InternshipService {
 
