@@ -5,7 +5,7 @@ import java.time.LocalDateTime;
 import lombok.Data;
 
 /**
- * 实习项目创建请求（教师/教务发布）。
+ * 实习项目创建请求（院系管理者发布）。
  */
 @Data
 public class InternshipCreateRequest {
