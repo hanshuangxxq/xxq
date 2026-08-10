@@ -57,6 +57,7 @@ import com.xrq.xxq.module.user.entity.user.Teacher;
 import com.xrq.xxq.module.user.mapper.DepartmentMapper;
 import com.xrq.xxq.module.user.mapper.TeacherMapper;
 import com.xrq.xxq.module.user.mapper.UserMapper;
+import com.xrq.xxq.module.college.mapper.CollegeMapper;
 import com.xrq.xxq.util.DistributedLock;
 import com.xrq.xxq.util.ParamValidator;
 import com.xrq.xxq.util.ReferenceValidator;
@@ -95,6 +96,7 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
     private final SemesterMapper semesterMapper;
     private final StudentEnrollmentResolver enrollmentResolver;
     private final TeacherNameResolver teacherNameResolver;
+    private final CollegeMapper collegeMapper;
 
     // ==================== 评教提交 ====================
 
@@ -375,7 +377,9 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
             sw.eq(Score::getSemesterId, semesterId);
         }
         List<Score> scores = scoreMapper.selectList(sw);
-        TeacherQualityDto dto = buildQuality(teacher, evals, scores);
+        Map<Long, String> collegeNameMap = collegeMapper.toNameMap(
+                teacher.getCollegeId() != null ? List.of(teacher.getCollegeId()) : List.of());
+        TeacherQualityDto dto = buildQuality(teacher, evals, scores, collegeNameMap);
         if (teacher.getUserId() != null) {
             User u = userMapper.selectById(teacher.getUserId());
             dto.setTeacherName(u != null ? u.getName() : null);
@@ -397,9 +401,9 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
         List<Teacher> teachers = teacherMapper.selectList(new LambdaQueryWrapper<>());
         if (AuthFacade.USER_TYPE_DEPARTMENT.equals(callerUserType)) {
             Department dept = departmentMapper.findByUserId(callerUserId);
-            String deptName = dept != null ? dept.getDepartmentName() : null;
+            Long collegeId = dept != null ? dept.getCollegeId() : null;
             teachers = teachers.stream()
-                    .filter(t -> deptName != null && deptName.equals(t.getDepartment()))
+                    .filter(t -> collegeId != null && collegeId.equals(t.getCollegeId()))
                     .toList();
         } else if (!AuthFacade.USER_TYPE_ACADEMIC_ADMIN.equals(callerUserType)) {
             throw new BusinessException(403, "权限不足");
@@ -430,6 +434,8 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
                 .filter(t -> t.getUserId() != null)
                 .collect(Collectors.toMap(Teacher::getId, Teacher::getUserId, (a, b) -> a));
         Map<Long, String> userNameMap = userMapper.toNameMap(teacherUserId.values());
+        Map<Long, String> collegeNameMap = collegeMapper.toNameMap(
+                teachers.stream().map(Teacher::getCollegeId).filter(Objects::nonNull).distinct().toList());
 
         List<TeacherQualityDto> result = new ArrayList<>();
         for (Teacher t : teachers) {
@@ -438,7 +444,7 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
             if (evals.isEmpty() && scores.isEmpty()) {
                 continue; // 无教学数据，跳过
             }
-            TeacherQualityDto dto = buildQuality(t, evals, scores);
+            TeacherQualityDto dto = buildQuality(t, evals, scores, collegeNameMap);
             dto.setTeacherName(userNameMap.get(teacherUserId.get(t.getId())));
             result.add(dto);
         }
@@ -461,7 +467,7 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
         }
         if (AuthFacade.USER_TYPE_DEPARTMENT.equals(callerUserType)) {
             Department dept = departmentMapper.findByUserId(callerUserId);
-            if (dept == null || !dept.getDepartmentName().equals(teacher.getDepartment())) {
+            if (dept == null || !Objects.equals(dept.getCollegeId(), teacher.getCollegeId())) {
                 throw new BusinessException(403, "权限不足");
             }
             return;
@@ -470,11 +476,12 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
     }
 
     /** 由已加载的评教与成绩列表组装质量 DTO。itemAverages 按 teaching_evaluation_score 快照指标名分组。 */
-    private TeacherQualityDto buildQuality(Teacher teacher, List<TeachingEvaluation> evals, List<Score> scores) {
+    private TeacherQualityDto buildQuality(Teacher teacher, List<TeachingEvaluation> evals, List<Score> scores,
+                                           Map<Long, String> collegeNameMap) {
         TeacherQualityDto dto = new TeacherQualityDto();
         dto.setTeacherId(teacher.getId());
         dto.setTeacherName(null); // 由调用方按需富化（批量场景已在外部解析）
-        dto.setDepartment(teacher.getDepartment());
+        dto.setDepartment(collegeNameMap.get(teacher.getCollegeId()));
 
         // 评教侧
         dto.setEvalCount(evals.size());
