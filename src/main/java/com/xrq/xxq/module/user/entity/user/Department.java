@@ -16,7 +16,5 @@ public class Department {
     @TableId (type = IdType.AUTO)
     private Long id;
     private Long userId;
-    private String departmentNo;
-    private String departmentName;
-    private String deptCode;
+    private Long collegeId;     // 所属院系 -> college.id（该管理员管理的院系）
 }
