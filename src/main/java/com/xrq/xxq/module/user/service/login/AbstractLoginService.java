@@ -82,10 +82,6 @@ public abstract class AbstractLoginService implements LoginService {
                         .eq(Teacher::getTeacherNo, account));
                     if (teacher != null) {return userMapper.selectById(teacher.getUserId());}
                 }
-                case "d" -> { Department department = departmentMapper.selectOne(new LambdaQueryWrapper<Department>()
-                        .eq(Department::getDepartmentNo, account));
-                    if (department != null) {return userMapper.selectById(department.getUserId());}
-                }
                 case "a" -> { AcademicAdmin academicAdmin = academicAdminMapper.selectOne(new LambdaQueryWrapper<AcademicAdmin>()
                         .eq(AcademicAdmin::getDepartmentNo, account));
                     if (academicAdmin != null) {return userMapper.selectById(academicAdmin.getUserId());}
@@ -216,16 +212,9 @@ public abstract class AbstractLoginService implements LoginService {
                 academicAdminMapper.insert(admin);
             }
             case "department" -> {
-                if (identifier != null && !identifier.isBlank()) {
-                    Long cnt = departmentMapper.selectCount(new LambdaQueryWrapper<Department>()
-                            .eq(Department::getDepartmentNo, identifier));
-                    if (cnt != null && cnt > 0) {
-                        throw new BusinessException(409, "部门编号已存在");
-                    }
-                }
                 Department dept = new Department();
                 dept.setUserId(user.getId());
-                dept.setDepartmentNo(identifier);
+                dept.setCollegeId(request.getCollegeId());
                 departmentMapper.insert(dept);
             }
             default -> throw new IllegalArgumentException("不支持的用户类型: " + request.getUserType());
