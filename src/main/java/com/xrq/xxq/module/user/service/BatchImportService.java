@@ -19,6 +19,8 @@ import com.xrq.xxq.module.user.entity.user.Grade;
 import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.entity.user.Teacher;
 import com.xrq.xxq.module.mojor.mapper.MajorMapper;
+import com.xrq.xxq.module.college.mapper.CollegeMapper;
+import com.xrq.xxq.module.college.entity.College;
 import com.xrq.xxq.module.user.mapper.GradeMapper;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.module.user.mapper.TeacherMapper;
@@ -37,6 +39,7 @@ public class BatchImportService {
     private final TeacherMapper teacherMapper;
     private final MajorMapper majorMapper;
     private final GradeMapper gradeMapper;
+    private final CollegeMapper collegeMapper;
     private final PlatformTransactionManager transactionManager;
 
     public BatchImportResponse batchImport(List<UserImportItem> items) {
@@ -121,7 +124,7 @@ public class BatchImportService {
             Teacher teacher = new Teacher();
             teacher.setUserId(user.getId());
             teacher.setTeacherNo(item.getIdentifier());
-            teacher.setDepartment(item.getDepartment());
+            teacher.setCollegeId(resolveCollegeId(item.getDepartment()));
             teacherMapper.insert(teacher);
         }
     }
@@ -160,5 +163,17 @@ public class BatchImportService {
             throw new BusinessException(400, "年级不存在：" + gradeName.strip() + "，请先在基础数据中创建");
         }
         return grade.getId();
+    }
+
+    /** 按院系名称解析 college_id（教师导入：department 字段为院系名；找不到则报错）。 */
+    private Long resolveCollegeId(String collegeName) {
+        if (collegeName == null || collegeName.isBlank()) {
+            return null;
+        }
+        College college = collegeMapper.findByName(collegeName.strip());
+        if (college == null) {
+            throw new BusinessException(400, "院系不存在：" + collegeName.strip() + "，请先在基础数据中创建");
+        }
+        return college.getId();
     }
 }
