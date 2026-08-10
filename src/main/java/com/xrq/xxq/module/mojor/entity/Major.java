@@ -14,4 +14,5 @@ public class Major {
     @TableId(type = IdType.AUTO)
     private Long id;
     private String majorName;
+    private Long collegeId;     // 所属院系 -> college.id
 }
