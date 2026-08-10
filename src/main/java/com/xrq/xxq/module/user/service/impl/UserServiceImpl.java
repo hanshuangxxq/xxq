@@ -18,6 +18,8 @@ import com.xrq.xxq.module.user.mapper.GradeMapper;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.module.user.mapper.TeacherMapper;
 import com.xrq.xxq.module.user.mapper.UserMapper;
+import com.xrq.xxq.module.college.mapper.CollegeMapper;
+import com.xrq.xxq.module.college.entity.College;
 import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.module.user.entity.user.Grade;
 import com.xrq.xxq.module.user.service.UserService;
@@ -38,6 +40,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     private final MajorMapper majorMapper;
     private final GradeMapper gradeMapper;
     private final LoginSessionStore sessionStore;
+    private final CollegeMapper collegeMapper;
 
     @Override
     public UserProfileResponse getProfile(Long userId, String tokenId) {
@@ -102,7 +105,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 if (teacher != null) {
                     profile.setIdentifier(teacher.getTeacherNo());
                     profile.setTitle(teacher.getTitle());
-                    profile.setDepartment(teacher.getDepartment());
+                    profile.setDepartment(collegeNameOf(teacher.getCollegeId()));
                 }
             }
             case "academic_admin" -> {
@@ -116,11 +119,19 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             case "department" -> {
                 Department dept = departmentMapper.findByUserId(userId);
                 if (dept != null) {
-                    profile.setIdentifier(dept.getDepartmentNo());
-                    profile.setDepartment(dept.getDepartmentName());
+                    profile.setDepartment(collegeNameOf(dept.getCollegeId()));
                     profile.setPosition("院系管理员");
                 }
             }
         }
+    }
+
+    /** 解析 college_id -> 院系名称（无匹配返回 null）。 */
+    private String collegeNameOf(Long collegeId) {
+        if (collegeId == null) {
+            return null;
+        }
+        College college = collegeMapper.selectById(collegeId);
+        return college != null ? college.getCollegeName() : null;
     }
 }
