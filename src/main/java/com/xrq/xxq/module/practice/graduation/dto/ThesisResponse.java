@@ -10,7 +10,7 @@ import lombok.Data;
 public class ThesisResponse {
 
     private Long id;
-    private Long selectionId;
+    private Long assignmentId;
     private Long studentId;
     private String studentName;
     private Long teacherId;
