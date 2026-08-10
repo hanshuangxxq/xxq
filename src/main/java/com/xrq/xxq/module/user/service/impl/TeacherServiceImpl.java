@@ -15,6 +15,7 @@ import com.xrq.xxq.module.user.entity.user.Teacher;
 import com.xrq.xxq.module.user.mapper.TeacherMapper;
 import com.xrq.xxq.module.user.mapper.UserMapper;
 import com.xrq.xxq.module.user.service.TeacherService;
+import com.xrq.xxq.module.college.mapper.CollegeMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -23,6 +24,7 @@ import org.springframework.stereotype.Service;
 public class TeacherServiceImpl extends ServiceImpl<TeacherMapper, Teacher> implements TeacherService {
     private final TeacherMapper teacherMapper;
     private final UserMapper userMapper;
+    private final CollegeMapper collegeMapper;
 
     @Override
     public PageResult<TeacherDto> listTeachers(PageQuery pageQuery) {
@@ -34,6 +36,8 @@ public class TeacherServiceImpl extends ServiceImpl<TeacherMapper, Teacher> impl
         }
         Map<Long, String> userIdToName = userMapper.selectList(null).stream()
                 .collect(Collectors.toMap(User::getId, User::getName, (a, b) -> a));
+        Map<Long, String> collegeNameMap = collegeMapper.toNameMap(
+                teachers.stream().map(Teacher::getCollegeId).filter(java.util.Objects::nonNull).distinct().toList());
 
         List<TeacherDto> records = teachers.stream()
                 .map(t -> {
@@ -42,7 +46,7 @@ public class TeacherServiceImpl extends ServiceImpl<TeacherMapper, Teacher> impl
                     dto.setName(userIdToName.getOrDefault(t.getUserId(), "未知"));
                     dto.setTeacherNo(t.getTeacherNo());
                     dto.setTitle(t.getTitle());
-                    dto.setDepartment(t.getDepartment());
+                    dto.setDepartment(collegeNameMap.get(t.getCollegeId()));
                     return dto;
                 })
                 .toList();
