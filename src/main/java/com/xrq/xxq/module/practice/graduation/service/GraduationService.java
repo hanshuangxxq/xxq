@@ -2,58 +2,76 @@ package com.xrq.xxq.module.practice.graduation.service;
 
 import java.util.List;
 
+import com.baomidou.mybatisplus.spring.service.IService;
 import com.xrq.xxq.common.PageQuery;
 import com.xrq.xxq.common.PageResult;
-import com.xrq.xxq.module.practice.graduation.dto.SelectionApplyRequest;
-import com.xrq.xxq.module.practice.graduation.dto.SelectionResponse;
-import com.xrq.xxq.module.practice.graduation.dto.SelectionReviewRequest;
-import com.xrq.xxq.module.practice.graduation.dto.TopicCreateRequest;
-import com.xrq.xxq.module.practice.graduation.dto.TopicResponse;
-import com.xrq.xxq.module.practice.graduation.dto.TopicUpdateRequest;
-import com.xrq.xxq.module.practice.graduation.entity.TopicStatusEnum;
+import com.xrq.xxq.module.practice.graduation.dto.AllocationRequest;
+import com.xrq.xxq.module.practice.graduation.dto.AssignmentResponse;
+import com.xrq.xxq.module.practice.graduation.dto.AssignmentReviewRequest;
+import com.xrq.xxq.module.practice.graduation.dto.CampaignCreateRequest;
+import com.xrq.xxq.module.practice.graduation.dto.CampaignResponse;
+import com.xrq.xxq.module.practice.graduation.dto.CampaignUpdateRequest;
+import com.xrq.xxq.module.practice.graduation.dto.GraduationExportRow;
+import com.xrq.xxq.module.practice.graduation.dto.PickRequest;
+import com.xrq.xxq.module.practice.graduation.dto.ProposalDeclareRequest;
+import com.xrq.xxq.module.practice.graduation.dto.ProposalResponse;
+import com.xrq.xxq.module.practice.graduation.dto.ProposalReviewRequest;
+import com.xrq.xxq.module.practice.graduation.entity.CampaignStatusEnum;
+import com.xrq.xxq.module.practice.graduation.entity.GraduationCampaign;
 
 /**
- * 毕业设计选题服务：教师发布/审核、学生申请、教务查看。
+ * 毕业选题活动服务。
+ * <p>
+ * 流程：教务开启活动 -> 学生自拟选题 -> 院系初审(本学院) -> 教师自选/院系分配 -> 教务最终审查+导出。
  */
-public interface GraduationService {
+public interface GraduationService extends IService<GraduationCampaign> {
 
-    TopicResponse createTopic(Long teacherUserId, TopicCreateRequest request);
+    // ---- 教务 ----
+    CampaignResponse createCampaign(CampaignCreateRequest request);
 
-    TopicResponse updateTopic(Long topicId, TopicUpdateRequest request, Long operatorUserId, String userType);
+    CampaignResponse updateCampaign(Long id, CampaignUpdateRequest request);
 
-    /** 开放/关闭选题。 */
-    void changeTopicStatus(Long topicId, TopicStatusEnum status, Long operatorUserId, String userType);
+    /** 开放/关闭活动。 */
+    void changeCampaignStatus(Long id, CampaignStatusEnum status);
 
-    /**
-     * 选题列表。
-     * <ul>
-     *   <li>教务：全部，teacherId 可选过滤。</li>
-     *   <li>教师：仅本人发布的选题。</li>
-     * </ul>
-     */
-    PageResult<TopicResponse> listTopics(Long operatorUserId, String userType,
-                                         Long teacherId, TopicStatusEnum status, PageQuery pageQuery);
+    PageResult<CampaignResponse> listCampaigns(PageQuery pageQuery);
 
-    TopicResponse getTopic(Long topicId);
+    CampaignResponse getCampaign(Long id);
 
-    /** 学生可见的开放选题（OPEN 且未满）。 */
-    List<TopicResponse> listAvailableTopics(Long studentUserId);
+    /** 教务最终审查匹配记录（通过/驳回；驳回则学生回匹配池）。 */
+    AssignmentResponse reviewAssignment(Long assignmentId, AssignmentReviewRequest request);
 
-    /** 学生申请选题。 */
-    SelectionResponse applyTopic(Long studentUserId, SelectionApplyRequest request);
+    /** 导出活动全部申报（含匹配信息）供送查重。 */
+    List<GraduationExportRow> exportAssignments(Long campaignId);
 
-    /** 学生撤销申请。 */
-    void cancelApplication(Long studentUserId, Long applicationId);
+    // ---- 学生 ----
+    ProposalResponse declareProposal(Long studentUserId, ProposalDeclareRequest request);
 
-    /** 审核申请（通过/驳回）。教师仅本人选题，教务任意。 */
-    SelectionResponse reviewApplication(Long applicationId, SelectionReviewRequest request, Long operatorUserId, String userType);
+    void cancelProposal(Long studentUserId, Long proposalId);
 
-    /** 学生查看我的申请。 */
-    List<SelectionResponse> listMyApplications(Long studentUserId);
+    List<ProposalResponse> listMyProposals(Long studentUserId);
 
-    /** 按选题查看申请列表（教师查本选题 / 教务查任意）。 */
-    PageResult<SelectionResponse> listApplicationsByTopic(Long topicId, Long operatorUserId,
-                                                          String userType, PageQuery pageQuery);
+    /** 学生查看自己在某活动的匹配结果（无匹配返回 null）。 */
+    AssignmentResponse getMyAssignment(Long studentUserId, Long campaignId);
 
-    void deleteTopic(Long topicId, Long operatorUserId, String userType);
+    // ---- 院系管理者 ----
+    ProposalResponse reviewProposal(Long deptUserId, Long proposalId, ProposalReviewRequest request);
+
+    AssignmentResponse allocateStudent(Long deptUserId, AllocationRequest request);
+
+    /** 本学院匹配池（DEPT_APPROVED 未匹配）。 */
+    List<ProposalResponse> listDeptPool(Long deptUserId, Long campaignId);
+
+    /** 本学院匹配记录。 */
+    List<AssignmentResponse> listDeptAssignments(Long deptUserId, Long campaignId);
+
+    // ---- 教师 ----
+    AssignmentResponse pickStudent(Long teacherUserId, PickRequest request);
+
+    void cancelPick(Long teacherUserId, Long assignmentId);
+
+    List<AssignmentResponse> listTeacherAssignments(Long teacherUserId, Long campaignId);
+
+    /** 教师可自选的本学院匹配池。 */
+    List<ProposalResponse> listPickableProposals(Long teacherUserId, Long campaignId);
 }
