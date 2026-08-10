@@ -40,7 +40,7 @@ import lombok.RequiredArgsConstructor;
 /**
  * 实习成果报告接口。
  * <p>
- * 提交：学生；评审：教师（负责本人）/教务；列表：教师/教务；下载：学生本人/负责教师/教务。
+ * 提交：学生；评审/列表：院系管理者（负责本人）/教务；下载：学生本人/负责院系管理者/教务。
  */
 @RestController
 @RequestMapping("/api/practice/internship-reports")
@@ -71,7 +71,7 @@ public class InternshipReportController {
                                                              @RequestParam(required = false) Integer page,
                                                              @RequestParam(required = false) Integer pageSize) {
         AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
+                AuthFacade.USER_TYPE_DEPARTMENT, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
         return Result.ok(reportService.listForHandler(ctx.userId(), ctx.userType(), status, new PageQuery(page, pageSize)));
     }
 
@@ -79,15 +79,15 @@ public class InternshipReportController {
     public Result<InternshipReportResponse> review(HttpServletRequest request, @PathVariable Long id,
                                                    @RequestBody InternshipReportReviewRequest body) {
         AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
+                AuthFacade.USER_TYPE_DEPARTMENT, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
         return Result.ok(reportService.review(id, body, ctx.userId(), ctx.userType()));
     }
 
-    /** 删除报告（教务全权；教师负责实习；学生仅本人且未评审）。 */
+    /** 删除报告（教务全权；院系管理者负责实习；学生仅本人且未评审）。 */
     @DeleteMapping("/{id}")
     public Result<Void> delete(HttpServletRequest request, @PathVariable Long id) {
         AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_ACADEMIC_ADMIN, AuthFacade.USER_TYPE_STUDENT);
+                AuthFacade.USER_TYPE_DEPARTMENT, AuthFacade.USER_TYPE_ACADEMIC_ADMIN, AuthFacade.USER_TYPE_STUDENT);
         reportService.deleteReport(id, ctx.userId(), ctx.userType());
         return Result.ok();
     }
@@ -95,7 +95,7 @@ public class InternshipReportController {
     @GetMapping("/{id}/download")
     public ResponseEntity<Resource> download(HttpServletRequest request, @PathVariable Long id) {
         AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_ACADEMIC_ADMIN, AuthFacade.USER_TYPE_STUDENT);
+                AuthFacade.USER_TYPE_DEPARTMENT, AuthFacade.USER_TYPE_ACADEMIC_ADMIN, AuthFacade.USER_TYPE_STUDENT);
         InternshipReport report = reportService.loadForDownload(id, ctx.userId(), ctx.userType());
         Path file = fileService.resolve(report.getFileName());
         String filename = report.getFileOriginal() != null ? report.getFileOriginal() : report.getFileName();
