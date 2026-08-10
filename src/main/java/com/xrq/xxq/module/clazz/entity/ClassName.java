@@ -14,5 +14,5 @@ public class ClassName {
     @TableId(type = IdType.AUTO)
     private Long id;
     private String className; // 班级名称
-    private String college; // 学院
+    private Long collegeId; // 所属院系 -> college.id
 }
