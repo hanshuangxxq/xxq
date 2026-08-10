@@ -1,6 +1,7 @@
 package com.xrq.xxq.module.clazz.controller;
 
 import java.util.List;
+import java.util.Objects;
 
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -61,7 +62,7 @@ public class ClassNameController {
         LambdaQueryWrapper<ClassName> wrapper = new LambdaQueryWrapper<>();
         if (AuthFacade.USER_TYPE_DEPARTMENT.equals(userType)) {
             Department dept = resolveDepartment(request);
-            wrapper.eq(ClassName::getCollege, dept.getDepartmentName());
+            wrapper.eq(ClassName::getCollegeId, dept.getCollegeId());
         }
         Page<ClassName> result = classNameService.page(pageQuery.toPage(), wrapper);
         return Result.ok(PageResult.of(result, result.getRecords()));
@@ -72,7 +73,7 @@ public class ClassNameController {
     public Result<List<ClassName>> listByDepartment(HttpServletRequest request) {
         Department dept = resolveDepartment(request);
         List<ClassName> list = classNameService.list(
-                new LambdaQueryWrapper<ClassName>().eq(ClassName::getCollege, dept.getDepartmentName()));
+                new LambdaQueryWrapper<ClassName>().eq(ClassName::getCollegeId, dept.getCollegeId()));
         return Result.ok(list);
     }
 
@@ -86,7 +87,7 @@ public class ClassNameController {
         String userType = authFacade.currentUserType(request);
         if (AuthFacade.USER_TYPE_DEPARTMENT.equals(userType)) {
             Department dept = resolveDepartment(request);
-            if (!dept.getDepartmentName().equals(className.getCollege())) {
+            if (!Objects.equals(dept.getCollegeId(), className.getCollegeId())) {
                 throw new BusinessException(403, "无权查看其他院系的班级");
             }
         }
