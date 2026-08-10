@@ -8,7 +8,7 @@ import lombok.Data;
 @Data
 public class ThesisSubmitRequest {
 
-    private Long selectionId;
+    private Long assignmentId;
     private String title;
     private String abstractText;
 }
