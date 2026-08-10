@@ -13,7 +13,7 @@ import lombok.Data;
  * 毕业论文实体（学生提交 + 教师评审）。
  * <p>
  * file_name 为磁盘存储名（UUID），file_original 为原始文件名（展示/下载用）。
- * 学生须有 APPROVED 的选题申请后方可提交论文。
+ * 学生须有已匹配的选题（assignment）后方可提交论文。
  */
 @Data
 @TableName("thesis")
@@ -21,7 +21,7 @@ public class Thesis {
 
     @TableId(type = IdType.AUTO)
     private Long id;
-    private Long selectionId;
+    private Long assignmentId;       // 关联 graduation_assignment.id
     private Long studentId;          // 学生 user.id
     private Long teacherId;          // 指导教师 user.id
     private String title;
