@@ -11,7 +11,7 @@ import com.xrq.xxq.module.practice.internship.dto.TrainingUpdateRequest;
 import com.xrq.xxq.module.practice.internship.entity.TrainingStatusEnum;
 
 /**
- * 培训课程服务：发布（教师/教务）、学生报名（即报即生效）。
+ * 培训课程服务：发布（院系管理者）、学生报名（即报即生效）。
  */
 public interface TrainingService {
 
