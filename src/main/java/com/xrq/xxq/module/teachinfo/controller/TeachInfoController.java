@@ -141,7 +141,7 @@ public class TeachInfoController {
 
         if (AuthFacade.USER_TYPE_DEPARTMENT.equals(userType)) {
             Department dept = resolveDepartment(request);
-            return Result.ok(draftCacheManager.getDraftsByCollege(dept.getDepartmentName()));
+            return Result.ok(draftCacheManager.getDraftsByCollege(dept.getCollegeId()));
         }
 
         return Result.ok(List.of());
@@ -220,7 +220,7 @@ public class TeachInfoController {
 
         if (AuthFacade.USER_TYPE_DEPARTMENT.equals(userType)) {
             Department dept = resolveDepartment(request);
-            List<DraftItem> deptDrafts = draftCacheManager.getDraftsByCollege(dept.getDepartmentName());
+            List<DraftItem> deptDrafts = draftCacheManager.getDraftsByCollege(dept.getCollegeId());
             boolean belongsToDept = deptDrafts.stream()
                     .anyMatch(d -> courseId.equals(d.getCourseId())
                             && teacherId.equals(d.getTeacherId())
@@ -251,7 +251,7 @@ public class TeachInfoController {
 
         if (AuthFacade.USER_TYPE_DEPARTMENT.equals(userType)) {
             Department dept = resolveDepartment(request);
-            List<DraftItem> deptDrafts = draftCacheManager.getDraftsByCollege(dept.getDepartmentName());
+            List<DraftItem> deptDrafts = draftCacheManager.getDraftsByCollege(dept.getCollegeId());
             boolean belongsToDept = deptDrafts.stream()
                     .anyMatch(d -> {
                         String cn = d.getClassName();
@@ -287,7 +287,7 @@ public class TeachInfoController {
 
         if (AuthFacade.USER_TYPE_DEPARTMENT.equals(userType)) {
             Department dept = resolveDepartment(request);
-            return draftCacheManager.getDraftsByCollege(dept.getDepartmentName());
+            return draftCacheManager.getDraftsByCollege(dept.getCollegeId());
         }
 
         return List.of();
