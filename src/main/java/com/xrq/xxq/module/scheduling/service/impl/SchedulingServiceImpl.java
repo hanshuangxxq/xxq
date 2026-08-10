@@ -18,6 +18,7 @@ import com.xrq.xxq.module.teachinfo.entity.TeachInfo;
 import com.xrq.xxq.module.time.entity.Time;
 import com.xrq.xxq.module.time.entity.TimeRestriction;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
+import com.xrq.xxq.module.college.mapper.CollegeMapper;
 import com.xrq.xxq.module.course.service.CourseInfoResolver;
 import com.xrq.xxq.module.local.entity.LocalTypeEnum;
 import com.xrq.xxq.module.local.mapper.LocalMapper;
@@ -76,6 +77,7 @@ public class SchedulingServiceImpl implements SchedulingService {
     private final CourseInfoResolver courseInfoResolver;
     private final StudentMapper studentMapper;
     private final ClassNameMapper classNameMapper;
+    private final CollegeMapper collegeMapper;
     private final TimeRestrictionMapper timeRestrictionMapper;
     private final SelectionClassMapper selectionClassMapper;
     private final SelectionClassMemberMapper selectionClassMemberMapper;
@@ -295,10 +297,12 @@ public class SchedulingServiceImpl implements SchedulingService {
                         cn -> cn.getClassName(),
                         cn -> cn.getId(),
                         (a, b) -> a));
+        Map<Long, String> collegeNameMap = collegeMapper.toNameMap(
+                allClasses.stream().map(ClassName::getCollegeId).filter(Objects::nonNull).distinct().toList());
         Map<String, String> classNameToCollege = allClasses.stream()
                 .collect(Collectors.toMap(
                         ClassName::getClassName,
-                        cn -> cn.getCollege() != null ? cn.getCollege() : "",
+                        cn -> cn.getCollegeId() != null ? collegeNameMap.getOrDefault(cn.getCollegeId(), "") : "",
                         (a, b) -> a));
 
         // 选课班：teachInfoId -> SelectionClass.studentCount
