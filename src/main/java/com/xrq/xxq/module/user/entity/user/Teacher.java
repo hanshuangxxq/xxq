@@ -15,6 +15,6 @@ public class Teacher {
     private Long userId;                // FK → user.id
     private String teacherNo;           // 教师编号
     private String title;               // 职称
-    private String department;          // 所属部门
+    private Long collegeId;             // 所属院系 -> college.id
     private LocalDate hireDate;         // 参加工作日期
 }
