@@ -122,7 +122,7 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
         }
         if (AuthFacade.USER_TYPE_DEPARTMENT.equals(userType)) {
             Department dept = departmentMapper.findByUserId(userId);
-            if (dept != null && belongsToCollege(info.getClassName(), dept.getDepartmentName())) {
+            if (dept != null && belongsToCollege(info.getClassName(), dept.getCollegeId())) {
                 return;
             }
             throw new BusinessException(403, "权限不足");
@@ -603,12 +603,12 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
         return regularPart.add(finalPart);
     }
 
-    private boolean belongsToCollege(String classNamesCsv, String college) {
+    private boolean belongsToCollege(String classNamesCsv, Long collegeId) {
         List<String> names = ClassNameUtil.splitClassNames(classNamesCsv);
-        if (names.isEmpty()) {
+        if (names.isEmpty() || collegeId == null) {
             return false;
         }
         return classNameMapper.selectList(new LambdaQueryWrapper<ClassName>().in(ClassName::getClassName, names))
-                .stream().anyMatch(c -> college != null && college.equals(c.getCollege()));
+                .stream().anyMatch(c -> collegeId.equals(c.getCollegeId()));
     }
 }
