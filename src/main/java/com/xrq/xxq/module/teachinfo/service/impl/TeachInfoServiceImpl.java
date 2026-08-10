@@ -14,6 +14,7 @@ import com.xrq.xxq.module.course.dto.WeekScheduleDto;
 import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.clazz.util.ClassNameUtil;
+import com.xrq.xxq.module.college.mapper.CollegeMapper;
 import com.xrq.xxq.module.course.entity.Course;
 import com.xrq.xxq.module.course.entity.CurseEnum;
 import com.xrq.xxq.module.exam.entity.Exam;
@@ -78,6 +79,7 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
     private final SemesterMapper semesterMapper;
     private final StudentEnrollmentResolver enrollmentResolver;
     private final TeacherNameResolver teacherNameResolver;
+    private final CollegeMapper collegeMapper;
 
     @Override
     public CourseDto getDetailById(Long id, Long userId, String userType) {
@@ -276,7 +278,7 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
                 }
                 List<String> classNames = classNameMapper.selectList(
                                 new LambdaQueryWrapper<ClassName>()
-                                        .eq(ClassName::getCollege, dept.getDepartmentName()))
+                                        .eq(ClassName::getCollegeId, dept.getCollegeId()))
                         .stream()
                         .map(ClassName::getClassName)
                         .toList();
@@ -364,6 +366,13 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
 
         Map<Long, String> teacherNameMap = teacherNameResolver.namesForTeachers(teacherMap.values());
 
+        // 院系名称解析：教师 collegeId + 班级 collegeId -> college.name（用于展示 department/college）
+        List<Long> collegeIds = java.util.stream.Stream.concat(
+                teacherMap.values().stream().map(Teacher::getCollegeId),
+                classMap.values().stream().map(ClassName::getCollegeId))
+                .filter(Objects::nonNull).distinct().toList();
+        Map<Long, String> collegeNameMap = collegeMapper.toNameMap(collegeIds);
+
         // 选课班及其活动：teachInfoId -> SelectionClass，campaignId -> SelectionCampaign
         // 用于公选课（PUBLIC）富化选课活动专属字段，前端无需再调 selection 接口合并
         List<Long> teachInfoIds = list.stream().map(TeachInfo::getId).filter(Objects::nonNull).distinct().toList();
@@ -400,12 +409,12 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
 
             Teacher teacher = teacherMap.get(info.getTeacherId());
             if (teacher != null) {
-                resp.setDepartment(teacher.getDepartment());
+                resp.setDepartment(collegeNameMap.get(teacher.getCollegeId()));
                 resp.setTeacherName(teacherNameMap.get(info.getTeacherId()));
             }
 
             resp.setClassName(info.getClassName());
-            resp.setCollege(resolveCollege(info.getClassName(), classMap));
+            resp.setCollege(resolveCollege(info.getClassName(), classMap, collegeNameMap));
 
             resp.setDayOfWeek(info.getDayOfWeek());
             resp.setStartWeek(info.getStartWeek());
@@ -472,12 +481,15 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
     }
 
     /** 合班时拆分班级名，逐个查院系后去重拼接。单班直接返回对应院系。 */
-    private String resolveCollege(String className, Map<String, ClassName> classMap) {
+    private String resolveCollege(String className, Map<String, ClassName> classMap, Map<Long, String> collegeNameMap) {
         var colleges = new java.util.LinkedHashSet<String>();
         for (String trimmed : ClassNameUtil.splitClassNames(className)) {
             ClassName cls = classMap.get(trimmed);
-            if (cls != null && cls.getCollege() != null && !cls.getCollege().isEmpty()) {
-                colleges.add(cls.getCollege());
+            if (cls != null && cls.getCollegeId() != null) {
+                String name = collegeNameMap.get(cls.getCollegeId());
+                if (name != null && !name.isEmpty()) {
+                    colleges.add(name);
+                }
             }
         }
         return colleges.isEmpty() ? null : String.join(",", colleges);
