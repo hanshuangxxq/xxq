@@ -30,7 +30,7 @@ import lombok.RequiredArgsConstructor;
 /**
  * 培训课程接口。
  * <p>
- * 发布/更新/状态/删除：教师（本人）或教务；报名/退课/我的报名：学生（即报即生效）。
+ * 发布：院系管理者；更新/状态/删除：院系管理者（本人）或教务；报名/退课/我的报名：学生（即报即生效）。
  */
 @RestController
 @RequestMapping("/api/practice/trainings")
@@ -43,7 +43,7 @@ public class TrainingController {
     @PostMapping
     public Result<TrainingResponse> create(HttpServletRequest request, @RequestBody TrainingCreateRequest body) {
         AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
+                AuthFacade.USER_TYPE_DEPARTMENT);
         return Result.ok(trainingService.createCourse(ctx.userId(), ctx.userType(), body));
     }
 
@@ -51,7 +51,7 @@ public class TrainingController {
     public Result<TrainingResponse> update(HttpServletRequest request, @PathVariable Long id,
                                            @RequestBody TrainingUpdateRequest body) {
         AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
+                AuthFacade.USER_TYPE_DEPARTMENT, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
         return Result.ok(trainingService.updateCourse(id, body, ctx.userId(), ctx.userType()));
     }
 
@@ -59,7 +59,7 @@ public class TrainingController {
     public Result<Void> changeStatus(HttpServletRequest request, @PathVariable Long id,
                                      @RequestParam TrainingStatusEnum status) {
         AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
+                AuthFacade.USER_TYPE_DEPARTMENT, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
         trainingService.changeCourseStatus(id, status, ctx.userId(), ctx.userType());
         return Result.ok();
     }
@@ -71,7 +71,7 @@ public class TrainingController {
                                                      @RequestParam(required = false) Integer page,
                                                      @RequestParam(required = false) Integer pageSize) {
         AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
+                AuthFacade.USER_TYPE_DEPARTMENT, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
         return Result.ok(trainingService.listCourses(ctx.userId(), ctx.userType(),
                 teacherId, status, new PageQuery(page, pageSize)));
     }
@@ -90,7 +90,7 @@ public class TrainingController {
     @DeleteMapping("/{id}")
     public Result<Void> delete(HttpServletRequest request, @PathVariable Long id) {
         AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
+                AuthFacade.USER_TYPE_DEPARTMENT, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
         trainingService.deleteCourse(id, ctx.userId(), ctx.userType());
         return Result.ok();
     }
@@ -120,7 +120,7 @@ public class TrainingController {
                                                                               @RequestParam(required = false) Integer page,
                                                                               @RequestParam(required = false) Integer pageSize) {
         AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
+                AuthFacade.USER_TYPE_DEPARTMENT, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
         return Result.ok(trainingService.listEnrollmentsByCourse(courseId, ctx.userId(), ctx.userType(),
                 new PageQuery(page, pageSize)));
     }
