@@ -22,11 +22,11 @@ import com.xrq.xxq.module.practice.common.PracticeFileService;
 import com.xrq.xxq.module.practice.graduation.dto.ThesisResponse;
 import com.xrq.xxq.module.practice.graduation.dto.ThesisReviewRequest;
 import com.xrq.xxq.module.practice.graduation.dto.ThesisSubmitRequest;
-import com.xrq.xxq.module.practice.graduation.entity.GraduationSelection;
-import com.xrq.xxq.module.practice.graduation.entity.SelectionStatusEnum;
+import com.xrq.xxq.module.practice.graduation.entity.AssignmentStatusEnum;
+import com.xrq.xxq.module.practice.graduation.entity.GraduationAssignment;
 import com.xrq.xxq.module.practice.graduation.entity.Thesis;
 import com.xrq.xxq.module.practice.graduation.entity.ThesisStatusEnum;
-import com.xrq.xxq.module.practice.graduation.mapper.GraduationSelectionMapper;
+import com.xrq.xxq.module.practice.graduation.mapper.GraduationAssignmentMapper;
 import com.xrq.xxq.module.practice.graduation.mapper.ThesisMapper;
 import com.xrq.xxq.module.practice.graduation.service.ThesisService;
 import com.xrq.xxq.module.user.mapper.UserMapper;
@@ -41,7 +41,7 @@ public class ThesisServiceImpl
         extends ServiceImpl<ThesisMapper, Thesis>
         implements ThesisService {
 
-    private final GraduationSelectionMapper selectionMapper;
+    private final GraduationAssignmentMapper assignmentMapper;
     private final UserMapper userMapper;
     private final PracticeFileService fileService;
     private final ApplicationEventPublisher eventPublisher;
@@ -49,21 +49,21 @@ public class ThesisServiceImpl
     @Override
     @Transactional
     public ThesisResponse submit(Long studentUserId, ThesisSubmitRequest request, MultipartFile file) {
-        ParamValidator.requireNonNull(request.getSelectionId(), "选题申请");
+        ParamValidator.requireNonNull(request.getAssignmentId(), "选题匹配");
         ParamValidator.requireNonBlank(request.getTitle(), "论文标题");
-        GraduationSelection selection = selectionMapper.selectById(request.getSelectionId());
-        if (selection == null) {
-            throw new BusinessException(404, "选题申请不存在");
+        GraduationAssignment assignment = assignmentMapper.selectById(request.getAssignmentId());
+        if (assignment == null) {
+            throw new BusinessException(404, "选题匹配不存在");
         }
-        if (!selection.getStudentId().equals(studentUserId)) {
+        if (!assignment.getStudentId().equals(studentUserId)) {
             throw new BusinessException(403, "权限不足");
         }
-        if (selection.getStatus() != SelectionStatusEnum.APPROVED) {
-            throw new BusinessException(409, "选题未通过，不可提交论文");
+        if (assignment.getStatus() == AssignmentStatusEnum.REJECTED) {
+            throw new BusinessException(409, "选题匹配已被驳回，不可提交论文");
         }
-        // 同一选题申请仅一份论文；教师退回(REVISION)后学生可重新提交（覆盖文件）
+        // 同一匹配仅一份论文；教师退回(REVISION)后学生可重新提交（覆盖文件）
         Thesis existing = baseMapper.selectOne(new LambdaQueryWrapper<Thesis>()
-                .eq(Thesis::getSelectionId, request.getSelectionId())
+                .eq(Thesis::getAssignmentId, request.getAssignmentId())
                 .last("LIMIT 1"));
         if (existing != null) {
             if (!existing.getStudentId().equals(studentUserId)) {
@@ -87,9 +87,9 @@ public class ThesisServiceImpl
         }
         PracticeFileService.StoredFile stored = fileService.store(file);
         Thesis thesis = new Thesis();
-        thesis.setSelectionId(request.getSelectionId());
+        thesis.setAssignmentId(request.getAssignmentId());
         thesis.setStudentId(studentUserId);
-        thesis.setTeacherId(selection.getTeacherId());
+        thesis.setTeacherId(assignment.getTeacherId());
         thesis.setTitle(request.getTitle());
         thesis.setAbstractText(request.getAbstractText());
         thesis.setFileName(stored.storedName());
@@ -97,7 +97,7 @@ public class ThesisServiceImpl
         thesis.setSubmitTime(LocalDateTime.now());
         thesis.setStatus(ThesisStatusEnum.SUBMITTED);
         save(thesis);
-        return toResponse(thesis, nameOf(studentUserId), nameOf(selection.getTeacherId()));
+        return toResponse(thesis, nameOf(studentUserId), nameOf(assignment.getTeacherId()));
     }
 
     @Override
@@ -210,7 +210,7 @@ public class ThesisServiceImpl
     private ThesisResponse toResponse(Thesis thesis, String studentName, String teacherName) {
         ThesisResponse resp = new ThesisResponse();
         resp.setId(thesis.getId());
-        resp.setSelectionId(thesis.getSelectionId());
+        resp.setAssignmentId(thesis.getAssignmentId());
         resp.setStudentId(thesis.getStudentId());
         resp.setStudentName(studentName);
         resp.setTeacherId(thesis.getTeacherId());
