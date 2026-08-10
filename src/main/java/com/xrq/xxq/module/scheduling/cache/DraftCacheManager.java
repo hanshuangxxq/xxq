@@ -15,6 +15,8 @@ import org.springframework.stereotype.Component;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.clazz.util.ClassNameUtil;
+import com.xrq.xxq.module.college.entity.College;
+import com.xrq.xxq.module.college.mapper.CollegeMapper;
 import com.xrq.xxq.module.teachinfo.entity.TeachInfo;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
 import com.xrq.xxq.module.course.service.CourseInfoResolver;
@@ -49,6 +51,7 @@ public class DraftCacheManager {
     private final TeacherMapper teacherMapper;
     private final UserMapper userMapper;
     private final ClassNameMapper classNameMapper;
+    private final CollegeMapper collegeMapper;
 
     private final List<DraftItem> drafts = Collections.synchronizedList(new ArrayList<>());
 
@@ -112,7 +115,15 @@ public class DraftCacheManager {
     }
 
     /** 按院系名称过滤草稿——院系管理者只能查看本院系的草稿。 */
-    public List<DraftItem> getDraftsByCollege(String collegeName) {
+    public List<DraftItem> getDraftsByCollege(Long collegeId) {
+        if (collegeId == null) {
+            return List.of();
+        }
+        College college = collegeMapper.selectById(collegeId);
+        if (college == null) {
+            return List.of();
+        }
+        String collegeName = college.getCollegeName();
         synchronized (drafts) {
             return drafts.stream()
                     .filter(d -> ClassNameUtil.splitClassNames(d.getCollege()).contains(collegeName))
@@ -282,10 +293,14 @@ public class DraftCacheManager {
         if (classNames.isEmpty()) {
             return Map.of();
         }
-        return classNameMapper.selectList(
-                        new LambdaQueryWrapper<ClassName>().in(ClassName::getClassName, classNames))
-                .stream()
-                .collect(Collectors.toMap(ClassName::getClassName, ClassName::getCollege, (a, b) -> a));
+        List<ClassName> classes = classNameMapper.selectList(
+                new LambdaQueryWrapper<ClassName>().in(ClassName::getClassName, classNames));
+        Map<Long, String> collegeNameMap = collegeMapper.toNameMap(
+                classes.stream().map(ClassName::getCollegeId).filter(java.util.Objects::nonNull).distinct().toList());
+        return classes.stream()
+                .collect(Collectors.toMap(ClassName::getClassName,
+                        cn -> cn.getCollegeId() != null ? collegeNameMap.getOrDefault(cn.getCollegeId(), "") : "",
+                        (a, b) -> a));
     }
 
     /** 将合班 className 解析为去重院系名，逗号分隔。 */
