@@ -1,6 +1,7 @@
 package com.xrq.xxq.util;
 
 import java.util.List;
+import java.util.Objects;
 
 import org.springframework.stereotype.Component;
 
@@ -24,8 +25,11 @@ import lombok.RequiredArgsConstructor;
 /**
  * 学生可见范围解析器：按当前角色解析可见学生 user.id 列表，供学情分析/成绩等模块复用。
  * <p>
- * 规则：教务管理员全校（返回 null 表示不过滤）；院系管理员本院班级；教师按课程归属判断；
- * 其余角色抛 403。原散落在 ScoreServiceImpl/各分析服务中的重复逻辑统一抽取到此处。
+ * 规则：教务管理员全校（返回 null 表示不过滤）；院系管理员本院班级（按 college_id）；
+ * 教师按课程归属判断；其余角色抛 403。原散落在 ScoreServiceImpl/各分析服务中的重复逻辑统一抽取到此处。
+ * <p>
+ * 院系归属自 college 表标准化后统一为 college_id：院系管理员经 department.college_id，
+ * 学生经 class_name.college_id，教师经 teacher.college_id。
  */
 @Component
 @RequiredArgsConstructor
@@ -57,11 +61,11 @@ public class StudentScopeResolver {
         }
         if (AuthFacade.USER_TYPE_DEPARTMENT.equals(userType)) {
             Department dept = departmentMapper.findByUserId(userId);
-            if (dept == null) {
+            if (dept == null || dept.getCollegeId() == null) {
                 return List.of();
             }
             List<Long> classIds = classNameMapper.selectList(new LambdaQueryWrapper<ClassName>()
-                            .eq(ClassName::getCollege, dept.getDepartmentName())).stream()
+                            .eq(ClassName::getCollegeId, dept.getCollegeId())).stream()
                     .map(ClassName::getId).toList();
             if (className != null && !className.isBlank()) {
                 List<Long> nameIds = classNameMapper.selectList(new LambdaQueryWrapper<ClassName>()
@@ -74,10 +78,14 @@ public class StudentScopeResolver {
         throw new BusinessException(403, "权限不足");
     }
 
-    /** 院系校验某学生是否在本院（学生班级 college == 院系 departmentName）。 */
+    /**
+     * 院系校验某学生是否不在本院。
+     * <p>返回 true 表示该学生不在该院系（或归属无法判定），调用方应拒绝访问；
+     * 返回 false 表示属于本院，允许访问。（契约与历史调用方一致：{@code if (departmentOwnsStudent) throw 403}）
+     */
     public boolean departmentOwnsStudent(Long deptUserId, Long studentUserId) {
         Department dept = departmentMapper.findByUserId(deptUserId);
-        if (dept == null) {
+        if (dept == null || dept.getCollegeId() == null) {
             return true;
         }
         Student stu = studentMapper.selectOne(
@@ -86,7 +94,30 @@ public class StudentScopeResolver {
             return true;
         }
         ClassName cn = classNameMapper.selectById(stu.getClassId());
-        return cn == null || !dept.getDepartmentName ().equals (cn.getCollege ());
+        return cn == null || !Objects.equals(dept.getCollegeId(), cn.getCollegeId());
+    }
+
+    /** 院系管理员所属 college_id（无匹配/未分配返回 null）。 */
+    public Long deptCollegeId(Long deptUserId) {
+        Department dept = departmentMapper.findByUserId(deptUserId);
+        return dept == null ? null : dept.getCollegeId();
+    }
+
+    /** 教师所属 college_id（无匹配/未分配返回 null）。 */
+    public Long teacherCollegeId(Long teacherUserId) {
+        Teacher t = teacherMapper.findByUserId(teacherUserId);
+        return t == null ? null : t.getCollegeId();
+    }
+
+    /** 学生所属 college_id（经 class_name.college_id；无班级/无匹配返回 null）。 */
+    public Long studentCollegeId(Long studentUserId) {
+        Student stu = studentMapper.selectOne(
+                new LambdaQueryWrapper<Student>().eq(Student::getUserId, studentUserId));
+        if (stu == null || stu.getClassId() == null) {
+            return null;
+        }
+        ClassName cn = classNameMapper.selectById(stu.getClassId());
+        return cn == null ? null : cn.getCollegeId();
     }
 
     /** 教师是否能访问某课程（存在该教师该课程的 teach_info）。 */
