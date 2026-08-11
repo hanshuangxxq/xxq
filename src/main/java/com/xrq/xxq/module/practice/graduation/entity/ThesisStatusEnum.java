@@ -6,16 +6,24 @@ import com.fasterxml.jackson.annotation.JsonValue;
 import lombok.Getter;
 
 /**
- * 论文状态：SUBMITTED 已提交 / UNDER_REVIEW 评审中 / PASSED 通过 / FAILED 未通过 / REVISION 需修改。
+ * 论文状态机（阶段三）：
+ * <pre>
+ * 学生提交 → SUBMITTED（待形式审查）
+ *   ├─ 教师形式审查通过 → APPROVED（待查重）
+ *   └─ 教师退回 → REVISION（可重提新版本，回到 SUBMITTED）
+ * APPROVED → 教务登记查重结果
+ *   ├─ 查重通过 → DUPLICATE_PASSED（门禁：可进入答辩）
+ *   └─ 查重不通过 → DUPLICATE_FAILED（可重提新版本，回到 SUBMITTED）
+ * </pre>
  */
 @Getter
 public enum ThesisStatusEnum {
 
-    SUBMITTED("SUBMITTED", "已提交"),
-    UNDER_REVIEW("UNDER_REVIEW", "评审中"),
-    PASSED("PASSED", "通过"),
-    FAILED("FAILED", "未通过"),
-    REVISION("REVISION", "需修改");
+    SUBMITTED("SUBMITTED", "待形式审查"),
+    APPROVED("APPROVED", "形式审查通过"),
+    REVISION("REVISION", "形式审查退回"),
+    DUPLICATE_PASSED("DUPLICATE_PASSED", "查重通过"),
+    DUPLICATE_FAILED("DUPLICATE_FAILED", "查重不通过");
 
     @EnumValue
     private final String code;
