@@ -10,11 +10,10 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 /**
- * 选题活动实体（教务开启）。
+ * 毕设活动（阶段一顶层归属单位）。
  * <p>
- * supervisor_capacity / free_select_capacity 为「每教师」配额，全校统一（同一活动所有教师相同）。
- * free_select_capacity ≤ supervisor_capacity；差额部分由院系管理者统一分配补足。
- * allowed_grade_ids 为允许参与的学生年级 id 列表（逗号分隔，空表示不限）。
+ * 配置：参与年级、选题时间窗、教师名额参数（可分配上限/自由选择上限）、
+ * 各过程环节时间窗（阶段二/三）、成绩权重（阶段四）。
  */
 @Data
 @TableName("graduation_campaign")
@@ -22,14 +21,56 @@ public class GraduationCampaign {
 
     @TableId(type = IdType.AUTO)
     private Long id;
-    private Long semesterId;
-    private String title;
-    private LocalDateTime deadline;          // 申报截止时间
-    private Integer supervisorCapacity;      // 每教师最大指导数（统一）
-    private Integer freeSelectCapacity;      // 每教师自选数（≤ supervisorCapacity，统一）
-    private String allowedGradeIds;          // 允许年级 id（逗号分隔，空=不限）
-    private CampaignStatusEnum status;       // DRAFT/OPEN/CLOSED
+
+    /** 活动名称（同年度内唯一） */
+    private String name;
+
+    /** 参与年级ID，逗号分隔（如 "1,2"） */
+    private String allowedGradeIds;
+
+    /** 选题开始时间 */
+    private LocalDateTime topicStartTime;
+
+    /** 选题截止时间 */
+    private LocalDateTime topicEndTime;
+
+    /** 每教师可分配学生数上限 */
+    private Integer supervisorCapacity;
+
+    /** 每教师自由选择学生数上限（<= supervisorCapacity） */
+    private Integer freeSelectCapacity;
+
+    /** 开题报告提交开始时间（阶段二） */
+    private LocalDateTime openingStartTime;
+
+    /** 开题报告提交截止时间（阶段二） */
+    private LocalDateTime openingEndTime;
+
+    /** 中期检查提交开始时间（阶段二） */
+    private LocalDateTime midtermStartTime;
+
+    /** 中期检查提交截止时间（阶段二） */
+    private LocalDateTime midtermEndTime;
+
+    /** 论文提交开始时间（阶段三） */
+    private LocalDateTime thesisStartTime;
+
+    /** 论文提交截止时间（阶段三） */
+    private LocalDateTime thesisEndTime;
+
+    /** 指导教师评分权重（阶段四，默认30%） */
+    private Integer advisorWeight;
+
+    /** 评阅教师评分权重（阶段四，默认20%） */
+    private Integer reviewerWeight;
+
+    /** 答辩评分权重（阶段四，默认50%） */
+    private Integer defenseWeight;
+
+    private CampaignStatusEnum status;
+
     private LocalDateTime createTime;
+
     private LocalDateTime updateTime;
 
     @TableLogic
