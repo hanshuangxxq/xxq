@@ -6,21 +6,22 @@ import com.fasterxml.jackson.annotation.JsonValue;
 import lombok.Getter;
 
 /**
- * 选题申报状态：
- * <ul>
- *   <li>PENDING_DEPT 待院系初审</li>
- *   <li>DEPT_APPROVED 院系初审通过（进入匹配池）</li>
- *   <li>DEPT_REJECTED 院系初审驳回</li>
- *   <li>ASSIGNED 已匹配教师</li>
- * </ul>
+ * 选题申请状态机（阶段一两级审批）：
+ * <pre>
+ * 学生提交 → PENDING_DEPT（待院系初审）
+ *   ├─ 院系驳回 → REJECTED（可修改重提，重提回到 PENDING_DEPT）
+ *   └─ 院系通过 → DEPT_APPROVED（待教务终审）
+ *        ├─ 教务驳回 → REJECTED（可修改重提）
+ *        └─ 教务通过 → APPROVED（审批完毕，终态）
+ * </pre>
  */
 @Getter
 public enum ProposalStatusEnum {
 
     PENDING_DEPT("PENDING_DEPT", "待院系初审"),
-    DEPT_APPROVED("DEPT_APPROVED", "院系初审通过"),
-    DEPT_REJECTED("DEPT_REJECTED", "院系初审驳回"),
-    ASSIGNED("ASSIGNED", "已匹配教师");
+    DEPT_APPROVED("DEPT_APPROVED", "待教务终审"),
+    APPROVED("APPROVED", "审批完毕"),
+    REJECTED("REJECTED", "已驳回");
 
     @EnumValue
     private final String code;
@@ -39,10 +40,10 @@ public enum ProposalStatusEnum {
             return null;
         }
         for (ProposalStatusEnum e : values()) {
-            if (e.code.equals(value) || e.description.equals(value) || e.name().equals(value)) {
+            if (e.code.equals(value) || e.description.equals(value)) {
                 return e;
             }
         }
-        throw new IllegalArgumentException("未知选题申报状态: " + value);
+        throw new IllegalArgumentException("未知选题状态: " + value);
     }
 }
