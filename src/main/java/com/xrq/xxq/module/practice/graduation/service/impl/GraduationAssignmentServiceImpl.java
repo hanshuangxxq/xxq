@@ -30,8 +30,8 @@ import com.xrq.xxq.module.practice.graduation.entity.GraduationAssignment;
 import com.xrq.xxq.module.practice.graduation.entity.GraduationCampaign;
 import com.xrq.xxq.module.practice.graduation.mapper.GraduationAssignmentMapper;
 import com.xrq.xxq.module.practice.graduation.mapper.GraduationCampaignMapper;
-import com.xrq.xxq.module.practice.graduation.mapper.GraduationDashboardMapper;
 import com.xrq.xxq.module.practice.graduation.service.GraduationAssignmentService;
+import com.xrq.xxq.module.practice.graduation.service.GraduationDashboardQuery;
 import com.xrq.xxq.module.practice.graduation.service.GraduationLogService;
 import com.xrq.xxq.module.user.entity.user.Teacher;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
@@ -50,7 +50,7 @@ public class GraduationAssignmentServiceImpl
         implements GraduationAssignmentService {
 
     private final GraduationCampaignMapper campaignMapper;
-    private final GraduationDashboardMapper dashboardMapper;
+    private final GraduationDashboardQuery dashboardQuery;
     private final TeacherMapper teacherMapper;
     private final StudentMapper studentMapper;
     private final UserMapper userMapper;
@@ -235,7 +235,7 @@ public class GraduationAssignmentServiceImpl
         ParamValidator.requireNonNull(campaignId, "活动");
         GraduationCampaign campaign = requireCampaign(campaignId);
         Long teacherCollegeId = scopeResolver.teacherCollegeId(teacherUserId);
-        List<DashboardRow> rows = dashboardMapper.selectDashboard(
+        List<DashboardRow> rows = dashboardQuery.queryRows(
                 campaign.getId(), gradeIdsOf(campaign), teacherCollegeId, null, null);
         return rows.stream().map(r -> {
             TeacherPickPoolRow row = new TeacherPickPoolRow();
@@ -303,7 +303,7 @@ public class GraduationAssignmentServiceImpl
         if ("department".equals(userType)) {
             effectiveCollegeId = scopeResolver.deptCollegeId(userId);
         }
-        List<DashboardRow> rows = dashboardMapper.selectDashboard(
+        List<DashboardRow> rows = dashboardQuery.queryRows(
                 campaign.getId(), gradeIdsOf(campaign), effectiveCollegeId, null, null);
         return rows.stream()
                 .filter(r -> r.getAssignmentId() == null)
