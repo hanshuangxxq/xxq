@@ -124,6 +124,13 @@ public class SchedulingServiceImpl implements SchedulingService {
         // 保存草稿并收集 DB 生成的 ID，确保后续查询一致
         // 直接走 mapper 跳过 TeachInfoServiceImpl 重写的逐条缓存淘汰（开头已 clearAll，避免 N 次 evict）
         // 选课分班产生的草稿已入库（id 不为 null），用 updateById 避免主键冲突；新草稿用 insert 分配 id
+        // 已存在 id 一次性批量查出（替代循环内逐条 selectById）
+        List<Long> draftIds = drafts.stream().map(DraftItem::toTeachInfo)
+                .map(TeachInfo::getId).filter(Objects::nonNull).distinct().toList();
+        Set<Long> existingIds = draftIds.isEmpty()
+                ? Set.of()
+                : teachInfoMapper.selectByIds(draftIds).stream()
+                        .map(TeachInfo::getId).collect(Collectors.toSet());
         List<TeachInfo> saved = new ArrayList<>();
         for (DraftItem draft : drafts) {
             TeachInfo ti = draft.toTeachInfo();
@@ -140,7 +147,7 @@ public class SchedulingServiceImpl implements SchedulingService {
                 throw new BusinessException(400,
                         "课程周次范围超出学期范围（" + semester.getStartWeek() + "-" + semester.getEndWeek() + "周）");
             }
-            if (ti.getId() != null && teachInfoMapper.selectById(ti.getId()) != null) {
+            if (ti.getId() != null && existingIds.contains(ti.getId())) {
                 teachInfoMapper.updateById(ti);
             } else {
                 teachInfoMapper.insert(ti);
