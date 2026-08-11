@@ -121,8 +121,13 @@ public class GraduationDefenseServiceImpl
         if ("student".equals(userType)) {
             list = list.stream().filter(d -> d.getStudentId().equals(userId)).toList();
         } else if ("department".equals(userType)) {
+            // R-10.1 院系可见性：批量解析学生院系后内存过滤（替代逐条 departmentOwnsStudent 查库）
+            Long deptCollegeId = scopeResolver.deptCollegeId(userId);
+            Map<Long, Long> collegeByStudent = scopeResolver.studentCollegeIdMap(
+                    list.stream().map(GraduationDefense::getStudentId).toList());
             list = list.stream()
-                    .filter(d -> !scopeResolver.departmentOwnsStudent(userId, d.getStudentId()))
+                    .filter(d -> deptCollegeId != null
+                            && Objects.equals(deptCollegeId, collegeByStudent.get(d.getStudentId())))
                     .toList();
         }
         return toDefenseResponses(list);
@@ -201,8 +206,13 @@ public class GraduationDefenseServiceImpl
                     .stream().map(GraduationAssignment::getStudentId).toList();
             list = list.stream().filter(s -> studentIds.contains(s.getStudentId())).toList();
         } else if ("department".equals(userType)) {
+            // R-10.1 院系可见性：批量解析学生院系后内存过滤（替代逐条 departmentOwnsStudent 查库）
+            Long deptCollegeId = scopeResolver.deptCollegeId(userId);
+            Map<Long, Long> collegeByStudent = scopeResolver.studentCollegeIdMap(
+                    list.stream().map(GraduationScore::getStudentId).toList());
             list = list.stream()
-                    .filter(s -> !scopeResolver.departmentOwnsStudent(userId, s.getStudentId()))
+                    .filter(s -> deptCollegeId != null
+                            && Objects.equals(deptCollegeId, collegeByStudent.get(s.getStudentId())))
                     .toList();
         }
         return toScoreResponses(list);
