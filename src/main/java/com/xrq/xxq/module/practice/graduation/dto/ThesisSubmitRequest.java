@@ -1,14 +1,20 @@
 package com.xrq.xxq.module.practice.graduation.dto;
 
+import org.jspecify.annotations.NonNull;
+
 import lombok.Data;
 
 /**
- * 论文提交请求（文件单独以 multipart 传输）。
+ * 学生提交/重提论文（R-8.1，文件随 multipart 上传）。
  */
 @Data
 public class ThesisSubmitRequest {
 
-    private Long assignmentId;
+    /** 活动ID */
+    @NonNull
+    private Long campaignId;
+
+    /** 论文题目 */
+    @NonNull
     private String title;
-    private String abstractText;
 }
