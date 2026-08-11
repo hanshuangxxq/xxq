@@ -1,15 +1,24 @@
 package com.xrq.xxq.module.practice.graduation.dto;
 
+import org.jspecify.annotations.NonNull;
+
 import lombok.Data;
 
 /**
- * 学生选题申报请求（学生自拟，不选教师）。
+ * 学生提交/重提选题申请（R-5.2）。
  */
 @Data
 public class ProposalDeclareRequest {
 
-    private Long campaignId;       // 活动 id（必填）
-    private String title;          // 选题标题（必填）
-    private String description;    // 选题描述
-    private String requirements;   // 选题要求
+    /** 活动ID */
+    @NonNull
+    private Long campaignId;
+
+    /** 自拟题目名称 */
+    @NonNull
+    private String title;
+
+    /** 主要内容说明（不少于100字） */
+    @NonNull
+    private String content;
 }
