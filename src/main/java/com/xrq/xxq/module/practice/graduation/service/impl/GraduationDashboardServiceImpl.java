@@ -23,7 +23,7 @@ import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.module.practice.graduation.dto.DashboardRow;
 import com.xrq.xxq.module.practice.graduation.entity.GraduationCampaign;
 import com.xrq.xxq.module.practice.graduation.mapper.GraduationCampaignMapper;
-import com.xrq.xxq.module.practice.graduation.mapper.GraduationDashboardMapper;
+import com.xrq.xxq.module.practice.graduation.service.GraduationDashboardQuery;
 import com.xrq.xxq.module.practice.graduation.service.GraduationDashboardService;
 import com.xrq.xxq.module.practice.graduation.service.GraduationLogService;
 import com.xrq.xxq.util.StudentScopeResolver;
@@ -39,7 +39,7 @@ public class GraduationDashboardServiceImpl implements GraduationDashboardServic
             "题目名称", "指导教师", "匹配来源", "中期结论", "申请提交时间", "审批完成时间"};
 
     private final GraduationCampaignMapper campaignMapper;
-    private final GraduationDashboardMapper dashboardMapper;
+    private final GraduationDashboardQuery dashboardQuery;
     private final GraduationLogService logService;
     private final StudentScopeResolver scopeResolver;
 
@@ -88,7 +88,7 @@ public class GraduationDashboardServiceImpl implements GraduationDashboardServic
         if ("department".equals(userType)) {
             effectiveCollegeId = scopeResolver.deptCollegeId(operatorUserId);
         }
-        return dashboardMapper.selectDashboard(campaign.getId(), gradeIdsOf(campaign),
+        return dashboardQuery.queryRows(campaign.getId(), gradeIdsOf(campaign),
                 effectiveCollegeId, keyword, status);
     }
 
