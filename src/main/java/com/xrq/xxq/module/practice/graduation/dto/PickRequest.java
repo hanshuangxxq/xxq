@@ -1,13 +1,20 @@
 package com.xrq.xxq.module.practice.graduation.dto;
 
+import org.jspecify.annotations.NonNull;
+
 import lombok.Data;
 
 /**
- * 教师自选学生请求（教师从本学院匹配池中选择学生）。
+ * 教师自由选择学生（R-6.1~R-6.4）。
  */
 @Data
 public class PickRequest {
 
-    private Long campaignId;       // 活动 id
-    private Long proposalId;       // 选题申报 id（即被选学生）
+    /** 活动ID */
+    @NonNull
+    private Long campaignId;
+
+    /** 学生 user.id */
+    @NonNull
+    private Long studentId;
 }
