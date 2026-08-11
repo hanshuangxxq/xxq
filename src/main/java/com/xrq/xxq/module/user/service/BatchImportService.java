@@ -1,7 +1,13 @@
 package com.xrq.xxq.module.user.service;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -47,12 +53,16 @@ public class BatchImportService {
         response.setTotal(items.size());
         // 每行独立事务：单行失败仅回滚该行（user+子类型），不影响其他行，避免孤立 user
         TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
+        // 批量预加载（替代逐行查库）：专业/年级/院系字典全量 + 已占用用户名/学号/工号一次 IN 批查
+        ImportContext ctx = preload(items);
 
         int index = 0;
         for (UserImportItem item : items) {
             index++;
             try {
-                txTemplate.executeWithoutResult(status -> importOne(item));
+                txTemplate.executeWithoutResult(status -> importOne(item, ctx));
+                // 本行提交成功后登记占用，保证后续行的查重语义与逐行查库一致
+                ctx.markImported(item);
                 ImportResultDetail detail = new ImportResultDetail();
                 detail.setIndex(index);
                 detail.setUsername(item.getUsername());
@@ -73,7 +83,63 @@ public class BatchImportService {
         return response;
     }
 
-    private void importOne(UserImportItem item) {
+    /** 预加载上下文：字典映射 + 已占用标识集合（导入过程中随成功行递增）。 */
+    private static class ImportContext {
+        private Map<String, Long> majorIdByName = Map.of();
+        private Map<String, Long> gradeIdByName = Map.of();
+        private Map<String, Long> collegeIdByName = Map.of();
+        private final Set<String> usedUsernames = new HashSet<>();
+        private final Set<String> usedStudentNos = new HashSet<>();
+        private final Set<String> usedTeacherNos = new HashSet<>();
+
+        private void markImported(UserImportItem item) {
+            if (item.getUsername() != null) {
+                usedUsernames.add(item.getUsername().strip());
+            }
+            if (item.getIdentifier() != null && !item.getIdentifier().isBlank()) {
+                if ("student".equals(item.getUserType())) {
+                    usedStudentNos.add(item.getIdentifier());
+                } else if ("teacher".equals(item.getUserType())) {
+                    usedTeacherNos.add(item.getIdentifier());
+                }
+            }
+        }
+    }
+
+    private ImportContext preload(List<UserImportItem> items) {
+        ImportContext ctx = new ImportContext();
+        // 字典表体量小（专业/年级/院系数十行），全量加载为名称 -> id 映射
+        ctx.majorIdByName = majorMapper.selectList(null).stream()
+                .collect(Collectors.toMap(Major::getMajorName, Major::getId, (a, b) -> a));
+        ctx.gradeIdByName = gradeMapper.selectList(null).stream()
+                .collect(Collectors.toMap(Grade::getName, Grade::getId, (a, b) -> a));
+        ctx.collegeIdByName = collegeMapper.selectList(null).stream()
+                .collect(Collectors.toMap(College::getCollegeName, College::getId, (a, b) -> a));
+        List<String> usernames = items.stream().map(UserImportItem::getUsername)
+                .filter(Objects::nonNull).map(String::strip).filter(s -> !s.isEmpty())
+                .distinct().toList();
+        if (!usernames.isEmpty()) {
+            userMapper.selectList(new LambdaQueryWrapper<User>()
+                            .select(User::getId, User::getName)
+                            .in(User::getName, usernames))
+                    .forEach(u -> ctx.usedUsernames.add(u.getName()));
+        }
+        List<String> identifiers = items.stream().map(UserImportItem::getIdentifier)
+                .filter(s -> s != null && !s.isBlank()).distinct().toList();
+        if (!identifiers.isEmpty()) {
+            studentMapper.selectList(new LambdaQueryWrapper<Student>()
+                            .select(Student::getId, Student::getStudentNo)
+                            .in(Student::getStudentNo, identifiers))
+                    .forEach(s -> ctx.usedStudentNos.add(s.getStudentNo()));
+            teacherMapper.selectList(new LambdaQueryWrapper<Teacher>()
+                            .select(Teacher::getId, Teacher::getTeacherNo)
+                            .in(Teacher::getTeacherNo, identifiers))
+                    .forEach(t -> ctx.usedTeacherNos.add(t.getTeacherNo()));
+        }
+        return ctx;
+    }
+
+    private void importOne(UserImportItem item, ImportContext ctx) {
         String userType = item.getUserType();
         if (userType == null || (!"student".equals(userType) && !"teacher".equals(userType))) {
             throw new IllegalArgumentException("用户类型只允许 student 或 teacher，收到: " + userType);
@@ -82,10 +148,8 @@ public class BatchImportService {
         ParamValidator.requireNonBlank(item.getUsername(), "用户名");
         ParamValidator.requireNonBlank(item.getPassword(), "密码");
 
-        // 用户名唯一性预检
-        Long userCnt = userMapper.selectCount(new LambdaQueryWrapper<User>()
-                .eq(User::getName, item.getUsername().strip()));
-        if (userCnt != null && userCnt > 0) {
+        // 用户名唯一性预检（内存集合，含本次导入已提交行）
+        if (ctx.usedUsernames.contains(item.getUsername().strip())) {
             throw new BusinessException(409, "用户名已存在：" + item.getUsername().strip());
         }
 
@@ -101,30 +165,26 @@ public class BatchImportService {
 
         if ("student".equals(userType)) {
             if (item.getIdentifier() != null && !item.getIdentifier().isBlank()) {
-                Long cnt = studentMapper.selectCount(new LambdaQueryWrapper<Student>()
-                        .eq(Student::getStudentNo, item.getIdentifier()));
-                if (cnt != null && cnt > 0) {
+                if (ctx.usedStudentNos.contains(item.getIdentifier())) {
                     throw new BusinessException(409, "学号已存在：" + item.getIdentifier());
                 }
             }
             Student student = new Student();
             student.setUserId(user.getId());
             student.setStudentNo(item.getIdentifier());
-            student.setGradeId(resolveGradeId(item.getClassName()));
-            student.setMajorId(resolveMajorId(item.getDepartment()));
+            student.setGradeId(resolveGradeId(item.getClassName(), ctx));
+            student.setMajorId(resolveMajorId(item.getDepartment(), ctx));
             studentMapper.insert(student);
         } else {
             if (item.getIdentifier() != null && !item.getIdentifier().isBlank()) {
-                Long cnt = teacherMapper.selectCount(new LambdaQueryWrapper<Teacher>()
-                        .eq(Teacher::getTeacherNo, item.getIdentifier()));
-                if (cnt != null && cnt > 0) {
+                if (ctx.usedTeacherNos.contains(item.getIdentifier())) {
                     throw new BusinessException(409, "工号已存在：" + item.getIdentifier());
                 }
             }
             Teacher teacher = new Teacher();
             teacher.setUserId(user.getId());
             teacher.setTeacherNo(item.getIdentifier());
-            teacher.setCollegeId(resolveCollegeId(item.getDepartment()));
+            teacher.setCollegeId(resolveCollegeId(item.getDepartment(), ctx));
             teacherMapper.insert(teacher);
         }
     }
@@ -141,39 +201,37 @@ public class BatchImportService {
         return GenderEnum.MALE;
     }
 
-    private Long resolveMajorId(String majorName) {
+    private Long resolveMajorId(String majorName, ImportContext ctx) {
         if (majorName == null || majorName.isBlank()) {
             return null;
         }
-        Major major = majorMapper.selectOne(
-                new LambdaQueryWrapper<Major>().eq(Major::getMajorName, majorName.strip()));
-        if (major == null) {
+        Long id = ctx.majorIdByName.get(majorName.strip());
+        if (id == null) {
             throw new BusinessException(400, "专业不存在：" + majorName.strip() + "，请先在基础数据中创建");
         }
-        return major.getId();
+        return id;
     }
 
-    private Long resolveGradeId(String gradeName) {
+    private Long resolveGradeId(String gradeName, ImportContext ctx) {
         if (gradeName == null || gradeName.isBlank()) {
             return null;
         }
-        Grade grade = gradeMapper.selectOne(
-                new LambdaQueryWrapper<Grade>().eq(Grade::getName, gradeName.strip()));
-        if (grade == null) {
+        Long id = ctx.gradeIdByName.get(gradeName.strip());
+        if (id == null) {
             throw new BusinessException(400, "年级不存在：" + gradeName.strip() + "，请先在基础数据中创建");
         }
-        return grade.getId();
+        return id;
     }
 
     /** 按院系名称解析 college_id（教师导入：department 字段为院系名；找不到则报错）。 */
-    private Long resolveCollegeId(String collegeName) {
+    private Long resolveCollegeId(String collegeName, ImportContext ctx) {
         if (collegeName == null || collegeName.isBlank()) {
             return null;
         }
-        College college = collegeMapper.findByName(collegeName.strip());
-        if (college == null) {
+        Long id = ctx.collegeIdByName.get(collegeName.strip());
+        if (id == null) {
             throw new BusinessException(400, "院系不存在：" + collegeName.strip() + "，请先在基础数据中创建");
         }
-        return college.getId();
+        return id;
     }
 }
