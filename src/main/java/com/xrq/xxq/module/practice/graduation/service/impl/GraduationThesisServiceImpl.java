@@ -7,8 +7,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -308,11 +311,7 @@ public class GraduationThesisServiceImpl
 
     @Override
     public List<DuplicateCheckResponse> listDuplicateChecks(Long thesisId) {
-        List<GraduationDuplicateCheck> checks = duplicateCheckMapper.selectList(
-                new LambdaQueryWrapper<GraduationDuplicateCheck>()
-                        .eq(GraduationDuplicateCheck::getThesisId, thesisId)
-                        .orderByAsc(GraduationDuplicateCheck::getCheckTime));
-        return toCheckResponses(checks);
+        return batchDuplicateChecks(List.of(thesisId)).getOrDefault(thesisId, List.of());
     }
 
     // ---- helpers ----
@@ -363,27 +362,35 @@ public class GraduationThesisServiceImpl
         // academic_admin：全量可见
     }
 
-    private String nameOf(Long userId) {
-        if (userId == null) {
-            return null;
-        }
-        return userMapper.toNameMap(List.of(userId)).get(userId);
-    }
-
     private List<ThesisResponse> toResponses(List<GraduationThesis> theses) {
         if (theses.isEmpty()) {
             return List.of();
         }
-        List<Long> studentIds = theses.stream().map(GraduationThesis::getStudentId).distinct().toList();
-        Map<Long, String> nameMap = userMapper.toNameMap(studentIds);
-        return theses.stream().map(t -> toResponse(t, nameMap.get(t.getStudentId()))).toList();
+        // 批量解析姓名（学生 + 审核教师一次查询，替代逐篇 nameOf）
+        List<Long> personIds = new ArrayList<>();
+        theses.forEach(t -> {
+            personIds.add(t.getStudentId());
+            if (t.getReviewTeacherId() != null) {
+                personIds.add(t.getReviewTeacherId());
+            }
+        });
+        personIds.removeIf(Objects::isNull);
+        Map<Long, String> nameMap = userMapper.toNameMap(personIds);
+        // 批量加载查重记录并按论文分组（替代逐篇查询）
+        Map<Long, List<DuplicateCheckResponse>> checksByThesis = batchDuplicateChecks(
+                theses.stream().map(GraduationThesis::getId).toList());
+        return theses.stream()
+                .map(t -> toResponse(t, nameMap.get(t.getStudentId()), nameMap,
+                        checksByThesis.getOrDefault(t.getId(), List.of())))
+                .toList();
     }
 
     private ThesisResponse toResponse(GraduationThesis thesis) {
-        return toResponse(thesis, nameOf(thesis.getStudentId()));
+        return toResponses(List.of(thesis)).getFirst();
     }
 
-    private ThesisResponse toResponse(GraduationThesis thesis, String studentName) {
+    private ThesisResponse toResponse(GraduationThesis thesis, String studentName,
+                                      Map<Long, String> nameMap, List<DuplicateCheckResponse> checks) {
         ThesisResponse resp = new ThesisResponse();
         resp.setId(thesis.getId());
         resp.setCampaignId(thesis.getCampaignId());
@@ -398,37 +405,54 @@ public class GraduationThesisServiceImpl
         resp.setStatus(thesis.getStatus());
         resp.setSubmitTime(thesis.getSubmitTime());
         resp.setReviewTeacherId(thesis.getReviewTeacherId());
-        resp.setReviewTeacherName(thesis.getReviewTeacherId() != null ? nameOf(thesis.getReviewTeacherId()) : null);
+        resp.setReviewTeacherName(thesis.getReviewTeacherId() != null
+                ? nameMap.get(thesis.getReviewTeacherId()) : null);
         resp.setReviewComment(thesis.getReviewComment());
         resp.setReviewTime(thesis.getReviewTime());
-        resp.setDuplicateChecks(listDuplicateChecks(thesis.getId()));
+        resp.setDuplicateChecks(checks);
         return resp;
     }
 
-    private List<DuplicateCheckResponse> toCheckResponses(List<GraduationDuplicateCheck> checks) {
+    /** 批量加载查重记录并按论文分组（操作人姓名一次批查）。 */
+    private Map<Long, List<DuplicateCheckResponse>> batchDuplicateChecks(List<Long> thesisIds) {
+        List<GraduationDuplicateCheck> checks = duplicateCheckMapper.selectList(
+                new LambdaQueryWrapper<GraduationDuplicateCheck>()
+                        .in(GraduationDuplicateCheck::getThesisId, thesisIds)
+                        .orderByAsc(GraduationDuplicateCheck::getCheckTime));
         if (checks.isEmpty()) {
-            return List.of();
+            return Map.of();
         }
-        List<Long> operatorIds = checks.stream().map(GraduationDuplicateCheck::getOperatorId).distinct().toList();
-        Map<Long, String> nameMap = userMapper.toNameMap(operatorIds);
-        return checks.stream().map(c -> {
-            DuplicateCheckResponse resp = new DuplicateCheckResponse();
-            resp.setId(c.getId());
-            resp.setThesisId(c.getThesisId());
-            resp.setDuplicateRate(c.getDuplicateRate());
-            resp.setPlatform(c.getPlatform());
-            resp.setCheckTime(c.getCheckTime());
-            resp.setResult(c.getResult());
-            resp.setComment(c.getComment());
-            resp.setOperatorId(c.getOperatorId());
-            resp.setOperatorName(nameMap.get(c.getOperatorId()));
-            resp.setCreateTime(c.getCreateTime());
-            return resp;
-        }).toList();
+        Map<Long, String> operatorNames = userMapper.toNameMap(
+                checks.stream().map(GraduationDuplicateCheck::getOperatorId)
+                        .filter(Objects::nonNull).distinct().toList());
+        Map<Long, List<DuplicateCheckResponse>> map = new HashMap<>();
+        for (GraduationDuplicateCheck c : checks) {
+            map.computeIfAbsent(c.getThesisId(), k -> new ArrayList<>())
+                    .add(toCheckResponse(c, operatorNames));
+        }
+        return map;
+    }
+
+    private DuplicateCheckResponse toCheckResponse(GraduationDuplicateCheck c, Map<Long, String> operatorNames) {
+        DuplicateCheckResponse resp = new DuplicateCheckResponse();
+        resp.setId(c.getId());
+        resp.setThesisId(c.getThesisId());
+        resp.setDuplicateRate(c.getDuplicateRate());
+        resp.setPlatform(c.getPlatform());
+        resp.setCheckTime(c.getCheckTime());
+        resp.setResult(c.getResult());
+        resp.setComment(c.getComment());
+        resp.setOperatorId(c.getOperatorId());
+        resp.setOperatorName(c.getOperatorId() == null ? null : operatorNames.get(c.getOperatorId()));
+        resp.setCreateTime(c.getCreateTime());
+        return resp;
     }
 
     private DuplicateCheckResponse toCheckResponse(GraduationDuplicateCheck check) {
-        return toCheckResponses(List.of(check)).get(0);
+        Map<Long, String> operatorNames = check.getOperatorId() == null
+                ? Map.of()
+                : userMapper.toNameMap(List.of(check.getOperatorId()));
+        return toCheckResponse(check, operatorNames);
     }
 
     // ---- 查重数据包导出（R-8.4）----
