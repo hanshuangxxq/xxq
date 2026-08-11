@@ -6,13 +6,13 @@ import com.fasterxml.jackson.annotation.JsonValue;
 import lombok.Getter;
 
 /**
- * 匹配来源：TEACHER_PICK 教师自选 / DEPT_ALLOCATE 院系统一分配。
+ * 师生匹配来源：TEACHER_PICK 教师自选 / DEPT_ALLOCATE 院系指定。
  */
 @Getter
 public enum AssignmentSourceEnum {
 
     TEACHER_PICK("TEACHER_PICK", "教师自选"),
-    DEPT_ALLOCATE("DEPT_ALLOCATE", "院系分配");
+    DEPT_ALLOCATE("DEPT_ALLOCATE", "院系指定");
 
     @EnumValue
     private final String code;
@@ -31,7 +31,7 @@ public enum AssignmentSourceEnum {
             return null;
         }
         for (AssignmentSourceEnum e : values()) {
-            if (e.code.equals(value) || e.description.equals(value) || e.name().equals(value)) {
+            if (e.code.equals(value) || e.description.equals(value)) {
                 return e;
             }
         }
