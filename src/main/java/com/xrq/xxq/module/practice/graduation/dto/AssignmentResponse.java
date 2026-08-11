@@ -2,30 +2,40 @@ package com.xrq.xxq.module.practice.graduation.dto;
 
 import java.time.LocalDateTime;
 
+import com.xrq.xxq.module.practice.graduation.entity.AssignmentSourceEnum;
+
 import lombok.Data;
 
 /**
- * 选题匹配记录响应。
+ * 师生匹配响应（R-6.12/R-6.13）。
  */
 @Data
 public class AssignmentResponse {
 
     private Long id;
+
     private Long campaignId;
-    private String campaignTitle;
-    private Long proposalId;
-    private String proposalTitle;
+
     private Long studentId;
+
     private String studentName;
+
     private String studentNo;
+
     private Long teacherId;
+
     private String teacherName;
-    private String teacherNo;
-    private Long collegeId;
-    private String collegeName;
-    private String source;          // TEACHER_PICK/DEPT_ALLOCATE
-    private String status;          // MATCHED/APPROVED/REJECTED
+
+    private AssignmentSourceEnum source;
+
     private LocalDateTime assignTime;
-    private LocalDateTime reviewTime;
-    private String reviewComment;
+
+    /** 改派前的原教师 user.id */
+    private Long prevTeacherId;
+
+    private String prevTeacherName;
+
+    private String reassignReason;
+
+    private LocalDateTime reassignTime;
 }
