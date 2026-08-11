@@ -199,9 +199,13 @@ public class GraduationProposalServiceImpl
                 .eq(GraduationProposal::getCampaignId, campaignId)
                 .eq(GraduationProposal::getStatus, ProposalStatusEnum.PENDING_DEPT)
                 .orderByAsc(GraduationProposal::getSubmitTime));
-        // 仅本学院学生（R-10.1 数据可见性）
+        // 仅本学院学生（R-10.1 数据可见性）：批量解析学生院系后内存过滤（替代逐条 departmentOwnsStudent 查库）
+        Long deptCollegeId = scopeResolver.deptCollegeId(deptUserId);
+        Map<Long, Long> collegeByStudent = scopeResolver.studentCollegeIdMap(
+                all.stream().map(GraduationProposal::getStudentId).toList());
         List<GraduationProposal> scoped = all.stream()
-                .filter(p -> !scopeResolver.departmentOwnsStudent(deptUserId, p.getStudentId()))
+                .filter(p -> deptCollegeId != null
+                        && Objects.equals(deptCollegeId, collegeByStudent.get(p.getStudentId())))
                 .toList();
         return toResponses(scoped, null);
     }
