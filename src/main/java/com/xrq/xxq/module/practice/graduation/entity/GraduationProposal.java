@@ -10,9 +10,10 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 /**
- * 学生选题申报实体（学生自拟选题，不选教师）。
+ * 选题申请（学生自拟题目）。
  * <p>
- * student_id 存学生 user.id。申报后由院系管理者初审（仅本学院），通过后进入匹配池。
+ * 一名学生在同一活动同一时间仅一条有效申请（R-5.3）；
+ * 被驳回后可在截止前修改重提，重新走完整两级审批流程。
  */
 @Data
 @TableName("graduation_proposal")
@@ -20,16 +21,30 @@ public class GraduationProposal {
 
     @TableId(type = IdType.AUTO)
     private Long id;
+
+    /** 活动ID graduation_campaign.id */
     private Long campaignId;
-    private Long studentId;          // 学生 user.id
+
+    /** 学生 user.id */
+    private Long studentId;
+
+    /** 自拟题目名称 */
     private String title;
-    private String description;
-    private String requirements;     // 选题要求
-    private ProposalStatusEnum status;   // PENDING_DEPT/DEPT_APPROVED/DEPT_REJECTED/ASSIGNED
-    private Long deptReviewerId;         // 院系初审人 user.id
-    private LocalDateTime deptReviewTime;
-    private String deptReviewComment;
+
+    /** 主要内容说明（不少于100字） */
+    private String content;
+
+    private ProposalStatusEnum status;
+
+    /** （最近一次）提交时间 */
+    private LocalDateTime submitTime;
+
+    /** 最近一次驳回理由 */
+    private String rejectReason;
+
     private LocalDateTime createTime;
+
+    private LocalDateTime updateTime;
 
     @TableLogic
     private Integer deleted;
