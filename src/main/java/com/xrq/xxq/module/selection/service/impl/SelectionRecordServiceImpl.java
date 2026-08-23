@@ -2,8 +2,12 @@ package com.xrq.xxq.module.selection.service.impl;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import jakarta.annotation.PostConstruct;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -29,7 +33,6 @@ import com.xrq.xxq.module.selection.mapper.SelectionCampaignTimeRestrictionMappe
 import com.xrq.xxq.module.selection.mapper.SelectionGroupMapper;
 import com.xrq.xxq.module.selection.mapper.SelectionRecordMapper;
 import com.xrq.xxq.module.selection.service.SelectionRecordService;
-import com.xrq.xxq.module.semester.entity.Semester;
 import com.xrq.xxq.module.semester.service.SemesterService;
 import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
@@ -218,8 +221,9 @@ public class SelectionRecordServiceImpl implements SelectionRecordService {
         if (campaigns.isEmpty()) {
             return List.of();
         }
+        StudentCampaignContext ctx = loadStudentCampaignContext(campaigns, studentUserId);
         return campaigns.stream()
-                .map(c -> toStudentResponse(c, studentUserId))
+                .map(c -> toStudentResponse(c, ctx))
                 .toList();
     }
 
@@ -229,16 +233,71 @@ public class SelectionRecordServiceImpl implements SelectionRecordService {
         if (campaign == null) {
             throw new BusinessException(404, "选课活动不存在");
         }
-        return toStudentResponse(campaign, studentUserId);
+        return toStudentResponse(campaign, loadStudentCampaignContext(List.of(campaign), studentUserId));
     }
 
-    private StudentCampaignResponse toStudentResponse(SelectionCampaign campaign, Long studentUserId) {
+    /**
+     * 学生视角活动响应的批量预加载上下文：学期名/时段限制/选课组/同组活动/已选计数/我的已选集合，
+     * 一次性批查后在内存组装，替代逐活动循环查库（N+1）。
+     */
+    private record StudentCampaignContext(
+            Map<Long, String> semesterNames,
+            Map<Long, List<Long>> timeRestrictionIdsByCampaign,
+            Map<Long, SelectionGroup> groups,
+            Map<Long, List<Long>> siblingIdsByGroup,
+            Map<Long, Long> selectedCountByCampaign,
+            Set<Long> mySelectedCampaignIds) {
+    }
+
+    private StudentCampaignContext loadStudentCampaignContext(List<SelectionCampaign> campaigns, Long studentUserId) {
+        List<Long> campaignIds = campaigns.stream().map(SelectionCampaign::getId).toList();
+        Map<Long, String> semesterNames = semesterService.toNameMap(
+                campaigns.stream().map(SelectionCampaign::getSemesterId)
+                        .filter(Objects::nonNull).distinct().toList());
+        Map<Long, List<Long>> trByCampaign = selectionCampaignTimeRestrictionMapper.selectList(
+                        new LambdaQueryWrapper<SelectionCampaignTimeRestriction>()
+                                .in(SelectionCampaignTimeRestriction::getCampaignId, campaignIds))
+                .stream().collect(Collectors.groupingBy(SelectionCampaignTimeRestriction::getCampaignId,
+                        Collectors.mapping(SelectionCampaignTimeRestriction::getTimeRestrictionId,
+                                Collectors.toList())));
+        List<Long> groupIds = campaigns.stream().map(SelectionCampaign::getGroupId)
+                .filter(Objects::nonNull).distinct().toList();
+        Map<Long, SelectionGroup> groups = groupIds.isEmpty()
+                ? Map.of()
+                : selectionGroupMapper.selectByIds(groupIds).stream()
+                        .collect(Collectors.toMap(SelectionGroup::getId, g -> g, (a, b) -> a));
+        Map<Long, List<Long>> siblingIdsByGroup = groupIds.isEmpty()
+                ? Map.of()
+                : selectionCampaignMapper.selectList(new LambdaQueryWrapper<SelectionCampaign>()
+                                .in(SelectionCampaign::getGroupId, groupIds))
+                        .stream().collect(Collectors.groupingBy(SelectionCampaign::getGroupId,
+                                Collectors.mapping(SelectionCampaign::getId, Collectors.toList())));
+        // 一次窄列查询同时算出「每活动已选人数」与「当前学生已选集合」（范围：列表活动 ∪ 同组活动）
+        Set<Long> relevantIds = new HashSet<>(campaignIds);
+        siblingIdsByGroup.values().forEach(relevantIds::addAll);
+        List<SelectionRecord> selectedRecords = selectionRecordMapper.selectList(
+                new LambdaQueryWrapper<SelectionRecord>()
+                        .select(SelectionRecord::getId, SelectionRecord::getCampaignId,
+                                SelectionRecord::getStudentId)
+                        .in(SelectionRecord::getCampaignId, relevantIds)
+                        .eq(SelectionRecord::getStatus, RecordStatusEnum.SELECTED));
+        Map<Long, Long> selectedCountByCampaign = selectedRecords.stream()
+                .collect(Collectors.groupingBy(SelectionRecord::getCampaignId, Collectors.counting()));
+        Set<Long> mySelectedCampaignIds = selectedRecords.stream()
+                .filter(r -> studentUserId.equals(r.getStudentId()))
+                .map(SelectionRecord::getCampaignId)
+                .collect(Collectors.toSet());
+        return new StudentCampaignContext(semesterNames, trByCampaign, groups, siblingIdsByGroup,
+                selectedCountByCampaign, mySelectedCampaignIds);
+    }
+
+    private StudentCampaignResponse toStudentResponse(SelectionCampaign campaign, StudentCampaignContext ctx) {
         StudentCampaignResponse resp = new StudentCampaignResponse();
         resp.setId(campaign.getId());
         resp.setName(campaign.getCourseName());
         resp.setSemesterId(campaign.getSemesterId());
-        Semester semester = semesterService.getById(campaign.getSemesterId());
-        resp.setSemesterName(semester != null ? semester.getName() : null);
+        resp.setSemesterName(campaign.getSemesterId() == null
+                ? null : ctx.semesterNames().get(campaign.getSemesterId()));
         resp.setStartWeek(campaign.getStartWeek());
         resp.setEndWeek(campaign.getEndWeek());
         resp.setStartTime(campaign.getStartTime());
@@ -253,45 +312,32 @@ public class SelectionRecordServiceImpl implements SelectionRecordService {
         resp.setCourseType(campaign.getCourseType() != null ? campaign.getCourseType().getDescription() : null);
         resp.setAllowedGradeIds(parseLongs(campaign.getAllowedGradeIds()));
         resp.setAllowedMajors(parseLongs(campaign.getAllowedMajors()));
-        List<SelectionCampaignTimeRestriction> rels = selectionCampaignTimeRestrictionMapper.selectList(
-                new LambdaQueryWrapper<SelectionCampaignTimeRestriction>()
-                        .eq(SelectionCampaignTimeRestriction::getCampaignId, campaign.getId()));
-        resp.setTimeRestrictionIds(rels.stream().map(SelectionCampaignTimeRestriction::getTimeRestrictionId).toList());
+        resp.setTimeRestrictionIds(ctx.timeRestrictionIdsByCampaign()
+                .getOrDefault(campaign.getId(), List.of()));
         resp.setCapacity(campaign.getCapacity());
 
         // 组上下文
         if (campaign.getGroupId() != null) {
-            SelectionGroup group = selectionGroupMapper.selectById(campaign.getGroupId());
+            SelectionGroup group = ctx.groups().get(campaign.getGroupId());
             if (group != null) {
                 resp.setGroupId(group.getId());
                 resp.setGroupName(group.getName());
                 resp.setGroupMax(group.getMaxCourses());
-                List<Long> siblingCampaignIds = selectionCampaignMapper.selectList(
-                        new LambdaQueryWrapper<SelectionCampaign>()
-                                .eq(SelectionCampaign::getGroupId, campaign.getGroupId()))
-                        .stream().map(SelectionCampaign::getId).toList();
-                Long selectedInGroup = selectionRecordMapper.selectCount(new LambdaQueryWrapper<SelectionRecord>()
-                        .eq(SelectionRecord::getStudentId, studentUserId)
-                        .in(SelectionRecord::getCampaignId, siblingCampaignIds)
-                        .eq(SelectionRecord::getStatus, RecordStatusEnum.SELECTED));
-                resp.setSelectedInGroup(selectedInGroup.intValue());
+                long selectedInGroup = ctx.siblingIdsByGroup()
+                        .getOrDefault(campaign.getGroupId(), List.of()).stream()
+                        .filter(ctx.mySelectedCampaignIds()::contains)
+                        .count();
+                resp.setSelectedInGroup((int) selectedInGroup);
             }
         } else {
             resp.setSelectedInGroup(0);
         }
 
-        // 实时选课统计
-        Long selectedCount = selectionRecordMapper.selectCount(new LambdaQueryWrapper<SelectionRecord>()
-                .eq(SelectionRecord::getCampaignId, campaign.getId())
-                .eq(SelectionRecord::getStatus, RecordStatusEnum.SELECTED));
-        resp.setSelectedCount(selectedCount.intValue());
-        resp.setRemaining(Math.max(0, campaign.getCapacity() - selectedCount.intValue()));
-
-        Long myCount = selectionRecordMapper.selectCount(new LambdaQueryWrapper<SelectionRecord>()
-                .eq(SelectionRecord::getCampaignId, campaign.getId())
-                .eq(SelectionRecord::getStudentId, studentUserId)
-                .eq(SelectionRecord::getStatus, RecordStatusEnum.SELECTED));
-        resp.setSelectedByMe(myCount > 0);
+        // 选课统计（预加载聚合结果）
+        int selectedCount = ctx.selectedCountByCampaign().getOrDefault(campaign.getId(), 0L).intValue();
+        resp.setSelectedCount(selectedCount);
+        resp.setRemaining(Math.max(0, campaign.getCapacity() - selectedCount));
+        resp.setSelectedByMe(ctx.mySelectedCampaignIds().contains(campaign.getId()));
 
         return resp;
     }
