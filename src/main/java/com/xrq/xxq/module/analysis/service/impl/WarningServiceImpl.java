@@ -42,6 +42,7 @@ import com.xrq.xxq.module.score.mapper.ScoreMapper;
 import com.xrq.xxq.module.semester.entity.Semester;
 import com.xrq.xxq.module.semester.mapper.SemesterMapper;
 import com.xrq.xxq.module.semester.service.SemesterService;
+import com.xrq.xxq.module.user.entity.User;
 import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.module.user.mapper.UserMapper;
@@ -137,6 +138,13 @@ public class WarningServiceImpl implements WarningService {
         Map<Long, List<Score>> byStudent = allScores.stream()
                 .collect(Collectors.groupingBy(Score::getStudentUserId));
 
+        // 批量预加载（替代循环内逐学生查询）：本学期全部预警记录按学生分组 + 学生用户存在性集合
+        Map<Long, List<WarningRecord>> existingByStudent = warningRecordMapper.selectList(
+                        new LambdaQueryWrapper<WarningRecord>().eq(WarningRecord::getSemesterId, semesterId))
+                .stream().collect(Collectors.groupingBy(WarningRecord::getStudentUserId));
+        Set<Long> validUserIds = userMapper.selectByIds(byStudent.keySet()).stream()
+                .map(User::getId).collect(Collectors.toSet());
+
         int scanned = 0;
         int warned = 0;
         int resolved = 0;
@@ -153,11 +161,12 @@ public class WarningServiceImpl implements WarningService {
             WarningLevelEnum target = matchLevel(configs, m);
 
             if (target != null) {
-                int newlyActivated = upsertWarning(studentUserId, semesterId, target, m);
+                int newlyActivated = upsertWarning(studentUserId, semesterId, target, m,
+                        existingByStudent.getOrDefault(studentUserId, List.of()), validUserIds);
                 warned += newlyActivated;
                 byLevel.merge(target.getDescription(), 1, Integer::sum);
             } else {
-                resolved += resolveAll(studentUserId, semesterId);
+                resolved += resolveAll(existingByStudent.getOrDefault(studentUserId, List.of()));
             }
         }
 
@@ -227,11 +236,12 @@ public class WarningServiceImpl implements WarningService {
     /**
      * upsert 预警记录：命中则激活目标级别（新激活时发通知），其余 ACTIVE 级别解除。
      * 返回 1 表示本次新激活，0 表示此前已是该级别 ACTIVE。
+     *
+     * @param existing     该学生本学期已有预警记录（调用方批量预加载后传入）
+     * @param validUserIds 批量预加载的有效用户 id 集合（替代逐条外键校验查询）
      */
-    private int upsertWarning(Long studentUserId, Long semesterId, WarningLevelEnum target, StudentMetrics m) {
-        List<WarningRecord> existing = warningRecordMapper.selectList(new LambdaQueryWrapper<WarningRecord>()
-                .eq(WarningRecord::getStudentUserId, studentUserId)
-                .eq(WarningRecord::getSemesterId, semesterId));
+    private int upsertWarning(Long studentUserId, Long semesterId, WarningLevelEnum target, StudentMetrics m,
+                              List<WarningRecord> existing, Set<Long> validUserIds) {
         String reason = String.format("累计GPA %s，累计挂科 %d 门，本学期挂科 %d 门",
                 m.gpa() != null ? m.gpa().toPlainString() : "无", m.failCount(), m.semesterFailCount());
 
@@ -251,7 +261,9 @@ public class WarningServiceImpl implements WarningService {
         targetRec.setSemesterFailCount(m.semesterFailCount());
         targetRec.setStatus(WarningStatusEnum.ACTIVE);
         if (targetRec.getId() == null) {
-            referenceValidator.requireExists(userMapper, studentUserId, "用户");
+            if (!validUserIds.contains(studentUserId)) {
+                throw new BusinessException(400, "引用的用户不存在(id=" + studentUserId + ")");
+            }
             warningRecordMapper.insert(targetRec);
         } else {
             warningRecordMapper.updateById(targetRec);
@@ -271,17 +283,17 @@ public class WarningServiceImpl implements WarningService {
         return newlyActivated;
     }
 
-    /** 解除该学生本学期所有 ACTIVE 记录，返回解除数。 */
-    private int resolveAll(Long studentUserId, Long semesterId) {
-        List<WarningRecord> existing = warningRecordMapper.selectList(new LambdaQueryWrapper<WarningRecord>()
-                .eq(WarningRecord::getStudentUserId, studentUserId)
-                .eq(WarningRecord::getSemesterId, semesterId)
-                .eq(WarningRecord::getStatus, WarningStatusEnum.ACTIVE));
+    /** 解除该学生所有 ACTIVE 记录（记录由调用方批量预加载后传入），返回解除数。 */
+    private int resolveAll(List<WarningRecord> existing) {
+        int resolved = 0;
         for (WarningRecord r : existing) {
-            r.setStatus(WarningStatusEnum.RESOLVED);
-            warningRecordMapper.updateById(r);
+            if (r.getStatus() == WarningStatusEnum.ACTIVE) {
+                r.setStatus(WarningStatusEnum.RESOLVED);
+                warningRecordMapper.updateById(r);
+                resolved++;
+            }
         }
-        return existing.size();
+        return resolved;
     }
 
     private void sendWarningNotification(Long studentUserId, WarningLevelEnum level, String reason) {
