@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -222,6 +223,14 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
                 throw new BusinessException(400, "存在无效的学生用户");
             }
         }
+        // 批量预载已有成绩（替代循环内逐条 selectOne）：studentUserId -> 已有 REGULAR 成绩
+        Map<Long, Score> existByStudent = entryStudentIds.isEmpty()
+                ? new HashMap<>()
+                : baseMapper.selectList(new LambdaQueryWrapper<Score>()
+                                .eq(Score::getTeachInfoId, teachInfoId)
+                                .in(Score::getStudentUserId, entryStudentIds)
+                                .eq(Score::getScoreType, ScoreTypeEnum.REGULAR))
+                        .stream().collect(Collectors.toMap(Score::getStudentUserId, s -> s, (a, b) -> a));
         for (ScoreEntryRequest e : request.getEntries()) {
             if (e.getStudentUserId() == null) {
                 throw new BusinessException(400, "学生ID不能为空");
@@ -234,10 +243,7 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
             BigDecimal total = computeTotal(e.getRegularScore(), e.getFinalScore(), ratio);
             String level = ScoreStats.levelOf(total);
 
-            Score exist = baseMapper.selectOne(new LambdaQueryWrapper<Score>()
-                    .eq(Score::getTeachInfoId, teachInfoId)
-                    .eq(Score::getStudentUserId, e.getStudentUserId())
-                    .eq(Score::getScoreType, ScoreTypeEnum.REGULAR));
+            Score exist = existByStudent.get(e.getStudentUserId());
             boolean isNew = (exist == null);
             if (!isNew && Integer.valueOf(1).equals(exist.getLocked())) {
                 throw new BusinessException(409, "成绩已锁定，不可修改");
@@ -258,6 +264,8 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
             g.setEnterUserId(enterUserId);
             if (isNew) {
                 baseMapper.insert(g);
+                // 回填预载 Map：同一请求内重复学号的后续条目按更新处理（与原逐条 selectOne 语义一致）
+                existByStudent.put(e.getStudentUserId(), g);
             } else {
                 baseMapper.updateById(g);
             }
