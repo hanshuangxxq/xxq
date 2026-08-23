@@ -90,7 +90,7 @@ public class StudentEnrollmentResolver {
      * 学生是否选修该授课安排。
      * <p>公选课班判断 selection_class_member 命中；常规班判断学生所在班级名出现在授课安排的合班 CSV 中。
      */
-    public boolean isEnrolled(Long teachInfoId, Long studentUserId) {
+    public Boolean isEnrolled(Long teachInfoId, Long studentUserId) {
         TeachInfo info = teachInfoMapper.selectById(teachInfoId);
         if (info == null) {
             return false;
@@ -169,7 +169,7 @@ public class StudentEnrollmentResolver {
     }
 
     /** 该授课安排是否关联了选课班（删授课安排前的下游引用检查）。 */
-    public boolean hasSelectionClass(Long teachInfoId) {
+    public Boolean hasSelectionClass(Long teachInfoId) {
         Long count = selectionClassMapper.selectCount(
                 new LambdaQueryWrapper<SelectionClass>().eq(SelectionClass::getTeachInfoId, teachInfoId));
         return count != null && count > 0;

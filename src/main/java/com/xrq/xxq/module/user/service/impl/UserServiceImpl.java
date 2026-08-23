@@ -70,7 +70,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     }
 
     @Override
-    public boolean updateProfile(Long userId, UpdateProfileRequest request) {
+    public Boolean updateProfile(Long userId, UpdateProfileRequest request) {
         User user = userMapper.selectById(userId);
         if (user == null) {
             throw new BusinessException(404, "用户不存在");

@@ -16,14 +16,14 @@ public class AssignmentOverviewRow {
     private String teacherNo;
 
     /** 已自由选择数 */
-    private long pickedCount;
+    private Long pickedCount;
 
     /** 已被指定分配数 */
-    private long allocatedCount;
+    private Long allocatedCount;
 
     /** 可分配上限（活动配置） */
-    private int capacity;
+    private Integer capacity;
 
     /** 空缺席位数 = capacity - pickedCount - allocatedCount */
-    private long freeCount;
+    private Long freeCount;
 }

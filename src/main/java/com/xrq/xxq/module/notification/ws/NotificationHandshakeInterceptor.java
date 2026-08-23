@@ -81,7 +81,7 @@ public class NotificationHandshakeInterceptor implements HandshakeInterceptor {
             return null;
         }
         for (String pair : query.split("&")) {
-            int idx = pair.indexOf('=');
+            Integer idx = pair.indexOf('=');
             if (idx > 0 && "token".equals(pair.substring(0, idx))) {
                 return pair.substring(idx + 1);
             }

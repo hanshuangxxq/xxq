@@ -193,7 +193,7 @@ public class GraduationDashboardQuery {
     }
 
     /** 内存筛选：院系 / 学号或姓名关键字 / 选题状态（语义与原 SQL 一致）。 */
-    private boolean matches(DashboardRow row, Long collegeId, String keyword, String status) {
+    private Boolean matches(DashboardRow row, Long collegeId, String keyword, String status) {
         if (collegeId != null && !collegeId.equals(row.getCollegeId())) {
             return false;
         }
@@ -230,7 +230,7 @@ public class GraduationDashboardQuery {
         return map;
     }
 
-    private boolean contains(String text, String keyword) {
+    private Boolean contains(String text, String keyword) {
         return text != null && text.contains(keyword);
     }
 

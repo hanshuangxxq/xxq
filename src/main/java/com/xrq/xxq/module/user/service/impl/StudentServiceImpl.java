@@ -56,7 +56,7 @@ public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> impl
                     .map(User::getId)
                     .toList();
             if (matchedUserIds.isEmpty()) {
-                return new PageResult<>(List.of(), 0, pageQuery.resolvedPage(), pageQuery.resolvedSize(), 0);
+                return new PageResult<>(List.of(), 0L, pageQuery.resolvedPage(), pageQuery.resolvedSize(), 0L);
             }
             wrapper.in(Student::getUserId, matchedUserIds);
         }
@@ -116,7 +116,7 @@ public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> impl
     }
 
     @Override
-    public boolean updateStudentInfo(Long studentId, UpdateStudentRequest request) {
+    public Boolean updateStudentInfo(Long studentId, UpdateStudentRequest request) {
         Student student = studentMapper.selectById(studentId);
         if (student == null) {
             throw new BusinessException(404, "学生不存在");

@@ -282,7 +282,7 @@ public class SelectionCampaignServiceImpl
      *
      * @param deleteCourse 是否删除衍生 Course；公选课无衍生 course，此参数保留以兼容签名
      */
-    private void doCascadeDelete(SelectionCampaign campaign, boolean deleteCourse) {
+    private void doCascadeDelete(SelectionCampaign campaign, Boolean deleteCourse) {
         Long campaignId = campaign.getId();
         // 1. 删 selection_class_member：先取本活动下所有 selection_class.id，再批量删其成员
         List<Long> classIds = selectionClassMapper.selectList(
@@ -499,7 +499,7 @@ public class SelectionCampaignServiceImpl
                 .collect(Collectors.toMap(SelectionGroup::getId, SelectionGroup::getName));
     }
 
-    private CampaignResponse toResponse(SelectionCampaign campaign, Semester semester, boolean loadGroup) {
+    private CampaignResponse toResponse(SelectionCampaign campaign, Semester semester, Boolean loadGroup) {
         String groupName = loadGroup && campaign.getGroupId() != null
                 ? selectionGroupMapper.selectByIds(List.of(campaign.getGroupId())).stream()
                         .map(SelectionGroup::getName).findFirst().orElse(null)

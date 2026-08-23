@@ -77,12 +77,12 @@ public class GraduationAssignmentServiceImpl
             throw new BusinessException(403, "只能选择本院系学生");
         }
         // R-6.3：自由选择数 < 自由选择上限
-        long picked = countTeacherAssignments(request.getCampaignId(), teacherUserId, AssignmentSourceEnum.TEACHER_PICK);
+        Long picked = countTeacherAssignments(request.getCampaignId(), teacherUserId, AssignmentSourceEnum.TEACHER_PICK);
         if (picked >= campaign.getFreeSelectCapacity()) {
             throw new BusinessException(409, "自由选择名额已达上限");
         }
         // R-6.4：先占先得 —— 学生维度锁保护「查重 + 插入」
-        return distributedLock.withLock("grad:assign:" + campaign.getId() + ":" + request.getStudentId(), 30, () -> {
+        return distributedLock.withLock("grad:assign:" + campaign.getId() + ":" + request.getStudentId(), 30L, () -> {
             ensureStudentUnassigned(campaign.getId(), request.getStudentId());
             GraduationAssignment assignment = new GraduationAssignment();
             assignment.setCampaignId(campaign.getId());
@@ -150,11 +150,11 @@ public class GraduationAssignmentServiceImpl
             throw new BusinessException(403, "只能分配给本院系教师");
         }
         // R-6.10：教师名下总数 < 可分配上限
-        long total = countTeacherAssignments(request.getCampaignId(), request.getTeacherId(), null);
+        Long total = countTeacherAssignments(request.getCampaignId(), request.getTeacherId(), null);
         if (total >= campaign.getSupervisorCapacity()) {
             throw new BusinessException(409, "该教师名额已满");
         }
-        return distributedLock.withLock("grad:assign:" + campaign.getId() + ":" + request.getStudentId(), 30, () -> {
+        return distributedLock.withLock("grad:assign:" + campaign.getId() + ":" + request.getStudentId(), 30L, () -> {
             ensureStudentUnassigned(campaign.getId(), request.getStudentId());
             GraduationAssignment assignment = new GraduationAssignment();
             assignment.setCampaignId(campaign.getId());
@@ -196,7 +196,7 @@ public class GraduationAssignmentServiceImpl
         if (!deptCollegeId.equals(newTeacherCollegeId)) {
             throw new BusinessException(403, "只能改派给本院系教师");
         }
-        return distributedLock.withLock("grad:assign:" + campaign.getId() + ":" + request.getStudentId(), 30, () -> {
+        return distributedLock.withLock("grad:assign:" + campaign.getId() + ":" + request.getStudentId(), 30L, () -> {
             GraduationAssignment assignment = baseMapper.selectOne(new LambdaQueryWrapper<GraduationAssignment>()
                     .eq(GraduationAssignment::getCampaignId, campaign.getId())
                     .eq(GraduationAssignment::getStudentId, request.getStudentId())
@@ -207,7 +207,7 @@ public class GraduationAssignmentServiceImpl
             if (assignment.getTeacherId().equals(request.getNewTeacherId())) {
                 throw new BusinessException(400, "新教师与原教师相同");
             }
-            long newTotal = countTeacherAssignments(campaign.getId(), request.getNewTeacherId(), null);
+            Long newTotal = countTeacherAssignments(campaign.getId(), request.getNewTeacherId(), null);
             if (newTotal >= campaign.getSupervisorCapacity()) {
                 throw new BusinessException(409, "新教师名额已满");
             }
@@ -279,9 +279,9 @@ public class GraduationAssignmentServiceImpl
         List<AssignmentOverviewRow> rows = new ArrayList<>();
         for (Teacher teacher : teachers) {
             List<GraduationAssignment> mine = byTeacher.getOrDefault(teacher.getUserId(), List.of());
-            long picked = mine.stream()
+            Long picked = mine.stream()
                     .filter(a -> a.getSource() == AssignmentSourceEnum.TEACHER_PICK).count();
-            long allocated = mine.size() - picked;
+            Long allocated = mine.size() - picked;
             AssignmentOverviewRow row = new AssignmentOverviewRow();
             row.setTeacherId(teacher.getUserId());
             row.setTeacherName(teacherNameMap.get(teacher.getUserId()));
@@ -289,7 +289,7 @@ public class GraduationAssignmentServiceImpl
             row.setPickedCount(picked);
             row.setAllocatedCount(allocated);
             row.setCapacity(campaign.getSupervisorCapacity());
-            row.setFreeCount(Math.max(0, campaign.getSupervisorCapacity() - mine.size()));
+            row.setFreeCount(Math.max(0L, campaign.getSupervisorCapacity() - mine.size()));
             rows.add(row);
         }
         return rows;
@@ -330,7 +330,7 @@ public class GraduationAssignmentServiceImpl
         }
     }
 
-    private long countTeacherAssignments(Long campaignId, Long teacherId, AssignmentSourceEnum source) {
+    private Long countTeacherAssignments(Long campaignId, Long teacherId, AssignmentSourceEnum source) {
         return baseMapper.selectCount(new LambdaQueryWrapper<GraduationAssignment>()
                 .eq(GraduationAssignment::getCampaignId, campaignId)
                 .eq(GraduationAssignment::getTeacherId, teacherId)

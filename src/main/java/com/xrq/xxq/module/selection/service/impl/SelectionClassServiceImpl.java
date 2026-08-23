@@ -83,12 +83,12 @@ public class SelectionClassServiceImpl implements SelectionClassService {
                 : userMapper.selectByIds(records.stream().map(SelectionRecord::getStudentId)
                                 .filter(Objects::nonNull).distinct().toList())
                         .stream().map(User::getId).collect(Collectors.toSet());
-        int capacity = campaign.getCapacity() == null || campaign.getCapacity() <= 0
+        Integer capacity = campaign.getCapacity() == null || campaign.getCapacity() <= 0
                 ? Integer.MAX_VALUE : campaign.getCapacity();
         List<List<SelectionRecord>> newBatches = new ArrayList<>();
-        int idx = 0;
+        Integer idx = 0;
         while (idx < records.size()) {
-            int end = Math.min(idx + capacity, records.size());
+            Integer end = Math.min(idx + capacity, records.size());
             newBatches.add(new ArrayList<>(records.subList(idx, end)));
             idx = end;
         }
@@ -115,11 +115,11 @@ public class SelectionClassServiceImpl implements SelectionClassService {
                 : teachInfoMapper.selectByIds(oldTeachInfoIds).stream()
                         .collect(Collectors.toMap(TeachInfo::getId, t -> t, (a, b) -> a));
 
-        int newClassCount = newBatches.size();
+        Integer newClassCount = newBatches.size();
         List<TeachInfo> createdTeachInfos = new ArrayList<>();
 
         // 处理新分班（classNo 1..newClassCount）：增量 diff
-        int classNo = 1;
+        Integer classNo = 1;
         for (List<SelectionRecord> batch : newBatches) {
             SelectionClass sc = existingByClassNo.get(classNo);
             Set<Long> newStudentIds = batch.stream()
@@ -192,7 +192,7 @@ public class SelectionClassServiceImpl implements SelectionClassService {
 
         // 精细化清缓存：所有班 class 维度 + 成员 user 维度（替代 clearAll 全局清空）
         StringBuilder classNames = new StringBuilder();
-        for (int n = 1; n <= newClassCount; n++) {
+        for (Integer n = 1; n <= newClassCount; n++) {
             if (n > 1) classNames.append(",");
             classNames.append(courseName).append("-").append(n);
         }

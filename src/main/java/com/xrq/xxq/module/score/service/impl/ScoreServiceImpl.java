@@ -205,7 +205,7 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
         if (config == null) {
             throw new BusinessException(400, "请先设置平时分占比");
         }
-        int ratio = config.getRegularRatio();
+        Integer ratio = config.getRegularRatio();
         CourseInfoResolver.CourseInfo courseInfo = courseInfoResolver.resolveOne(
                 info.getCourseId(), info.getCampaignId());
         String courseName = courseInfo != null && courseInfo.getCourseName() != null
@@ -244,7 +244,7 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
             String level = ScoreStats.levelOf(total);
 
             Score exist = existByStudent.get(e.getStudentUserId());
-            boolean isNew = (exist == null);
+            Boolean isNew = (exist == null);
             if (!isNew && Integer.valueOf(1).equals(exist.getLocked())) {
                 throw new BusinessException(409, "成绩已锁定，不可修改");
             }
@@ -312,7 +312,7 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
         }
         ScoreStats.validateScore(entry.getRegularScore());
         ScoreStats.validateScore(entry.getFinalScore());
-        int ratio = g.getRegularRatio() != null ? g.getRegularRatio() : 0;
+        Integer ratio = g.getRegularRatio() != null ? g.getRegularRatio() : 0;
         BigDecimal total = computeTotal(entry.getRegularScore(), entry.getFinalScore(), ratio);
         g.setRegularScore(entry.getRegularScore());
         g.setFinalScore(entry.getFinalScore());
@@ -518,9 +518,9 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
         dto.setCourseId(courseId);
         dto.setCourseName(courseName);
         dto.setTotalCount(grades.size());
-        int exc = 0, good = 0, med = 0, pass = 0, fail = 0;
+        Integer exc = 0, good = 0, med = 0, pass = 0, fail = 0;
         BigDecimal sum = BigDecimal.ZERO;
-        int scored = 0;
+        Integer scored = 0;
         BigDecimal max = null, min = null;
         for (Score g : grades) {
             BigDecimal t = g.getTotalScore();
@@ -604,14 +604,14 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
         }).toList();
     }
 
-    private BigDecimal computeTotal(BigDecimal regular, BigDecimal finale, int ratio) {
+    private BigDecimal computeTotal(BigDecimal regular, BigDecimal finale, Integer ratio) {
         BigDecimal ratioBd = BigDecimal.valueOf(ratio);
         BigDecimal regularPart = regular.multiply(ratioBd).divide(ScoreStats.HUNDRED, 2, RoundingMode.HALF_UP);
         BigDecimal finalPart = finale.multiply(ScoreStats.HUNDRED.subtract(ratioBd)).divide(ScoreStats.HUNDRED, 2, RoundingMode.HALF_UP);
         return regularPart.add(finalPart);
     }
 
-    private boolean belongsToCollege(String classNamesCsv, Long collegeId) {
+    private Boolean belongsToCollege(String classNamesCsv, Long collegeId) {
         List<String> names = ClassNameUtil.splitClassNames(classNamesCsv);
         if (names.isEmpty() || collegeId == null) {
             return false;

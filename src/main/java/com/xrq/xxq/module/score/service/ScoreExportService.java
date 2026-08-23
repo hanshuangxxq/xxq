@@ -56,21 +56,21 @@ public class ScoreExportService {
 
             // 表头行
             Row header = sheet.createRow(1);
-            for (int i = 0; i < COLUMNS.length; i++) {
+            for (Integer i = 0; i < COLUMNS.length; i++) {
                 Cell c = header.createCell(i);
                 c.setCellValue(COLUMNS[i]);
                 c.setCellStyle(headerStyle);
             }
 
             // 数据行
-            int r = 2;
+            Integer r = 2;
             for (ScoreView g : grades) {
                 Row row = sheet.createRow(r++);
                 textCell(row, 0, str(g.getStudentNo()), dataStyle);
                 textCell(row, 1, str(g.getStudentName()), dataStyle);
                 numCell(row, 2, num(g.getRegularScore()), dataStyle);
                 numCell(row, 3, num(g.getFinalScore()), dataStyle);
-                numCell(row, 4, g.getRegularRatio() != null ? g.getRegularRatio() : 0, dataStyle);
+                numCell(row, 4, num(g.getRegularRatio()), dataStyle);
                 numCell(row, 5, num(g.getTotalScore()), dataStyle);
                 textCell(row, 6, str(g.getScoreLevel()), dataStyle);
             }
@@ -126,13 +126,13 @@ public class ScoreExportService {
         style.setBorderRight(BorderStyle.THIN);
     }
 
-    private void textCell(Row row, int col, String value, CellStyle style) {
+    private void textCell(Row row, Integer col, String value, CellStyle style) {
         Cell cell = row.createCell(col);
         cell.setCellValue(value);
         cell.setCellStyle(style);
     }
 
-    private void numCell(Row row, int col, double value, CellStyle style) {
+    private void numCell(Row row, Integer col, Double value, CellStyle style) {
         Cell cell = row.createCell(col);
         cell.setCellValue(value);
         cell.setCellStyle(style);
@@ -143,10 +143,10 @@ public class ScoreExportService {
      * POI {@link Sheet#autoSizeColumn(int)} 对中文估宽偏窄导致表头被截断的问题。
      * 跨列合并的单元格（如标题行）不计入单列宽度。
      */
-    private void autoSizeColumns(Sheet sheet, int colCount) {
-        for (int col = 0; col < colCount; col++) {
-            int maxDisplay = 0;
-            for (int rowIdx = 0; rowIdx <= sheet.getLastRowNum(); rowIdx++) {
+    private void autoSizeColumns(Sheet sheet, Integer colCount) {
+        for (Integer col = 0; col < colCount; col++) {
+            Integer maxDisplay = 0;
+            for (Integer rowIdx = 0; rowIdx <= sheet.getLastRowNum(); rowIdx++) {
                 Row row = sheet.getRow(rowIdx);
                 if (row == null) {
                     continue;
@@ -159,19 +159,19 @@ public class ScoreExportService {
                 if (text == null || text.isEmpty()) {
                     continue;
                 }
-                int w = displayWidth(text);
+                Integer w = displayWidth(text);
                 if (w > maxDisplay) {
                     maxDisplay = w;
                 }
             }
             // POI 列宽单位 = 1/256 字符宽；+2 留出留白，上限 255 字符
-            int width = Math.min((maxDisplay + 2) * 256, 255 * 256);
+            Integer width = Math.min((maxDisplay + 2) * 256, 255 * 256);
             sheet.setColumnWidth(col, width);
         }
     }
 
-    private boolean inMergedRegion(Sheet sheet, int rowIdx, int col) {
-        for (int i = 0; i < sheet.getNumMergedRegions(); i++) {
+    private Boolean inMergedRegion(Sheet sheet, Integer rowIdx, Integer col) {
+        for (Integer i = 0; i < sheet.getNumMergedRegions(); i++) {
             if (sheet.getMergedRegion(i).isInRange(rowIdx, col)) {
                 return true;
             }
@@ -195,15 +195,15 @@ public class ScoreExportService {
     }
 
     /** 估算字符串在 Excel 中的显示宽度：CJK/全角字符计 2，其余计 1。 */
-    private int displayWidth(String s) {
-        int width = 0;
-        for (int i = 0; i < s.length(); i++) {
+    private Integer displayWidth(String s) {
+        Integer width = 0;
+        for (Integer i = 0; i < s.length(); i++) {
             width += isWideChar(s.charAt(i)) ? 2 : 1;
         }
         return width;
     }
 
-    private boolean isWideChar(char c) {
+    private Boolean isWideChar(Character c) {
         if (c >= 0x1100 && c <= 0x115F) return true;   // Hangul Jamo
         if (c >= 0x2E80 && c <= 0x303E) return true;   // CJK 部首/标点
         if (c >= 0x3040 && c <= 0x33BF) return true;   // 假名/CJK/全角符号
@@ -225,8 +225,8 @@ public class ScoreExportService {
             Document doc = new Document();
             PdfWriter.getInstance(doc, out);
             doc.open();
-            Font titleFont = cjkFont(16);
-            Font cellFont = cjkFont(10);
+            Font titleFont = cjkFont(16f);
+            Font cellFont = cjkFont(10f);
 
             Paragraph p = new Paragraph(title, titleFont);
             p.setAlignment(Element.ALIGN_CENTER);
@@ -255,7 +255,7 @@ public class ScoreExportService {
         }
     }
 
-    private Font cjkFont(float size) {
+    private Font cjkFont(Float size) {
         try {
             BaseFont bf = BaseFont.createFont("STSong-Light", "UniGB-UCS2-H", BaseFont.NOT_EMBEDDED);
             return new Font(bf, size);
@@ -274,8 +274,8 @@ public class ScoreExportService {
         return o != null ? o.toString() : "";
     }
 
-    private double num(BigDecimal bd) {
-        return bd != null ? bd.doubleValue() : 0;
+    private Double num(Number n) {
+        return n != null ? n.doubleValue() : 0.0;
     }
 
     private String safeSheetName(String name) {

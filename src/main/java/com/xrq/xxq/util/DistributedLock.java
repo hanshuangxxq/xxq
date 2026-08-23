@@ -49,7 +49,7 @@ public class DistributedLock {
      * @param action        受保护动作（通常为“查重 + 插入”）
      * @return 动作返回值
      */
-    public <T> T withLock(String key, long expireSeconds, Supplier<T> action) {
+    public <T> T withLock(String key, Long expireSeconds, Supplier<T> action) {
         String token = UUID.randomUUID().toString();
         String fullKey = LOCK_PREFIX + key;
         Boolean acquired = redisTemplate.opsForValue()

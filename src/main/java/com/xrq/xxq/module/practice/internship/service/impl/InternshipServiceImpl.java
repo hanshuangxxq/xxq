@@ -97,7 +97,7 @@ public class InternshipServiceImpl
         }
         if (request.getCapacity() != null) {
             ParamValidator.requirePositive(request.getCapacity(), "实习容量");
-            int selected = internship.getSelectedCount() == null ? 0 : internship.getSelectedCount();
+            Integer selected = internship.getSelectedCount() == null ? 0 : internship.getSelectedCount();
             if (request.getCapacity() < selected) {
                 throw new BusinessException(409, "容量不能小于已通过人数");
             }
@@ -231,7 +231,7 @@ public class InternshipServiceImpl
         ensureOwns(internship, operatorUserId, userType);
         if (request.getApproved()) {
             // 审核通过才纳入容量管理：条件更新防超售；满员时报名保持 PENDING，可扩容后再审
-            int affected = baseMapper.update(null, new LambdaUpdateWrapper<Internship>()
+            Integer affected = baseMapper.update(null, new LambdaUpdateWrapper<Internship>()
                     .eq(Internship::getId, internship.getId())
                     .lt(Internship::getSelectedCount, internship.getCapacity())
                     .setSql("selected_count = selected_count + 1"));

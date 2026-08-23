@@ -163,7 +163,7 @@ public class SocialPracticeReportServiceImpl
             throw new BusinessException(404, "报告不存在");
         }
         if (!AuthFacade.USER_TYPE_ACADEMIC_ADMIN.equals(userType)) {
-            boolean isOwnerStudent = report.getStudentId() != null && report.getStudentId().equals(operatorUserId)
+            Boolean isOwnerStudent = report.getStudentId() != null && report.getStudentId().equals(operatorUserId)
                     && report.getStatus() == ReportStatusEnum.SUBMITTED;
             if (!isOwnerStudent) {
                 throw new BusinessException(403, "权限不足");

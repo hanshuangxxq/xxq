@@ -281,7 +281,7 @@ public class EvaluationTemplateServiceImpl implements EvaluationTemplateService 
         referenceValidator.requireExists(templateMapper, templateId, "评教模板");
         Map<Long, EvaluationItem> map = entities.stream()
                 .collect(Collectors.toMap(EvaluationItem::getId, i -> i));
-        int order = 1;
+        Integer order = 1;
         for (TemplateItemDto dto : items) {
             EvaluationItem it = map.get(dto.getItemId());
             if (templateItemMapper.selectCount(new LambdaQueryWrapper<EvaluationTemplateItem>()
@@ -317,7 +317,7 @@ public class EvaluationTemplateServiceImpl implements EvaluationTemplateService 
             }
         }
         // 新增/更新
-        int order = 1;
+        Integer order = 1;
         for (TemplateItemDto dto : items) {
             EvaluationTemplateItem existingRel = existingByItemId.get(dto.getItemId());
             if (existingRel == null) {

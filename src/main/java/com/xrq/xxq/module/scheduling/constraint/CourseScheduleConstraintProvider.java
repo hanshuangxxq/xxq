@@ -82,8 +82,8 @@ public class CourseScheduleConstraintProvider implements ConstraintProvider {
                 .filter(lesson -> {
                     Long rc = lesson.getTimeslot().getReservedCourseId();
                     Long rca = lesson.getTimeslot().getReservedCampaignId();
-                    boolean courseViolation = rc != null && !rc.equals(lesson.getCourseId());
-                    boolean campaignViolation = rca != null && !rca.equals(lesson.getCampaignId());
+                    Boolean courseViolation = rc != null && !rc.equals(lesson.getCourseId());
+                    Boolean campaignViolation = rca != null && !rca.equals(lesson.getCampaignId());
                     return courseViolation || campaignViolation;
                 })
                 .penalize(HardSoftScore.ONE_HARD)
@@ -103,7 +103,7 @@ public class CourseScheduleConstraintProvider implements ConstraintProvider {
                 .asConstraint("Room capacity");
     }
 
-    private static boolean sharesAnyStudent(Lesson a, Lesson b) {
+    private static Boolean sharesAnyStudent(Lesson a, Lesson b) {
         Set<Long> aIds = a.getStudentIds();
         if (aIds == null || aIds.isEmpty()) {
             return false;
@@ -120,7 +120,7 @@ public class CourseScheduleConstraintProvider implements ConstraintProvider {
         return false;
     }
 
-    private static boolean weeksOverlap(Lesson a, Lesson b) {
+    private static Boolean weeksOverlap(Lesson a, Lesson b) {
         if (a.getStartWeek() == null || a.getEndWeek() == null
                 || b.getStartWeek() == null || b.getEndWeek() == null) {
             return true;
@@ -129,7 +129,7 @@ public class CourseScheduleConstraintProvider implements ConstraintProvider {
     }
 
     /** 同一学期或任一为 null（保守处理）时返回 true。不同学期返回 false，不产生冲突。 */
-    private static boolean sameSemester(Lesson a, Lesson b) {
+    private static Boolean sameSemester(Lesson a, Lesson b) {
         if (a.getSemesterId() == null || b.getSemesterId() == null) {
             return true;
         }

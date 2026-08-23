@@ -185,7 +185,7 @@ public class InternshipReportServiceImpl
             throw new BusinessException(404, "报告不存在");
         }
         if (!AuthFacade.USER_TYPE_ACADEMIC_ADMIN.equals(userType)) {
-            boolean allowed = false;
+            Boolean allowed = false;
             if (report.getStudentId() != null && report.getStudentId().equals(operatorUserId)
                     && report.getStatus() == ReportStatusEnum.SUBMITTED) {
                 allowed = true;

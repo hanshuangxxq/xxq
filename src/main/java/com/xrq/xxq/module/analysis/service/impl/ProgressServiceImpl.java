@@ -119,14 +119,14 @@ public class ProgressServiceImpl implements ProgressService {
             cp.setProgressPercent(computeProgress(currentWeek, info.getStartWeek(), info.getEndWeek()));
 
             Exam exam = examMap.get(info.getId());
-            boolean examCompleted = exam != null && exam.getStatus() == ExamStatusEnum.COMPLETED;
+            Boolean examCompleted = exam != null && exam.getStatus() == ExamStatusEnum.COMPLETED;
             cp.setExamStatus(exam == null ? "无考试" : (examCompleted ? "已完成" : "已排考"));
 
             Score sc = scoreMap.get(info.getId());
             cp.setScoreEntered(sc != null && sc.getTotalScore() != null);
             cp.setTotalScore(sc != null ? sc.getTotalScore() : null);
 
-            boolean ended = (currentWeek != null && info.getEndWeek() != null && currentWeek > info.getEndWeek())
+            Boolean ended = (currentWeek != null && info.getEndWeek() != null && currentWeek > info.getEndWeek())
                     || examCompleted;
             cp.setStatus(ended ? "已结课" : "进行中");
             courses.add(cp);
@@ -163,8 +163,8 @@ public class ProgressServiceImpl implements ProgressService {
         if (sem == null || sem.getStartDate() == null || sem.getStartWeek() == null) {
             return null;
         }
-        long weeks = ChronoUnit.WEEKS.between(sem.getStartDate(), LocalDate.now());
-        return sem.getStartWeek() + (int) weeks;
+        Long weeks = ChronoUnit.WEEKS.between(sem.getStartDate(), LocalDate.now());
+        return sem.getStartWeek() + weeks.intValue();
     }
 
     private Integer computeProgress(Integer currentWeek, Integer startWeek, Integer endWeek) {
@@ -180,8 +180,8 @@ public class ProgressServiceImpl implements ProgressService {
         if (currentWeek > endWeek) {
             return 100;
         }
-        int total = endWeek - startWeek + 1;
-        int done = currentWeek - startWeek + 1;
+        Integer total = endWeek - startWeek + 1;
+        Integer done = currentWeek - startWeek + 1;
         return Math.min(100, Math.max(0, (int) Math.round(done * 100.0 / total)));
     }
 }

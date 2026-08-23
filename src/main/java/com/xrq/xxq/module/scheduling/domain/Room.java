@@ -23,7 +23,7 @@ public class Room {
     private String roomName;
 
     /** 教室最大容量（人数），对应 local.max。0 或 Integer.MAX_VALUE 表示无限制 */
-    private int capacity;
+    private Integer capacity;
 
     /** 教室类型，对应 local.type。自动排课仅选取普通教室 */
     private LocalTypeEnum type;

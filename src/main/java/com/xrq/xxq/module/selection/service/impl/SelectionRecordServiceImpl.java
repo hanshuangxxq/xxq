@@ -134,7 +134,7 @@ public class SelectionRecordServiceImpl implements SelectionRecordService {
         // 分布式锁保护「查重 + 容量 INCR + 插入」关键段，关闭并发下同一生重复选课的竞态窗口。
         // 锁按 campaignId+studentId 粒度：同一学生重复提交被串行化；容量由 Redis Lua 原子计数器跨学生防超卖。
         return distributedLock.withLock(
-                "sel:" + request.getCampaignId() + ":" + studentUserId, 30, () -> {
+                "sel:" + request.getCampaignId() + ":" + studentUserId, 30L, () -> {
                     Long dupCount = selectionRecordMapper.selectCount(new LambdaQueryWrapper<SelectionRecord>()
                             .eq(SelectionRecord::getCampaignId, request.getCampaignId())
                             .eq(SelectionRecord::getStudentId, studentUserId)
@@ -323,18 +323,18 @@ public class SelectionRecordServiceImpl implements SelectionRecordService {
                 resp.setGroupId(group.getId());
                 resp.setGroupName(group.getName());
                 resp.setGroupMax(group.getMaxCourses());
-                long selectedInGroup = ctx.siblingIdsByGroup()
+                Long selectedInGroup = ctx.siblingIdsByGroup()
                         .getOrDefault(campaign.getGroupId(), List.of()).stream()
                         .filter(ctx.mySelectedCampaignIds()::contains)
                         .count();
-                resp.setSelectedInGroup((int) selectedInGroup);
+                resp.setSelectedInGroup(selectedInGroup.intValue());
             }
         } else {
             resp.setSelectedInGroup(0);
         }
 
         // 选课统计（预加载聚合结果）
-        int selectedCount = ctx.selectedCountByCampaign().getOrDefault(campaign.getId(), 0L).intValue();
+        Integer selectedCount = ctx.selectedCountByCampaign().getOrDefault(campaign.getId(), 0L).intValue();
         resp.setSelectedCount(selectedCount);
         resp.setRemaining(Math.max(0, campaign.getCapacity() - selectedCount));
         resp.setSelectedByMe(ctx.mySelectedCampaignIds().contains(campaign.getId()));
@@ -358,7 +358,7 @@ public class SelectionRecordServiceImpl implements SelectionRecordService {
         return resp;
     }
 
-    private boolean isAllowed(SelectionCampaign campaign, Long studentGradeId, Long studentMajorId) {
+    private Boolean isAllowed(SelectionCampaign campaign, Long studentGradeId, Long studentMajorId) {
         List<Long> allowedGrades = parseLongs(campaign.getAllowedGradeIds());
         if (!allowedGrades.isEmpty()) {
             if (studentGradeId == null || !allowedGrades.contains(studentGradeId)) {

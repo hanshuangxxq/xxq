@@ -108,13 +108,13 @@ public class ScoreReviewServiceImpl extends ServiceImpl<ScoreReviewMapper, Score
         } else if (AuthFacade.USER_TYPE_TEACHER.equals(userType)) {
             Teacher t = teacherMapper.findByUserId(userId);
             if (t == null) {
-                return new PageResult<>(List.of(), 0, pageQuery.resolvedPage(), pageQuery.resolvedSize(), 0);
+                return new PageResult<>(List.of(), 0L, pageQuery.resolvedPage(), pageQuery.resolvedSize(), 0L);
             }
             List<Long> scoreIds = scoreMapper.selectList(
                             new LambdaQueryWrapper<Score>().eq(Score::getTeacherId, t.getId()))
                     .stream().map(Score::getId).toList();
             if (scoreIds.isEmpty()) {
-                return new PageResult<>(List.of(), 0, pageQuery.resolvedPage(), pageQuery.resolvedSize(), 0);
+                return new PageResult<>(List.of(), 0L, pageQuery.resolvedPage(), pageQuery.resolvedSize(), 0L);
             }
             w.in(ScoreReview::getScoreId, scoreIds);
         } else {
@@ -202,7 +202,7 @@ public class ScoreReviewServiceImpl extends ServiceImpl<ScoreReviewMapper, Score
         }
         r.setAdminReply(request.getReply());
         r.setAdminId(adminUserId);
-        r.setStatus(request.isResolved() ? ReviewStatusEnum.RESOLVED : ReviewStatusEnum.REJECTED);
+        r.setStatus(Boolean.TRUE.equals(request.getResolved()) ? ReviewStatusEnum.RESOLVED : ReviewStatusEnum.REJECTED);
         r.setResolvedTime(LocalDateTime.now());
         // 外键存在性校验
         referenceValidator.requireExists(scoreMapper, r.getScoreId(), "成绩");

@@ -12,5 +12,5 @@ public class ReviewResolveRequest {
 
     private String reply;           // 教务回复
     private BigDecimal newTotalScore; // 调整后的总评（可选）
-    private boolean resolved;       // true:RESOLVED 已解决 / false:REJECTED 已驳回
+    private Boolean resolved;       // true:RESOLVED 已解决 / false:REJECTED 已驳回
 }

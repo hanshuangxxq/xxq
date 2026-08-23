@@ -56,7 +56,7 @@ public class BatchImportService {
         // 批量预加载（替代逐行查库）：专业/年级/院系字典全量 + 已占用用户名/学号/工号一次 IN 批查
         ImportContext ctx = preload(items);
 
-        int index = 0;
+        Integer index = 0;
         for (UserImportItem item : items) {
             index++;
             try {

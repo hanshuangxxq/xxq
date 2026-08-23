@@ -11,9 +11,9 @@ import lombok.Data;
  */
 @Data
 public class BatchImportResponse {
-    private int total;
-    private int successCount;
-    private int failCount;
+    private Integer total;
+    private Integer successCount = 0;
+    private Integer failCount = 0;
     private List<ImportResultDetail> details = new ArrayList<>();
 
     /**
@@ -21,9 +21,9 @@ public class BatchImportResponse {
      */
     @Data
     public static class ImportResultDetail {
-        private int index;
+        private Integer index;
         private String username;
-        private boolean success;
+        private Boolean success;
         private String message;
     }
 }

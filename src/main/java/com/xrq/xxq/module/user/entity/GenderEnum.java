@@ -19,12 +19,12 @@ public enum GenderEnum {
 
     /** 数据库存取值 */
     @EnumValue
-    private final int code;
+    private final Integer code;
     /** 中文描述 */
     @JsonValue
     private final String desc;
 
-    GenderEnum(int code, String desc) {
+    GenderEnum(Integer code, String desc) {
         this.code = code;
         this.desc = desc;
     }

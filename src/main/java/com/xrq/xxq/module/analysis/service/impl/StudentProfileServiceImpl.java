@@ -156,8 +156,8 @@ public class StudentProfileServiceImpl implements StudentProfileService {
     }
 
     /** 学分求和：按课程去重（碰撞安全键）；passedOnly=true 时仅计及格课程。 */
-    private Integer sumCredits(List<Score> scores, CreditSource creditSource, boolean passedOnly) {
-        int sum = 0;
+    private Integer sumCredits(List<Score> scores, CreditSource creditSource, Boolean passedOnly) {
+        Integer sum = 0;
         Set<String> seen = new HashSet<>();
         for (Score s : scores) {
             String key = CreditSource.keyOf(s);
@@ -260,8 +260,8 @@ public class StudentProfileServiceImpl implements StudentProfileService {
         CreditSource creditSource = loadCreditSource(matesScores);
         Map<Long, List<Score>> byMate = matesScores.stream()
                 .collect(Collectors.groupingBy(Score::getStudentUserId));
-        int ahead = 0;
-        int scoredMates = 0;
+        Integer ahead = 0;
+        Integer scoredMates = 0;
         for (List<Score> ms : byMate.values()) {
             BigDecimal g = GpaCalculator.weightedGpa(ms, creditSource);
             if (g == null) {

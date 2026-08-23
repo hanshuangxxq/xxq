@@ -51,11 +51,11 @@ public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Not
     // ==================== 查询 ====================
 
     @Override
-    public int unreadCount(Long userId, String userType) {
+    public Integer unreadCount(Long userId, String userType) {
         Long direct = baseMapper.selectCount(new LambdaQueryWrapper<Notification>()
                 .eq(Notification::getUserId, userId)
                 .eq(Notification::getIsRead, 0));
-        int directUnread = direct == null ? 0 : direct.intValue();
+        Integer directUnread = direct == null ? 0 : direct.intValue();
         return directUnread + broadcastUnreadCount(userId, userType);
     }
 
@@ -155,7 +155,7 @@ public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Not
 
     @Override
     public void pushUnreadCount(Long userId, String userType) {
-        int count = unreadCount(userId, userType);
+        Integer count = unreadCount(userId, userType);
         sendPayload(userId, Map.of("type", "unread_count", "count", count));
     }
 
@@ -213,7 +213,7 @@ public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Not
                 .toList();
     }
 
-    private int broadcastUnreadCount(Long userId, String userType) {
+    private Integer broadcastUnreadCount(Long userId, String userType) {
         List<Long> visibleIds = visibleBroadcastIds(userType);
         if (visibleIds.isEmpty()) {
             return 0;
@@ -221,7 +221,7 @@ public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Not
         Long readCount = notificationReadMapper.selectCount(new LambdaQueryWrapper<NotificationRead>()
                 .eq(NotificationRead::getUserId, userId)
                 .in(NotificationRead::getBroadcastId, visibleIds));
-        int read = readCount == null ? 0 : readCount.intValue();
+        Integer read = readCount == null ? 0 : readCount.intValue();
         return visibleIds.size() - read;
     }
 
@@ -336,7 +336,7 @@ public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Not
         return resp;
     }
 
-    private NotificationResponse toBroadcastResponse(NotificationBroadcast b, boolean read) {
+    private NotificationResponse toBroadcastResponse(NotificationBroadcast b, Boolean read) {
         NotificationResponse resp = new NotificationResponse();
         resp.setId(b.getId());
         resp.setUserId(null); // 广播无单一接收者

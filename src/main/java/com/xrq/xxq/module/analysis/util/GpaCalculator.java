@@ -27,7 +27,7 @@ public final class GpaCalculator {
         if (totalScore == null) {
             return BigDecimal.ZERO;
         }
-        double s = totalScore.doubleValue();
+        Double s = totalScore.doubleValue();
         if (s < 60) {
             return BigDecimal.ZERO;
         }

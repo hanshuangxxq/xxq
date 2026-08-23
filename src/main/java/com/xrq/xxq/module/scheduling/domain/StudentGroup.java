@@ -25,5 +25,5 @@ public class StudentGroup {
     private String college;
 
     /** 该班级的学生人数（用于教室容量约束判断） */
-    private int studentCount;
+    private Integer studentCount;
 }

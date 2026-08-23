@@ -90,7 +90,7 @@ public class GraduationCampaignServiceImpl
     public CampaignResponse updateCampaign(Long operatorUserId, String operatorType, Long id, CampaignUpdateRequest request) {
         GraduationCampaign campaign = requireCampaign(id);
         LocalDateTime now = LocalDateTime.now();
-        boolean started = now.isAfter(campaign.getTopicStartTime());
+        Boolean started = now.isAfter(campaign.getTopicStartTime());
         if (started) {
             // R-4.1：选题开始后仅允许延长截止时间、上调名额
             if (request.getName() != null && !request.getName().equals(campaign.getName())) {
@@ -266,7 +266,7 @@ public class GraduationCampaignServiceImpl
         }
     }
 
-    private boolean sameGradeIds(List<Long> list, String stored) {
+    private Boolean sameGradeIds(List<Long> list, String stored) {
         Set<Long> a = new HashSet<>(list);
         Set<Long> b = gradeIdsOf(stored);
         return a.equals(b);

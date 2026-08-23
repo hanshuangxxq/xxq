@@ -145,9 +145,9 @@ public class WarningServiceImpl implements WarningService {
         Set<Long> validUserIds = userMapper.selectByIds(byStudent.keySet()).stream()
                 .map(User::getId).collect(Collectors.toSet());
 
-        int scanned = 0;
-        int warned = 0;
-        int resolved = 0;
+        Integer scanned = 0;
+        Integer warned = 0;
+        Integer resolved = 0;
         Map<String, Integer> byLevel = new LinkedHashMap<>();
         byLevel.put(WarningLevelEnum.YELLOW.getDescription(), 0);
         byLevel.put(WarningLevelEnum.ORANGE.getDescription(), 0);
@@ -161,7 +161,7 @@ public class WarningServiceImpl implements WarningService {
             WarningLevelEnum target = matchLevel(configs, m);
 
             if (target != null) {
-                int newlyActivated = upsertWarning(studentUserId, semesterId, target, m,
+                Integer newlyActivated = upsertWarning(studentUserId, semesterId, target, m,
                         existingByStudent.getOrDefault(studentUserId, List.of()), validUserIds);
                 warned += newlyActivated;
                 byLevel.merge(target.getDescription(), 1, Integer::sum);
@@ -201,8 +201,8 @@ public class WarningServiceImpl implements WarningService {
                 regularSemByCourse.putIfAbsent(key, s.getSemesterId());
             }
         }
-        int failCount = 0;
-        int semesterFailCount = 0;
+        Integer failCount = 0;
+        Integer semesterFailCount = 0;
         for (Map.Entry<String, BigDecimal> be : bestByCourse.entrySet()) {
             if (be.getValue().doubleValue() < 60) {
                 failCount++;
@@ -217,7 +217,7 @@ public class WarningServiceImpl implements WarningService {
     /** 按严重程度降序匹配，返回首个命中的级别；无命中返回 null。 */
     private WarningLevelEnum matchLevel(List<WarningConfig> configs, StudentMetrics m) {
         for (WarningConfig c : configs) {
-            boolean hit = c.getGpaThreshold() != null && m.gpa() != null
+            Boolean hit = c.getGpaThreshold() != null && m.gpa() != null
                     && m.gpa().compareTo(c.getGpaThreshold()) < 0;
             if (!hit && c.getFailCountThreshold() != null && m.failCount() >= c.getFailCountThreshold()) {
                 hit = true;
@@ -240,15 +240,15 @@ public class WarningServiceImpl implements WarningService {
      * @param existing     该学生本学期已有预警记录（调用方批量预加载后传入）
      * @param validUserIds 批量预加载的有效用户 id 集合（替代逐条外键校验查询）
      */
-    private int upsertWarning(Long studentUserId, Long semesterId, WarningLevelEnum target, StudentMetrics m,
+    private Integer upsertWarning(Long studentUserId, Long semesterId, WarningLevelEnum target, StudentMetrics m,
                               List<WarningRecord> existing, Set<Long> validUserIds) {
         String reason = String.format("累计GPA %s，累计挂科 %d 门，本学期挂科 %d 门",
                 m.gpa() != null ? m.gpa().toPlainString() : "无", m.failCount(), m.semesterFailCount());
 
-        int newlyActivated = 0;
+        Integer newlyActivated = 0;
         WarningRecord targetRec = existing.stream()
                 .filter(r -> r.getLevel() == target).findFirst().orElse(null);
-        boolean wasActive = targetRec != null && targetRec.getStatus() == WarningStatusEnum.ACTIVE;
+        Boolean wasActive = targetRec != null && targetRec.getStatus() == WarningStatusEnum.ACTIVE;
         if (targetRec == null) {
             targetRec = new WarningRecord();
             targetRec.setStudentUserId(studentUserId);
@@ -284,8 +284,8 @@ public class WarningServiceImpl implements WarningService {
     }
 
     /** 解除该学生所有 ACTIVE 记录（记录由调用方批量预加载后传入），返回解除数。 */
-    private int resolveAll(List<WarningRecord> existing) {
-        int resolved = 0;
+    private Integer resolveAll(List<WarningRecord> existing) {
+        Integer resolved = 0;
         for (WarningRecord r : existing) {
             if (r.getStatus() == WarningStatusEnum.ACTIVE) {
                 r.setStatus(WarningStatusEnum.RESOLVED);
@@ -326,7 +326,7 @@ public class WarningServiceImpl implements WarningService {
         }
         if (scopedStudentIds != null) {
             if (scopedStudentIds.isEmpty()) {
-                return new PageResult<>(List.of(), 0, pageQuery.resolvedPage(), pageQuery.resolvedSize(), 0);
+                return new PageResult<>(List.of(), 0L, pageQuery.resolvedPage(), pageQuery.resolvedSize(), 0L);
             }
             w.in(WarningRecord::getStudentUserId, scopedStudentIds);
         }
@@ -396,6 +396,6 @@ public class WarningServiceImpl implements WarningService {
     }
 
     /** 学生扫描指标中间结构。 */
-    private record StudentMetrics(BigDecimal gpa, int failCount, int semesterFailCount) {
+    private record StudentMetrics(BigDecimal gpa, Integer failCount, Integer semesterFailCount) {
     }
 }

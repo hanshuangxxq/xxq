@@ -32,7 +32,7 @@ public class InternshipPendingStore {
     }
 
     /** 当前待审核人数（SCARD，key 不存在时为 0）。 */
-    public int pendingCount(Long internshipId) {
+    public Integer pendingCount(Long internshipId) {
         Long size = redisTemplate.opsForSet().size(key(internshipId));
         return size == null ? 0 : size.intValue();
     }

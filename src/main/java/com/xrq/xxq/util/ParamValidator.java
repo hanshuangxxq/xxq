@@ -39,26 +39,27 @@ public final class ParamValidator {
         }
     }
 
-    /** 正数校验：value <= 0 抛 400「{name}必须大于0」。 */
-    public static void requirePositive(long value, String name) {
-        if (value <= 0) {
+    /** 正数校验：value 为 null 或 <= 0 抛 400「{name}必须大于0」。 */
+    public static void requirePositive(Number value, String name) {
+        if (value == null || value.doubleValue() <= 0) {
             throw new BusinessException(400, name + "必须大于0");
         }
     }
 
     /** 区间校验：value 为 null 或超出 [min,max] 抛 400「{name}必须在 {min}-{max} 之间」。 */
-    public static void requireInRange(BigDecimal value, double min, double max, String name) {
+    public static void requireInRange(BigDecimal value, Number min, Number max, String name) {
         if (value == null) {
             throw new BusinessException(400, name + "不能为空");
         }
-        double v = value.doubleValue();
-        if (v < min || v > max) {
+        Double v = value.doubleValue();
+        if (v < min.doubleValue() || v > max.doubleValue()) {
             throw new BusinessException(400, name + "必须在 " + fmt(min) + "-" + fmt(max) + " 之间");
         }
     }
 
     /** 整数 d 显示为整数，非整数显示原值。 */
-    private static String fmt(double d) {
-        return d == Math.floor(d) && !Double.isInfinite(d) ? Long.toString((long) d) : Double.toString(d);
+    private static String fmt(Number d) {
+        Double dv = d.doubleValue();
+        return dv == Math.floor(dv) && !Double.isInfinite(dv) ? Long.toString((long) dv.doubleValue()) : Double.toString(dv);
     }
 }

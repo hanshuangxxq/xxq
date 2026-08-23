@@ -168,18 +168,18 @@ public class ScoreAnalysisServiceImpl implements ScoreAnalysisService {
         ScoreDistributionDto dto = new ScoreDistributionDto();
         dto.setCourseId(courseId);
         dto.setCourseName(courseInfoResolver.resolveNameByEitherId(courseId));
-        int s0 = 0, s6 = 0, s7 = 0, s8 = 0, s9 = 0;
+        Integer s0 = 0, s6 = 0, s7 = 0, s8 = 0, s9 = 0;
         BigDecimal sum = BigDecimal.ZERO;
-        int scored = 0;
+        Integer scored = 0;
         BigDecimal max = null, min = null;
-        int pass = 0;
+        Integer pass = 0;
         List<BigDecimal> vals = new ArrayList<>();
         for (Score g : grades) {
             BigDecimal t = g.getTotalScore();
             if (t == null) {
                 continue;
             }
-            double v = t.doubleValue();
+            Double v = t.doubleValue();
             if (v < 60) {
                 s0++;
             } else if (v < 70) {

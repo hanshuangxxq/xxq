@@ -29,7 +29,7 @@ public interface NotificationService extends IService<Notification> {
      *
      * @param userType 当前用户类型，用于判定可见广播；null 时只统计单点未读。
      */
-    int unreadCount(Long userId, String userType);
+    Integer unreadCount(Long userId, String userType);
 
     /**
      * 当前用户消息列表（单点 + 广播合并），status 可选 read/unread，不传则全部。

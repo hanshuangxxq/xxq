@@ -166,7 +166,7 @@ public class DraftCacheManager {
         saveToRedis();
     }
 
-    private static boolean containsClassName(String draftClassName, String target) {
+    private static Boolean containsClassName(String draftClassName, String target) {
         return ClassNameUtil.splitClassNames(draftClassName).contains(target);
     }
 
@@ -201,9 +201,9 @@ public class DraftCacheManager {
     }
 
     /** 按唯一键（courseId + teacherId + className）移除单条草稿。 */
-    public boolean removeByKey(Long courseId, Long teacherId, String className) {
+    public Boolean removeByKey(Long courseId, Long teacherId, String className) {
         synchronized (drafts) {
-            boolean removed = drafts.removeIf(d ->
+            Boolean removed = drafts.removeIf(d ->
                     courseId.equals(d.getCourseId())
                             && teacherId.equals(d.getTeacherId())
                             && className.equals(d.getClassName()));
@@ -237,12 +237,12 @@ public class DraftCacheManager {
     }
 
     /** 是否有草稿。 */
-    public boolean isEmpty() {
+    public Boolean isEmpty() {
         return drafts.isEmpty();
     }
 
     /** 草稿数量。 */
-    public int size() {
+    public Integer size() {
         return drafts.size();
     }
 

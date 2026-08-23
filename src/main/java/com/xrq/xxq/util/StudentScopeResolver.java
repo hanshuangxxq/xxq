@@ -87,7 +87,7 @@ public class StudentScopeResolver {
      * <p>返回 true 表示该学生不在该院系（或归属无法判定），调用方应拒绝访问；
      * 返回 false 表示属于本院，允许访问。（契约与历史调用方一致：{@code if (departmentOwnsStudent) throw 403}）
      */
-    public boolean departmentOwnsStudent(Long deptUserId, Long studentUserId) {
+    public Boolean departmentOwnsStudent(Long deptUserId, Long studentUserId) {
         Department dept = departmentMapper.findByUserId(deptUserId);
         if (dept == null || dept.getCollegeId() == null) {
             return true;
@@ -158,7 +158,7 @@ public class StudentScopeResolver {
     }
 
     /** 教师是否能访问某课程（存在该教师该课程的 teach_info）。 */
-    public boolean teacherCanAccessCourse(Long teacherUserId, Long courseId, String source) {
+    public Boolean teacherCanAccessCourse(Long teacherUserId, Long courseId, String source) {
         Teacher t = teacherMapper.findByUserId(teacherUserId);
         if (t == null) {
             return false;

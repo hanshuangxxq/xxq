@@ -90,7 +90,7 @@ public class SocialPracticeServiceImpl
         }
         if (request.getCapacity() != null) {
             ParamValidator.requirePositive(request.getCapacity(), "实践容量");
-            int selected = practice.getSelectedCount() == null ? 0 : practice.getSelectedCount();
+            Integer selected = practice.getSelectedCount() == null ? 0 : practice.getSelectedCount();
             if (request.getCapacity() < selected) {
                 throw new BusinessException(409, "容量不能小于已申报人数");
             }
@@ -154,7 +154,7 @@ public class SocialPracticeServiceImpl
         if (dup > 0) {
             throw new BusinessException(409, "已申报该实践");
         }
-        int affected = baseMapper.update(null, new LambdaUpdateWrapper<SocialPractice>()
+        Integer affected = baseMapper.update(null, new LambdaUpdateWrapper<SocialPractice>()
                 .eq(SocialPractice::getId, request.getPracticeId())
                 .lt(SocialPractice::getSelectedCount, practice.getCapacity())
                 .setSql("selected_count = selected_count + 1"));

@@ -221,7 +221,7 @@ public class TeachInfoController {
         if (AuthFacade.USER_TYPE_DEPARTMENT.equals(userType)) {
             Department dept = resolveDepartment(request);
             List<DraftItem> deptDrafts = draftCacheManager.getDraftsByCollege(dept.getCollegeId());
-            boolean belongsToDept = deptDrafts.stream()
+            Boolean belongsToDept = deptDrafts.stream()
                     .anyMatch(d -> courseId.equals(d.getCourseId())
                             && teacherId.equals(d.getTeacherId())
                             && className.equals(d.getClassName()));
@@ -234,7 +234,7 @@ public class TeachInfoController {
                     AuthFacade.USER_TYPE_DEPARTMENT);
         }
 
-        boolean removed = draftCacheManager.removeByKey(courseId, teacherId, className);
+        Boolean removed = draftCacheManager.removeByKey(courseId, teacherId, className);
         if (!removed) {
             return Result.fail(404, "草稿记录不存在");
         }
@@ -252,7 +252,7 @@ public class TeachInfoController {
         if (AuthFacade.USER_TYPE_DEPARTMENT.equals(userType)) {
             Department dept = resolveDepartment(request);
             List<DraftItem> deptDrafts = draftCacheManager.getDraftsByCollege(dept.getCollegeId());
-            boolean belongsToDept = deptDrafts.stream()
+            Boolean belongsToDept = deptDrafts.stream()
                     .anyMatch(d -> {
                         String cn = d.getClassName();
                         if (cn == null) return false;

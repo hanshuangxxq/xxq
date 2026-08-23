@@ -89,7 +89,7 @@ public class GraduationDefenseServiceImpl
                 .eq(GraduationDefense::getCampaignId, campaign.getId())
                 .eq(GraduationDefense::getStudentId, request.getStudentId())
                 .last("LIMIT 1"));
-        boolean isNew = defense == null;
+        Boolean isNew = defense == null;
         if (isNew) {
             defense = new GraduationDefense();
             defense.setCampaignId(campaign.getId());
@@ -267,7 +267,7 @@ public class GraduationDefenseServiceImpl
                 .eq(GraduationScore::getCampaignId, campaign.getId())
                 .eq(GraduationScore::getStudentId, request.getStudentId())
                 .last("LIMIT 1"));
-        boolean isNew = score == null;
+        Boolean isNew = score == null;
         if (!isNew && score.getStatus() == GraduationScoreStatusEnum.PUBLISHED) {
             throw new BusinessException(409, "成绩已发布，不可修改");
         }
@@ -493,12 +493,12 @@ public class GraduationDefenseServiceImpl
             headerFont.setBold(true);
             headerStyle.setFont(headerFont);
             org.apache.poi.ss.usermodel.Row header = sheet.createRow(0);
-            for (int i = 0; i < headers.length; i++) {
+            for (Integer i = 0; i < headers.length; i++) {
                 org.apache.poi.ss.usermodel.Cell cell = header.createCell(i);
                 cell.setCellValue(headers[i]);
                 cell.setCellStyle(headerStyle);
             }
-            int r = 1;
+            Integer r = 1;
             for (GraduationScore s : scores) {
                 org.apache.poi.ss.usermodel.Row dataRow = sheet.createRow(r++);
                 dataRow.createCell(0).setCellValue(nvl(noMap.get(s.getStudentId())));
@@ -513,7 +513,7 @@ public class GraduationDefenseServiceImpl
                         ? s.getPublishTime().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
                         : "");
             }
-            for (int i = 0; i < headers.length; i++) {
+            for (Integer i = 0; i < headers.length; i++) {
                 sheet.autoSizeColumn(i);
             }
             workbook.write(out);

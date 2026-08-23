@@ -246,7 +246,7 @@ public class SchedulingServiceImpl implements SchedulingService {
         List<Time> times = timeMapper.selectList(null);
         List<Timeslot> timeslots = new ArrayList<>(times.size() * 7);
         for (Time time : times) {
-            for (int dow = 1; dow <= 7; dow++) {
+            for (Integer dow = 1; dow <= 7; dow++) {
                 String key = time.getId() + "_" + dow;
                 TimeRestriction restriction = restrictionMap.get(key);
 
@@ -281,7 +281,7 @@ public class SchedulingServiceImpl implements SchedulingService {
         return localMapper.selectList(null).stream()
                 .filter(local -> local.getType() == LocalTypeEnum.CLASSROOM)
                 .map(local -> {
-                    int capacity = local.getMax() != null && local.getMax() > 0
+                    Integer capacity = local.getMax() != null && local.getMax() > 0
                             ? local.getMax()
                             : Integer.MAX_VALUE;
                     return new Room(local.getId(), local.getBuilding(), local.getClassRoom(), capacity, LocalTypeEnum.CLASSROOM);
@@ -332,7 +332,7 @@ public class SchedulingServiceImpl implements SchedulingService {
         }
 
         Map<String, StudentGroup> groups = new LinkedHashMap<>();
-        long id = 1;
+        Long id = 1L;
         for (TeachInfo ti : teachInfos) {
             String raw = ti.getClassName();
             if (raw == null || raw.isBlank()) continue;
@@ -340,7 +340,7 @@ public class SchedulingServiceImpl implements SchedulingService {
                 name = name.strip();
                 if (!name.isEmpty() && !groups.containsKey(name)) {
                     Long classId = classNameToClassId.get(name);
-                    int count;
+                    Integer count;
                     if (classId != null) {
                         count = classStudentCount.getOrDefault(classId, 0L).intValue();
                     } else {
@@ -415,7 +415,7 @@ public class SchedulingServiceImpl implements SchedulingService {
 
             // studentIds：选课班取成员 userId；必修课/合班取班级学生 userId
             Set<Long> studentIds = new LinkedHashSet<>();
-            int studentCount;
+            Integer studentCount;
             SelectionClass selectionClass = selectionClassByTeachInfoId.get(ti.getId());
             if (selectionClass != null) {
                 List<SelectionClassMember> members = membersBySelectionClassId.getOrDefault(
@@ -473,7 +473,7 @@ public class SchedulingServiceImpl implements SchedulingService {
         solution.setSolverStatus("SOLVING");
         solutionCache.put(scheduleId, solution);
 
-        int assignedCount = 0;
+        Integer assignedCount = 0;
         for (Lesson lesson : solution.getLessonList()) {
             Timeslot ts = lesson.getTimeslot();
             Room room = lesson.getRoom();

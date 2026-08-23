@@ -41,8 +41,8 @@ public class LoginSessionStore {
         // 清理超出上限的最早会话（列表尾部）
         Long size = redisTemplate.opsForList().size(listKey);
         if (size != null) {
-            long extra = size - MAX_SESSIONS_PER_USER;
-            for (long i = 0; i < extra; i++) {
+            Long extra = size - MAX_SESSIONS_PER_USER;
+            for (Long i = 0L; i < extra; i++) {
                 String evicted = redisTemplate.opsForList().rightPop(listKey);
                 if (evicted != null && !evicted.equals(tokenId)) {
                     redisTemplate.delete(PREFIX + evicted);

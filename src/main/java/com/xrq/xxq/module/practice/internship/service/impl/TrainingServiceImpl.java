@@ -86,7 +86,7 @@ public class TrainingServiceImpl
         }
         if (request.getCapacity() != null) {
             ParamValidator.requirePositive(request.getCapacity(), "培训容量");
-            int enrolled = course.getEnrolledCount() == null ? 0 : course.getEnrolledCount();
+            Integer enrolled = course.getEnrolledCount() == null ? 0 : course.getEnrolledCount();
             if (request.getCapacity() < enrolled) {
                 throw new BusinessException(409, "容量不能小于已报名人数");
             }
@@ -169,7 +169,7 @@ public class TrainingServiceImpl
         if (dup > 0) {
             throw new BusinessException(409, "已报名该培训");
         }
-        int affected = baseMapper.update(null, new LambdaUpdateWrapper<TrainingCourse>()
+        Integer affected = baseMapper.update(null, new LambdaUpdateWrapper<TrainingCourse>()
                 .eq(TrainingCourse::getId, courseId)
                 .lt(TrainingCourse::getEnrolledCount, course.getCapacity())
                 .setSql("enrolled_count = enrolled_count + 1"));

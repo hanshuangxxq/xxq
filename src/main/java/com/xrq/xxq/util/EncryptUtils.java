@@ -50,7 +50,7 @@ public class EncryptUtils {
      * @param length 盐的字节长度
      * @return Base64 编码的盐
      */
-    public static String generateSalt(int length) {
+    public static String generateSalt(Integer length) {
         SecureRandom random = new SecureRandom();
         byte[] salt = new byte[length];
         random.nextBytes(salt);
@@ -85,7 +85,7 @@ public class EncryptUtils {
      * @param hashResult 预期的哈希值（十六进制字符串）
      * @return true 匹配，false 不匹配
      */
-    public static boolean verifyHash(String plainText, String salt, String hashResult) {
+    public static Boolean verifyHash(String plainText, String salt, String hashResult) {
         String computed = hashWithSalt(plainText, salt);
         return MessageDigest.isEqual(computed.getBytes(), hashResult.getBytes());
     }
@@ -132,10 +132,10 @@ public class EncryptUtils {
      * @param stored    hashWithPbkdf2 生成的存储字符串（"迭代次数:盐:哈希"）
      * @return true 匹配
      */
-    public static boolean verifyPbkdf2(String plainText, String stored) {
+    public static Boolean verifyPbkdf2(String plainText, String stored) {
         try {
             String[] parts = stored.split(":");
-            int iterations = Integer.parseInt(parts[0]);
+            Integer iterations = Integer.parseInt(parts[0]);
             String salt = parts[1];
             String expectedHash = parts[2];
 
@@ -241,7 +241,7 @@ public class EncryptUtils {
 
     private static String bytesToHex(byte[] bytes) {
         StringBuilder sb = new StringBuilder();
-        for (byte b : bytes) {
+        for (Byte b : bytes) {
             sb.append(String.format("%02x", b));
         }
         return sb.toString();

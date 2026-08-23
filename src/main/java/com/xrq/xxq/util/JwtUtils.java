@@ -46,7 +46,7 @@ public class JwtUtils {
                 .getPayload();
     }
 
-    public long getRefreshTokenExpirationMillis() {
+    public Long getRefreshTokenExpirationMillis() {
         return config.getRefreshTokenExpiration().toMillis();
     }
 }

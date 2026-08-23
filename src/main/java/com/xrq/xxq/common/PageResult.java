@@ -19,13 +19,13 @@ public class PageResult<T> {
     /** 当前页数据。 */
     private List<T> records;
     /** 总记录数。 */
-    private long total;
+    private Long total;
     /** 当前页码。 */
-    private int page;
+    private Integer page;
     /** 每页条数。 */
-    private int pageSize;
+    private Integer pageSize;
     /** 总页数。 */
-    private long pages;
+    private Long pages;
 
     /**
      * 从 MyBatis Plus 分页结果与转换后的当前页记录构造。
@@ -43,12 +43,12 @@ public class PageResult<T> {
      * 调用方应在此之前完成排序，以保证跨页全局有序。
      */
     public static <T> PageResult<T> slice(List<T> all, PageQuery pageQuery) {
-        int total = all.size();
-        int page = pageQuery.resolvedPage();
-        int size = pageQuery.resolvedSize();
-        int from = (int) Math.min((long) (page - 1) * size, total);
-        int to = Math.min(from + size, total);
-        int pages = (total + size - 1) / size;
+        Long total = (long) all.size();
+        Integer page = pageQuery.resolvedPage();
+        Integer size = pageQuery.resolvedSize();
+        Integer from = (int) Math.min((long) (page - 1) * size, total);
+        Integer to = (int) Math.min(from + size, total);
+        Long pages = (total + size - 1) / size;
         return new PageResult<>(all.subList(from, to), total, page, size, pages);
     }
 }

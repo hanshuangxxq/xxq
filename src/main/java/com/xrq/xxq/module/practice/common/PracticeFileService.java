@@ -28,7 +28,7 @@ public class PracticeFileService {
     private String storagePath;
 
     @Value("${practice.max-file-size:20971520}")
-    private long maxFileSize;
+    private Long maxFileSize;
 
     /** 存储上传文件，返回存储名与原始文件名。 */
     public StoredFile store(MultipartFile file) {
@@ -107,7 +107,7 @@ public class PracticeFileService {
         if (filename == null) {
             return "";
         }
-        int i = filename.lastIndexOf('.');
+        Integer i = filename.lastIndexOf('.');
         return i >= 0 ? filename.substring(i) : "";
     }
 

@@ -135,7 +135,7 @@ public abstract class AbstractLoginService implements LoginService {
         return session;
     }
 
-    protected boolean matchPassword(String rawPassword, String storedPassword) {
+    protected Boolean matchPassword(String rawPassword, String storedPassword) {
         if (storedPassword == null) return false;
         return EncryptUtils.verifyPbkdf2(rawPassword, storedPassword);
     }

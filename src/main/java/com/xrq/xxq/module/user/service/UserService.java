@@ -9,5 +9,5 @@ public interface UserService extends IService<User> {
 
     UserProfileResponse getProfile(Long userId, String tokenId);
 
-    boolean updateProfile(Long userId, UpdateProfileRequest request);
+    Boolean updateProfile(Long userId, UpdateProfileRequest request);
 }

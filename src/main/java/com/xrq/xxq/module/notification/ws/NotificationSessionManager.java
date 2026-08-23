@@ -49,13 +49,13 @@ public class NotificationSessionManager {
      *
      * @return 是否至少送达一个连接（用户不在线返回 false）
      */
-    public boolean send(Long userId, String text) {
+    public Boolean send(Long userId, String text) {
         Set<WebSocketSession> sessions = userSessions.get(userId);
         if (sessions == null || sessions.isEmpty()) {
             return false;
         }
         TextMessage message = new TextMessage(text);
-        boolean delivered = false;
+        Boolean delivered = false;
         for (WebSocketSession session : sessions) {
             if (!session.isOpen()) {
                 continue;
@@ -107,7 +107,7 @@ public class NotificationSessionManager {
         return Collections.unmodifiableSet(userSessions.keySet());
     }
 
-    public boolean isOnline(Long userId) {
+    public Boolean isOnline(Long userId) {
         Set<WebSocketSession> sessions = userSessions.get(userId);
         return sessions != null && !sessions.isEmpty();
     }

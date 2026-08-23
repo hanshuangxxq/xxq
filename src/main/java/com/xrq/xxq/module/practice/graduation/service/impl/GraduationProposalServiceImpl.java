@@ -84,7 +84,7 @@ public class GraduationProposalServiceImpl
         }
 
         // R-5.3：同一时间仅一条有效申请；锁保护提交/重提的并发窗口
-        return distributedLock.withLock("grad:proposal:" + campaign.getId() + ":" + studentUserId, 30, () -> {
+        return distributedLock.withLock("grad:proposal:" + campaign.getId() + ":" + studentUserId, 30L, () -> {
             GraduationProposal existing = baseMapper.selectOne(new LambdaQueryWrapper<GraduationProposal>()
                     .eq(GraduationProposal::getCampaignId, campaign.getId())
                     .eq(GraduationProposal::getStudentId, studentUserId)
@@ -135,7 +135,7 @@ public class GraduationProposalServiceImpl
         if (campaign == null) {
             throw new BusinessException(404, "活动不存在");
         }
-        boolean approve = request.getApprove();
+        Boolean approve = request.getApprove();
         if (!approve && (request.getComment() == null || request.getComment().isBlank())) {
             throw new BusinessException(400, "驳回必须填写理由");
         }
@@ -230,7 +230,7 @@ public class GraduationProposalServiceImpl
         return campaign;
     }
 
-    private boolean gradeAllowed(GraduationCampaign campaign, Long gradeId) {
+    private Boolean gradeAllowed(GraduationCampaign campaign, Long gradeId) {
         if (gradeId == null || campaign.getAllowedGradeIds() == null) {
             return false;
         }

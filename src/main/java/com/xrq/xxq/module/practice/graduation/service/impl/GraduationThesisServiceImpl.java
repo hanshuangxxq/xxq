@@ -500,12 +500,12 @@ public class GraduationThesisServiceImpl
             headerFont.setBold(true);
             headerStyle.setFont(headerFont);
             Row header = sheet.createRow(0);
-            for (int i = 0; i < headers.length; i++) {
+            for (Integer i = 0; i < headers.length; i++) {
                 Cell cell = header.createCell(i);
                 cell.setCellValue(headers[i]);
                 cell.setCellStyle(headerStyle);
             }
-            int r = 1;
+            Integer r = 1;
             for (GraduationThesis t : theses) {
                 Row dataRow = sheet.createRow(r++);
                 dataRow.createCell(0).setCellValue(nvl(noMap.get(t.getStudentId())));
@@ -517,7 +517,7 @@ public class GraduationThesisServiceImpl
                 dataRow.createCell(6).setCellValue(t.getSubmitTime() != null
                         ? t.getSubmitTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")) : "");
             }
-            for (int i = 0; i < headers.length; i++) {
+            for (Integer i = 0; i < headers.length; i++) {
                 sheet.autoSizeColumn(i);
             }
             workbook.write(out);
@@ -556,7 +556,7 @@ public class GraduationThesisServiceImpl
         if (original == null) {
             return "";
         }
-        int dot = original.lastIndexOf('.');
+        Integer dot = original.lastIndexOf('.');
         return dot >= 0 ? original.substring(dot) : "";
     }
 

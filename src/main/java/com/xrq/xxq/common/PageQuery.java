@@ -28,12 +28,12 @@ public class PageQuery {
     private Integer pageSize;
 
     /** 规范化页码：null 或小于 1 时取默认值。 */
-    public int resolvedPage() {
+    public Integer resolvedPage() {
         return (page == null || page < 1) ? DEFAULT_PAGE : page;
     }
 
     /** 规范化每页条数：null 或小于 1 取默认值，超过上限则截断。 */
-    public int resolvedSize() {
+    public Integer resolvedSize() {
         if (pageSize == null || pageSize < 1) {
             return DEFAULT_SIZE;
         }
@@ -42,6 +42,6 @@ public class PageQuery {
 
     /** 构造 MyBatis Plus 分页对象（含 total 查询）。 */
     public <T> Page<T> toPage() {
-        return new Page<>(resolvedPage(), resolvedSize());
+        return new Page<>((long) resolvedPage(), (long) resolvedSize());
     }
 }

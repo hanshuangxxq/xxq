@@ -82,7 +82,7 @@ public class GraduationProcessServiceImpl
                 .eq(GraduationOpeningReport::getCampaignId, campaign.getId())
                 .eq(GraduationOpeningReport::getStudentId, studentUserId)
                 .last("LIMIT 1"));
-        boolean isNew = report == null;
+        Boolean isNew = report == null;
         if (!isNew && report.getStatus() == OpeningReportStatusEnum.APPROVED) {
             throw new BusinessException(409, "开题报告已通过审核，不可再修改");
         }
@@ -196,7 +196,7 @@ public class GraduationProcessServiceImpl
                 .eq(GraduationMidterm::getCampaignId, campaign.getId())
                 .eq(GraduationMidterm::getStudentId, studentUserId)
                 .last("LIMIT 1"));
-        boolean isNew = midterm == null;
+        Boolean isNew = midterm == null;
         if (!isNew && "REVIEWED".equals(midterm.getStatus())) {
             throw new BusinessException(409, "中期检查已评审，不可再修改");
         }

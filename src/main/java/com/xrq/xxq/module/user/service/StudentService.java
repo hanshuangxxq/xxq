@@ -19,5 +19,5 @@ public interface StudentService extends IService<Student> {
 
     PageResult<StudentDto> queryStudents(Long gradeId, List<Long> classIds, List<Long> majorIds, Boolean unassigned, String name, PageQuery pageQuery);
 
-    boolean updateStudentInfo(Long studentId, UpdateStudentRequest request);
+    Boolean updateStudentInfo(Long studentId, UpdateStudentRequest request);
 }

@@ -26,7 +26,7 @@ public class AvatarService {
     private String avatarStoragePath;
 
     @Value("${avatar.max-file-size:5242880}")
-    private long maxFileSize;
+    private Long maxFileSize;
 
     private final UserMapper userMapper;
 
@@ -123,7 +123,7 @@ public class AvatarService {
 
     private String getExtension(String filename) {
         if (filename == null) return "";
-        int i = filename.lastIndexOf('.');
+        Integer i = filename.lastIndexOf('.');
         return i >= 0 ? filename.substring(i) : "";
     }
 }

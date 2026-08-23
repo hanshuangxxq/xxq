@@ -85,17 +85,17 @@ public class SemesterController {
             s.setStartWeek(1);
         }
 
-        boolean hasEndWeek = s.getEndWeek() != null;
-        boolean hasStartDate = s.getStartDate() != null;
-        boolean hasEndDate = s.getEndDate() != null;
+        Boolean hasEndWeek = s.getEndWeek() != null;
+        Boolean hasStartDate = s.getStartDate() != null;
+        Boolean hasEndDate = s.getEndDate() != null;
 
         // 从日期推导周数
         if (!hasEndWeek && hasStartDate && hasEndDate) {
-            long days = ChronoUnit.DAYS.between(s.getStartDate(), s.getEndDate());
+            Long days = ChronoUnit.DAYS.between(s.getStartDate(), s.getEndDate());
             if (days < 0) {
                 throw new BusinessException(400, "开始日期不能晚于结束日期");
             }
-            int totalWeeks = (int) days / 7 + 1;
+            Integer totalWeeks = days.intValue() / 7 + 1;
             s.setEndWeek(s.getStartWeek() + totalWeeks - 1);
             return;
         }
@@ -104,23 +104,23 @@ public class SemesterController {
             throw new BusinessException(400, "结束周不能为空（可通过开始日期+结束日期自动推导）");
         }
 
-        int totalWeeks = s.getEndWeek() - s.getStartWeek() + 1;
+        Integer totalWeeks = s.getEndWeek() - s.getStartWeek() + 1;
         if (totalWeeks <= 0) {
             throw new BusinessException(400, "结束周必须大于等于起始周");
         }
 
-        int provided = (hasStartDate ? 1 : 0) + (hasEndDate ? 1 : 0);
+        Integer provided = (hasStartDate ? 1 : 0) + (hasEndDate ? 1 : 0);
         if (provided == 0) {
             return;
         }
 
         if (provided == 2) {
-            long days = ChronoUnit.DAYS.between(s.getStartDate(), s.getEndDate());
+            Long days = ChronoUnit.DAYS.between(s.getStartDate(), s.getEndDate());
             if (days < 0) {
                 throw new BusinessException(400, "开始日期不能晚于结束日期");
             }
-            int expectedWeeks = (int) days / 7 + 1;
-            if (expectedWeeks != totalWeeks) {
+            Integer expectedWeeks = days.intValue() / 7 + 1;
+            if (!expectedWeeks.equals(totalWeeks)) {
                 throw new BusinessException(400,
                         "日期范围与周数不匹配：开始日期(" + s.getStartDate()
                         + ") 到结束日期(" + s.getEndDate()

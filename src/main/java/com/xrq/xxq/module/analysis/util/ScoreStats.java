@@ -27,7 +27,7 @@ public final class ScoreStats {
     }
 
     /** 是否挂科：总评为 null 视为未挂（不计），&lt; 60 为挂科。 */
-    public static boolean isFail(BigDecimal total) {
+    public static Boolean isFail(BigDecimal total) {
         return total != null && total.doubleValue() < PASS_SCORE;
     }
 
@@ -37,7 +37,7 @@ public final class ScoreStats {
             return null;
         }
         BigDecimal sum = BigDecimal.ZERO;
-        int count = 0;
+        Integer count = 0;
         for (BigDecimal v : vals) {
             if (v == null) {
                 continue;
@@ -56,8 +56,8 @@ public final class ScoreStats {
         if (vals == null || vals.isEmpty()) {
             return null;
         }
-        int total = 0;
-        int pass = 0;
+        Integer total = 0;
+        Integer pass = 0;
         for (BigDecimal v : vals) {
             if (v == null) {
                 continue;
@@ -80,7 +80,7 @@ public final class ScoreStats {
             return null;
         }
         BigDecimal sqSum = BigDecimal.ZERO;
-        int count = 0;
+        Integer count = 0;
         for (BigDecimal v : vals) {
             if (v == null) {
                 continue;
@@ -92,7 +92,7 @@ public final class ScoreStats {
         if (count < 2) {
             return null;
         }
-        double variance = sqSum.divide(BigDecimal.valueOf(count), 6, RoundingMode.HALF_UP).doubleValue();
+        Double variance = sqSum.divide(BigDecimal.valueOf(count), 6, RoundingMode.HALF_UP).doubleValue();
         return BigDecimal.valueOf(Math.sqrt(variance)).setScale(2, RoundingMode.HALF_UP);
     }
 
@@ -101,7 +101,7 @@ public final class ScoreStats {
         if (total == null) {
             return null;
         }
-        double t = total.doubleValue();
+        Double t = total.doubleValue();
         if (t >= 90) {
             return "优";
         }
@@ -120,6 +120,6 @@ public final class ScoreStats {
     /** 成绩合法性校验：非空 + 0-100 区间，委托 {@link ParamValidator}。 */
     public static void validateScore(BigDecimal score) {
         ParamValidator.requireNonNull(score, "成绩");
-        ParamValidator.requireInRange(score, 0, 100, "成绩");
+        ParamValidator.requireInRange(score, 0.0, 100.0, "成绩");
     }
 }

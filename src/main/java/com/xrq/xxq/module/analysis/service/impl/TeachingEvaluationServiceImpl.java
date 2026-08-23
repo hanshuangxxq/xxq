@@ -141,7 +141,7 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
                 }
                 continue;
             }
-            int max = item.getMaxScore() == null ? 5 : item.getMaxScore();
+            Integer max = item.getMaxScore() == null ? 5 : item.getMaxScore();
             if (score < 1 || score > max) {
                 throw new BusinessException(400, "指标「" + item.getItemName() + "」评分须为 1-" + max);
             }
@@ -153,10 +153,10 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
         }
 
         // avg = 已评分项原始分均值
-        double avg = req.getScores().stream().mapToInt(s -> s.getScore()).average().orElse(0);
+        Double avg = req.getScores().stream().mapToInt(s -> s.getScore()).average().orElse(0);
         BigDecimal avgScore = BigDecimal.valueOf(avg).setScale(2, RoundingMode.HALF_UP);
 
-        return distributedLock.withLock("eval:" + req.getTeachInfoId() + ":" + studentUserId, 30, () -> {
+        return distributedLock.withLock("eval:" + req.getTeachInfoId() + ":" + studentUserId, 30L, () -> {
             TeachingEvaluation exist = evaluationMapper.selectOne(new LambdaQueryWrapper<TeachingEvaluation>()
                     .eq(TeachingEvaluation::getTeachInfoId, req.getTeachInfoId())
                     .eq(TeachingEvaluation::getStudentUserId, studentUserId));
@@ -341,7 +341,7 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
 
     private EvaluationStatusDto toStatusDto(EvaluationPeriod period, Semester semester) {
         EvaluationStatusDto dto = new EvaluationStatusDto();
-        boolean open = period != null && period.getStatus() == EvaluationStatusEnum.OPEN;
+        Boolean open = period != null && period.getStatus() == EvaluationStatusEnum.OPEN;
         dto.setOpen(open);
         dto.setMessage(open ? null : "暂无评教");
         dto.setSemesterId(semester != null ? semester.getId() : null);
@@ -409,7 +409,7 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
             throw new BusinessException(403, "权限不足");
         }
         if (teachers.isEmpty()) {
-            return new PageResult<>(List.of(), 0, pageQuery.resolvedPage(), pageQuery.resolvedSize(), 0);
+            return new PageResult<>(List.of(), 0L, pageQuery.resolvedPage(), pageQuery.resolvedSize(), 0L);
         }
 
         List<Long> teacherIds = teachers.stream().map(Teacher::getId).toList();
@@ -503,7 +503,7 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
                             LinkedHashMap::new, Collectors.toList()));
             Map<String, BigDecimal> itemAverages = new LinkedHashMap<>();
             for (Map.Entry<String, List<TeachingEvaluationScore>> en : byName.entrySet()) {
-                double avg = en.getValue().stream().mapToInt(s -> n(s.getScore())).average().orElse(0);
+                Double avg = en.getValue().stream().mapToInt(s -> n(s.getScore())).average().orElse(0);
                 itemAverages.put(en.getKey(), BigDecimal.valueOf(avg).setScale(2, RoundingMode.HALF_UP));
             }
             dto.setItemAverages(itemAverages);
@@ -514,8 +514,8 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
             Set<Long> courseIds = new HashSet<>();
             Set<Long> studentIds = new HashSet<>();
             BigDecimal sum = BigDecimal.ZERO;
-            int scored = 0;
-            int pass = 0;
+            Integer scored = 0;
+            Integer pass = 0;
             for (Score s : scores) {
                 if (s.getCourseId() != null) {
                     courseIds.add(s.getCourseId());
@@ -542,7 +542,7 @@ public class TeachingEvaluationServiceImpl implements TeachingEvaluationService 
         return dto;
     }
 
-    private int n(Integer v) {
+    private Integer n(Integer v) {
         return v == null ? 0 : v;
     }
 

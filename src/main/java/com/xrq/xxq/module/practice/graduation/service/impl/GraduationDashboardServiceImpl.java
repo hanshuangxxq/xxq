@@ -125,12 +125,12 @@ public class GraduationDashboardServiceImpl implements GraduationDashboardServic
             headerStyle.setFont(headerFont);
 
             Row header = sheet.createRow(0);
-            for (int i = 0; i < HEADERS.length; i++) {
+            for (Integer i = 0; i < HEADERS.length; i++) {
                 Cell cell = header.createCell(i);
                 cell.setCellValue(HEADERS[i]);
                 cell.setCellStyle(headerStyle);
             }
-            int r = 1;
+            Integer r = 1;
             for (DashboardRow row : rows) {
                 Row dataRow = sheet.createRow(r++);
                 dataRow.createCell(0).setCellValue(nvl(row.getStudentNo()));
@@ -147,7 +147,7 @@ public class GraduationDashboardServiceImpl implements GraduationDashboardServic
                 dataRow.createCell(10).setCellValue(timeText(row.getProposalSubmitTime()));
                 dataRow.createCell(11).setCellValue(timeText(row.getProposalApprovedTime()));
             }
-            for (int i = 0; i < HEADERS.length; i++) {
+            for (Integer i = 0; i < HEADERS.length; i++) {
                 sheet.autoSizeColumn(i);
             }
             workbook.write(out);

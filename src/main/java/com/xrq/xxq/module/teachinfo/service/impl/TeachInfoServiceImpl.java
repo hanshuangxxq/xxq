@@ -177,7 +177,7 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
     @Override
     public boolean save(TeachInfo entity) {
         validateReferences(entity);
-        boolean ok = super.save(entity);
+        Boolean ok = super.save(entity);
         if (ok) {
             cacheManager.evictByClassNames(entity.getClassName());
         }
@@ -188,7 +188,7 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
     public boolean updateById(TeachInfo entity) {
         validateReferences(entity);
         TeachInfo old = teachInfoMapper.selectById(entity.getId());
-        boolean ok = super.updateById(entity);
+        Boolean ok = super.updateById(entity);
         if (ok) {
             if (old != null) {
                 cacheManager.evictByClassNames(old.getClassName());
@@ -218,7 +218,7 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
         if (enrollmentResolver.hasSelectionClass((Long) id)) {
             throw new BusinessException(409, "该授课安排关联选课班，无法删除");
         }
-        boolean ok = super.removeById(id);
+        Boolean ok = super.removeById(id);
         if (ok) {
             cacheManager.evictByClassNames(old.getClassName());
         }
@@ -228,10 +228,10 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
     private WeekScheduleDto buildWeekSchedule(Integer week, LocalDate mondayDate, List<CourseDto> courses) {
         Map<String, List<CourseDto>> byDay = new LinkedHashMap<>();
         String[] dayLabels = {"周一", "周二", "周三", "周四", "周五", "周六", "周日"};
-        for (int i = 1; i <= 7; i++) {
-            final int dow = i;
+        for (Integer i = 1; i <= 7; i++) {
+            final Integer dow = i;
             List<CourseDto> dayCourses = courses.stream()
-                    .filter(c -> c.getDayOfWeek() != null && c.getDayOfWeek() == dow)
+                    .filter(c -> c.getDayOfWeek() != null && Objects.equals(c.getDayOfWeek(), dow))
                     .toList();
             if (!dayCourses.isEmpty()) {
                 byDay.put(dayLabels[i - 1], dayCourses);
@@ -288,7 +288,7 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
                 wrapper.and(w -> {
                     String first = classNames.getFirst();
                     w.apply("FIND_IN_SET({0}, class_name) > 0", first);
-                    for (int i = 1; i < classNames.size(); i++) {
+                    for (Integer i = 1; i < classNames.size(); i++) {
                         w.or().apply("FIND_IN_SET({0}, class_name) > 0", classNames.get(i));
                     }
                 });
@@ -304,7 +304,7 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
         return wrapper;
     }
 
-    private boolean isInScope(TeachInfo info, Long userId, String userType) {
+    private Boolean isInScope(TeachInfo info, Long userId, String userType) {
         LambdaQueryWrapper<TeachInfo> scope = resolveScopeCondition(userId, userType);
         if (scope == null) {
             return false;
@@ -476,7 +476,7 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
         if (semester == null || semester.getStartDate() == null) {
             return null;
         }
-        int startWeek = semester.getStartWeek() != null ? semester.getStartWeek() : 1;
+        Integer startWeek = semester.getStartWeek() != null ? semester.getStartWeek() : 1;
         return semester.getStartDate().plusWeeks(week - startWeek);
     }
 

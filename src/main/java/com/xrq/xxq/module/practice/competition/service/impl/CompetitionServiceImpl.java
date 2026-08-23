@@ -270,7 +270,7 @@ public class CompetitionServiceImpl
         CompetitionResult result = resultMapper.selectOne(new LambdaQueryWrapper<CompetitionResult>()
                 .eq(CompetitionResult::getRegistrationId, request.getRegistrationId())
                 .last("LIMIT 1"));
-        boolean isNew = result == null;
+        Boolean isNew = result == null;
         if (isNew) {
             result = new CompetitionResult();
             result.setCompetitionId(request.getCompetitionId());

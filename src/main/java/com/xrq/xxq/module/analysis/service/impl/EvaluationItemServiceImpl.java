@@ -43,7 +43,7 @@ public class EvaluationItemServiceImpl implements EvaluationItemService {
     @Transactional
     public ItemResponse createItem(ItemCreateRequest req, Long userId) {
         ParamValidator.requireNonBlank(req.getName(), "指标名称");
-        int maxScore = normalizeMaxScore(req.getMaxScore());
+        Integer maxScore = normalizeMaxScore(req.getMaxScore());
         if (itemMapper.selectCount(new LambdaQueryWrapper<EvaluationItem>()
                 .eq(EvaluationItem::getName, req.getName())) > 0) {
             throw new BusinessException(409, "指标名称已存在");
@@ -114,8 +114,8 @@ public class EvaluationItemServiceImpl implements EvaluationItemService {
 
     // ==================== 辅助 ====================
 
-    private int normalizeMaxScore(Integer maxScore) {
-        int v = maxScore == null ? DEFAULT_MAX_SCORE : maxScore;
+    private Integer normalizeMaxScore(Integer maxScore) {
+        Integer v = maxScore == null ? DEFAULT_MAX_SCORE : maxScore;
         if (v < 1 || v > 100) {
             throw new BusinessException(400, "满分须在 1-100 之间");
         }
@@ -132,7 +132,7 @@ public class EvaluationItemServiceImpl implements EvaluationItemService {
                 .collect(Collectors.groupingBy(EvaluationTemplateItem::getItemId, Collectors.counting()));
     }
 
-    private ItemResponse toResponse(EvaluationItem item, int usedCount) {
+    private ItemResponse toResponse(EvaluationItem item, Integer usedCount) {
         ItemResponse r = new ItemResponse();
         r.setId(item.getId());
         r.setName(item.getName());

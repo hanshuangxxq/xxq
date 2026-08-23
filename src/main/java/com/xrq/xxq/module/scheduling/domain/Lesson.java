@@ -56,7 +56,7 @@ public class Lesson {
     private Set<Long> studentIds = new HashSet<>();
 
     /** 课堂实际学生人数（用于教室容量约束；选课班取 SelectionClass.studentCount，避免 sum 误算） */
-    private int studentCount;
+    private Integer studentCount;
 
     /** 起始教学周 */
     private Integer startWeek;
