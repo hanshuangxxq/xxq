@@ -223,10 +223,7 @@ public class SelectionCampaignServiceImpl
         if (list.isEmpty()) {
             return PageResult.of(page, List.of());
         }
-        List<CampaignResponse> records = list.stream()
-                .map(c -> toResponse(c, semesterService.getById(c.getSemesterId()), true))
-                .collect(Collectors.toList());
-        return PageResult.of(page, records);
+        return PageResult.of(page, toResponses(list));
     }
 
     @Override
@@ -239,16 +236,16 @@ public class SelectionCampaignServiceImpl
             return List.of();
         }
         // 过滤规则：group_id 为 NULL（未绑定）或等于当前 groupId（已绑定到本组）
-        return allCampaigns.stream()
+        List<SelectionCampaign> filtered = allCampaigns.stream()
                 .filter(c -> c.getGroupId() == null || groupId.equals(c.getGroupId()))
-                .map(c -> {
-                    CampaignResponse resp = toResponse(c, semesterService.getById(c.getSemesterId()), true);
-                    if (groupId.equals(c.getGroupId())) {
-                        resp.setBoundGroupId(groupId);
-                    }
-                    return resp;
-                })
-                .collect(Collectors.toList());
+                .toList();
+        List<CampaignResponse> responses = toResponses(filtered);
+        responses.forEach(resp -> {
+            if (groupId.equals(resp.getGroupId())) {
+                resp.setBoundGroupId(groupId);
+            }
+        });
+        return responses;
     }
 
     @Override
@@ -503,15 +500,56 @@ public class SelectionCampaignServiceImpl
     }
 
     private CampaignResponse toResponse(SelectionCampaign campaign, Semester semester, boolean loadGroup) {
-        Map<Long, String> groupNameMap = loadGroup && campaign.getGroupId() != null
+        String groupName = loadGroup && campaign.getGroupId() != null
                 ? selectionGroupMapper.selectByIds(List.of(campaign.getGroupId())).stream()
-                        .collect(Collectors.toMap(SelectionGroup::getId, SelectionGroup::getName))
-                : Map.of();
+                        .map(SelectionGroup::getName).findFirst().orElse(null)
+                : null;
+        List<Long> timeRestrictionIds = selectionCampaignTimeRestrictionMapper.selectList(
+                        new LambdaQueryWrapper<SelectionCampaignTimeRestriction>()
+                                .eq(SelectionCampaignTimeRestriction::getCampaignId, campaign.getId()))
+                .stream().map(SelectionCampaignTimeRestriction::getTimeRestrictionId).toList();
+        return assemble(campaign, semester != null ? semester.getName() : null, groupName, timeRestrictionIds);
+    }
+
+    /**
+     * 批量组装活动响应：学期名/选课组名/时段限制各一次批查后内存合并，
+     * 供列表接口使用（替代逐活动查询的 N+1）。
+     */
+    private List<CampaignResponse> toResponses(List<SelectionCampaign> campaigns) {
+        if (campaigns.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, String> semesterNames = semesterService.toNameMap(
+                campaigns.stream().map(SelectionCampaign::getSemesterId)
+                        .filter(java.util.Objects::nonNull).distinct().toList());
+        List<Long> groupIds = campaigns.stream().map(SelectionCampaign::getGroupId)
+                .filter(java.util.Objects::nonNull).distinct().toList();
+        Map<Long, String> groupNames = groupIds.isEmpty()
+                ? Map.of()
+                : selectionGroupMapper.selectByIds(groupIds).stream()
+                        .collect(Collectors.toMap(SelectionGroup::getId, SelectionGroup::getName, (a, b) -> a));
+        Map<Long, List<Long>> trByCampaign = selectionCampaignTimeRestrictionMapper.selectList(
+                        new LambdaQueryWrapper<SelectionCampaignTimeRestriction>()
+                                .in(SelectionCampaignTimeRestriction::getCampaignId,
+                                        campaigns.stream().map(SelectionCampaign::getId).toList()))
+                .stream().collect(Collectors.groupingBy(SelectionCampaignTimeRestriction::getCampaignId,
+                        Collectors.mapping(SelectionCampaignTimeRestriction::getTimeRestrictionId,
+                                Collectors.toList())));
+        return campaigns.stream()
+                .map(c -> assemble(c,
+                        c.getSemesterId() == null ? null : semesterNames.get(c.getSemesterId()),
+                        c.getGroupId() == null ? null : groupNames.get(c.getGroupId()),
+                        trByCampaign.getOrDefault(c.getId(), List.of())))
+                .collect(Collectors.toList());
+    }
+
+    private CampaignResponse assemble(SelectionCampaign campaign, String semesterName, String groupName,
+                                      List<Long> timeRestrictionIds) {
         CampaignResponse resp = new CampaignResponse();
         resp.setId(campaign.getId());
         resp.setName(campaign.getCourseName());
         resp.setSemesterId(campaign.getSemesterId());
-        resp.setSemesterName(semester != null ? semester.getName() : null);
+        resp.setSemesterName(semesterName);
         resp.setCourseId(null); // 公选课不再关联 course 表
         resp.setStartWeek(campaign.getStartWeek());
         resp.setEndWeek(campaign.getEndWeek());
@@ -525,16 +563,10 @@ public class SelectionCampaignServiceImpl
         resp.setCourseType(campaign.getCourseType() != null ? campaign.getCourseType().getDescription() : null);
         resp.setAllowedGradeIds(parseLongs(campaign.getAllowedGradeIds()));
         resp.setAllowedMajors(parseLongs(campaign.getAllowedMajors()));
-        List<SelectionCampaignTimeRestriction> rels = selectionCampaignTimeRestrictionMapper.selectList(
-                new LambdaQueryWrapper<SelectionCampaignTimeRestriction>()
-                        .eq(SelectionCampaignTimeRestriction::getCampaignId, campaign.getId()));
-        resp.setTimeRestrictionIds(rels.stream().map(SelectionCampaignTimeRestriction::getTimeRestrictionId).toList());
+        resp.setTimeRestrictionIds(timeRestrictionIds);
         resp.setCapacity(campaign.getCapacity());
         resp.setGroupId(campaign.getGroupId());
-        // groupId 为 null（未绑定选课组）时 groupNameMap 是 Map.of()，不可变 Map 的 get(null) 会抛 NPE，
-        // 故先判 groupId 非空再查；groupNameMap 为 null（防御）或查不到时回退 null。
-        resp.setGroupName(campaign.getGroupId() != null && groupNameMap != null
-                ? groupNameMap.get(campaign.getGroupId()) : null);
+        resp.setGroupName(groupName);
         resp.setCreateTime(campaign.getCreateTime());
         return resp;
     }
