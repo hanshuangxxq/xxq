@@ -151,7 +151,7 @@ public class GraduationThesisServiceImpl
                 .eq(GraduationThesis::getAssignmentId, assignment.getId())
                 .orderByAsc(GraduationThesis::getVersion));
         while (allVersions.size() > MAX_VERSIONS) {
-            GraduationThesis oldest = allVersions.remove(0);
+            GraduationThesis oldest = allVersions.removeFirst ();
             baseMapper.deleteById(oldest.getId());
             fileService.delete(oldest.getFileName());
         }
