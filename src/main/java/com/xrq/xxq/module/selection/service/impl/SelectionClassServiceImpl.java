@@ -77,6 +77,12 @@ public class SelectionClassServiceImpl implements SelectionClassService {
                         .eq(SelectionRecord::getCampaignId, campaignId)
                         .eq(SelectionRecord::getStatus, RecordStatusEnum.SELECTED)
                         .orderByAsc(SelectionRecord::getSelectTime));
+        // 批量校验学生用户存在性（替代 insertMember 内逐人 selectById）
+        Set<Long> validUserIds = records.isEmpty()
+                ? Set.of()
+                : userMapper.selectByIds(records.stream().map(SelectionRecord::getStudentId)
+                                .filter(Objects::nonNull).distinct().toList())
+                        .stream().map(User::getId).collect(Collectors.toSet());
         int capacity = campaign.getCapacity() == null || campaign.getCapacity() <= 0
                 ? Integer.MAX_VALUE : campaign.getCapacity();
         List<List<SelectionRecord>> newBatches = new ArrayList<>();
@@ -119,13 +125,7 @@ public class SelectionClassServiceImpl implements SelectionClassService {
             Set<Long> newStudentIds = batch.stream()
                     .map(SelectionRecord::getStudentId).collect(Collectors.toSet());
             if (sc == null) {
-                // 唯一性预检 (campaign_id, class_no)
-                Long classDup = selectionClassMapper.selectCount(new LambdaQueryWrapper<SelectionClass>()
-                        .eq(SelectionClass::getCampaignId, campaignId)
-                        .eq(SelectionClass::getClassNo, classNo));
-                if (classDup > 0) {
-                    throw new BusinessException(409, "选课班编号已存在(活动=" + campaignId + ", 班号=" + classNo + ")");
-                }
+                // (campaign_id, class_no) 唯一性由 existingByClassNo 内存保证（顶部已全量加载本活动选课班）
                 // 新班：建 teach_info（教师/时段/教室为 null）+ selection_class + member
                 TeachInfo ti = new TeachInfo();
                 ti.setCampaignId(campaign.getId());
@@ -142,7 +142,7 @@ public class SelectionClassServiceImpl implements SelectionClassService {
                 sc.setTeachInfoId(ti.getId());
                 selectionClassMapper.insert(sc);
                 for (SelectionRecord r : batch) {
-                    insertMember(sc.getId(), r);
+                    insertMember(sc.getId(), r, validUserIds);
                 }
             } else {
                 // 共有班：保留 teach_info（含已分配教师 + 排课时段/教室）+ selection_class，仅增删变化的 member
@@ -158,7 +158,7 @@ public class SelectionClassServiceImpl implements SelectionClassService {
                         .collect(Collectors.toMap(SelectionRecord::getStudentId, r -> r, (a, b) -> a));
                 for (Long newStudentId : newStudentIds) {
                     if (!existingStudentIds.contains(newStudentId)) {
-                        insertMember(sc.getId(), recordByStudent.get(newStudentId));
+                        insertMember(sc.getId(), recordByStudent.get(newStudentId), validUserIds);
                     }
                 }
                 if (sc.getStudentCount() == null || sc.getStudentCount() != batch.size()) {
@@ -204,19 +204,17 @@ public class SelectionClassServiceImpl implements SelectionClassService {
         }
     }
 
-    /** 插入选课班成员：唯一性预检 (class_id, student_id) + 外键存在性校验。 */
-    private void insertMember(Long classId, SelectionRecord r) {
-        // 唯一性预检 (class_id, student_id)
-        Long memberDup = selectionClassMemberMapper.selectCount(new LambdaQueryWrapper<SelectionClassMember>()
-                .eq(SelectionClassMember::getClassId, classId)
-                .eq(SelectionClassMember::getStudentId, r.getStudentId()));
-        if (memberDup > 0) {
-            throw new BusinessException(409, "该学生已在本选课班中");
+    /**
+     * 插入选课班成员。
+     * <p>
+     * 唯一性由调用方的内存 diff 保证（新班无成员；共有班仅插入新增学生）；
+     * 用户存在性由 finalize 顶部批量校验的 validUserIds 保证（替代逐人 selectById）；
+     * 选课班/选课记录均为本事务内刚插入或顶部已加载的记录，无需再查库校验。
+     */
+    private void insertMember(Long classId, SelectionRecord r, Set<Long> validUserIds) {
+        if (r.getStudentId() != null && !validUserIds.contains(r.getStudentId())) {
+            throw new BusinessException(400, "引用的用户不存在(id=" + r.getStudentId() + ")");
         }
-        // 外键存在性
-        referenceValidator.requireExists(selectionClassMapper, classId, "选课班");
-        referenceValidator.requireExists(userMapper, r.getStudentId(), "用户");
-        referenceValidator.requireExists(selectionRecordMapper, r.getId(), "选课记录");
         SelectionClassMember member = new SelectionClassMember();
         member.setClassId(classId);
         member.setStudentId(r.getStudentId());
