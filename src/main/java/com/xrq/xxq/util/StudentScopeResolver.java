@@ -1,7 +1,11 @@
 package com.xrq.xxq.util;
 
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Component;
 
@@ -118,6 +122,39 @@ public class StudentScopeResolver {
         }
         ClassName cn = classNameMapper.selectById(stu.getClassId());
         return cn == null ? null : cn.getCollegeId();
+    }
+
+    /**
+     * 批量解析 studentUserId -> college_id（student + class_name 各一次批查）。
+     * <p>
+     * 供列表接口的院系可见性过滤使用，替代在循环中逐条调用 {@link #departmentOwnsStudent}
+     * 或 {@link #studentCollegeId}（每条的 2~3 次单表查询）。学生不存在/无班级/班级无院系时
+     * 该学生不出现在返回 Map 中（视为归属无法判定，过滤方应按不可见处理）。
+     */
+    public Map<Long, Long> studentCollegeIdMap(Collection<Long> studentUserIds) {
+        if (studentUserIds == null || studentUserIds.isEmpty()) {
+            return Map.of();
+        }
+        List<Student> students = studentMapper.selectList(
+                new LambdaQueryWrapper<Student>().in(Student::getUserId, studentUserIds));
+        if (students.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> classIds = students.stream().map(Student::getClassId)
+                .filter(Objects::nonNull).distinct().toList();
+        Map<Long, Long> collegeByClassId = classIds.isEmpty()
+                ? Map.of()
+                : classNameMapper.selectByIds(classIds).stream()
+                        .filter(cn -> cn.getCollegeId() != null)
+                        .collect(Collectors.toMap(ClassName::getId, ClassName::getCollegeId, (a, b) -> a));
+        Map<Long, Long> map = new HashMap<>();
+        for (Student s : students) {
+            Long collegeId = s.getClassId() == null ? null : collegeByClassId.get(s.getClassId());
+            if (collegeId != null) {
+                map.put(s.getUserId(), collegeId);
+            }
+        }
+        return map;
     }
 
     /** 教师是否能访问某课程（存在该教师该课程的 teach_info）。 */
