@@ -1,6 +1,7 @@
 package com.xrq.xxq.common;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -18,6 +19,12 @@ public class GlobalExceptionHandler {
     public Result<Void> handleIllegalArgument(IllegalArgumentException e) {
         log.warn("参数校验失败 — message={}", e.getMessage());
         return Result.fail(400, e.getMessage());
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public Result<Void> handleNotReadable(HttpMessageNotReadableException e) {
+        log.warn("请求体格式错误 — message={}", e.getMessage());
+        return Result.fail(400, "请求体格式错误");
     }
 
     @ExceptionHandler(Exception.class)
