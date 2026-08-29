@@ -10,6 +10,7 @@ avatar:
 practice:
   storage-path: uploads/practice
   max-file-size: 20971520
+  operation-log-path: uploads/practice/graduation-operation-logs
 
 jwt:
   secret: dGhpcyBpcyBhIHNlY3JldCBrZXkgZm9yIGp3dCB0b2tlbiBnZW5lcmF0aW9uIGFuZCB2YWxpZGF0aW9u
