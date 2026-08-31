@@ -486,19 +486,6 @@ public class SelectionCampaignServiceImpl
         }
     }
 
-    private Map<Long, String> loadGroupNameMap(List<SelectionCampaign> campaigns) {
-        List<Long> ids = campaigns.stream()
-                .map(SelectionCampaign::getGroupId)
-                .filter(java.util.Objects::nonNull)
-                .distinct()
-                .toList();
-        if (ids.isEmpty()) {
-            return Map.of();
-        }
-        return selectionGroupMapper.selectByIds(ids).stream()
-                .collect(Collectors.toMap(SelectionGroup::getId, SelectionGroup::getName));
-    }
-
     private CampaignResponse toResponse(SelectionCampaign campaign, Semester semester, Boolean loadGroup) {
         String groupName = loadGroup && campaign.getGroupId() != null
                 ? selectionGroupMapper.selectByIds(List.of(campaign.getGroupId())).stream()
