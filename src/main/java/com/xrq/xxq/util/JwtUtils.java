@@ -45,8 +45,4 @@ public class JwtUtils {
                 .parseSignedClaims(token)
                 .getPayload();
     }
-
-    public Long getRefreshTokenExpirationMillis() {
-        return config.getRefreshTokenExpiration().toMillis();
-    }
 }
