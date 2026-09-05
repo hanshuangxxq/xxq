@@ -21,6 +21,12 @@ public class ScoreResponse {
 
     private String studentName;
 
+    /** 学号（教师录入列表等场景填充，其余场景为 null） */
+    private String studentNo;
+
+    /** 答辩组（评阅录入列表场景填充，其余场景为 null） */
+    private String groupName;
+
     private Integer advisorScore;
 
     private Long advisorBy;
