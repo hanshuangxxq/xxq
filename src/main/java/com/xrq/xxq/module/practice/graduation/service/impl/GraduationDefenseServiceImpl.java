@@ -153,6 +153,31 @@ public class GraduationDefenseServiceImpl
     }
 
     @Override
+    public List<ScoreResponse> listAdvisorScoreEntries(Long teacherUserId, Long campaignId) {
+        ParamValidator.requireNonNull(campaignId, "活动");
+        List<Long> studentIds = assignmentMapper.selectList(new LambdaQueryWrapper<GraduationAssignment>()
+                        .eq(GraduationAssignment::getCampaignId, campaignId)
+                        .eq(GraduationAssignment::getTeacherId, teacherUserId))
+                .stream().map(GraduationAssignment::getStudentId).sorted().toList();
+        return buildScoreEntryRows(campaignId, studentIds, Map.of());
+    }
+
+    @Override
+    public List<ScoreResponse> listReviewerScoreEntries(Long reviewerUserId, Long campaignId) {
+        ParamValidator.requireNonNull(campaignId, "活动");
+        List<GraduationDefense> defenses = baseMapper.selectList(new LambdaQueryWrapper<GraduationDefense>()
+                .eq(GraduationDefense::getCampaignId, campaignId)
+                .eq(GraduationDefense::getReviewerId, reviewerUserId)
+                .orderByAsc(GraduationDefense::getStudentId));
+        Map<Long, String> groupByStudent = defenses.stream().collect(Collectors.toMap(
+                GraduationDefense::getStudentId,
+                d -> d.getGroupName() == null ? "" : d.getGroupName(),
+                (a, b) -> a));
+        return buildScoreEntryRows(campaignId,
+                defenses.stream().map(GraduationDefense::getStudentId).toList(), groupByStudent);
+    }
+
+    @Override
     @Transactional
     public ScoreResponse submitDefenseScore(Long userId, String userType, ScoreSubmitRequest request) {
         if ("department".equals(userType)
@@ -323,6 +348,52 @@ public class GraduationDefenseServiceImpl
         if (assignment == null || !assignment.getTeacherId().equals(teacherUserId)) {
             throw new BusinessException(403, "权限不足");
         }
+    }
+
+    /**
+     * 评分录入列表行：有成绩记录则完整转换，否则补骨架行（仅学生信息、分数字段为空），
+     * 保证教师对尚未产生成绩记录的学生也能首次录入。
+     */
+    private List<ScoreResponse> buildScoreEntryRows(Long campaignId, List<Long> studentIds,
+                                                    Map<Long, String> groupByStudent) {
+        if (studentIds.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, GraduationScore> scoreByStudent = scoreMapper.selectList(
+                        new LambdaQueryWrapper<GraduationScore>()
+                                .eq(GraduationScore::getCampaignId, campaignId))
+                .stream().collect(Collectors.toMap(GraduationScore::getStudentId, s -> s, (a, b) -> a));
+        List<Long> personIds = new ArrayList<>(studentIds);
+        for (Long studentId : studentIds) {
+            GraduationScore score = scoreByStudent.get(studentId);
+            if (score != null) {
+                personIds.add(score.getAdvisorBy());
+                personIds.add(score.getReviewerBy());
+                personIds.add(score.getDefenseBy());
+                personIds.add(score.getConfirmBy());
+            }
+        }
+        personIds.removeIf(Objects::isNull);
+        Map<Long, String> nameMap = userMapper.toNameMap(personIds);
+        Map<Long, String> noMap = studentMapper.toStudentNoMap(studentIds);
+        List<ScoreResponse> rows = new ArrayList<>();
+        for (Long studentId : studentIds) {
+            GraduationScore score = scoreByStudent.get(studentId);
+            ScoreResponse resp;
+            if (score != null) {
+                resp = toScoreResponse(score, nameMap);
+            } else {
+                resp = new ScoreResponse();
+                resp.setCampaignId(campaignId);
+                resp.setStudentId(studentId);
+                resp.setStudentName(nameMap.get(studentId));
+            }
+            resp.setStudentNo(noMap.get(studentId));
+            String groupName = groupByStudent.get(studentId);
+            resp.setGroupName(groupName == null || groupName.isEmpty() ? null : groupName);
+            rows.add(resp);
+        }
+        return rows;
     }
 
     private GraduationCampaign requireCampaign(Long id) {
