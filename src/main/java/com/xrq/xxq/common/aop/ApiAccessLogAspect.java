@@ -11,6 +11,9 @@ import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.reflect.MethodSignature;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -34,6 +37,7 @@ import java.util.regex.Pattern;
  * 参数序列化走 Jackson（业务统一 tools.jackson），{@code *password*} 字段打码；
  * Servlet/框架注入对象（request/response/session 等）不计入参数；
  * 文件上传只记文件名与大小；超长参数（如批量导入列表）截断。
+ * 耗时超过 {@code api-log.slow-threshold-ms}（默认 3 分钟）的成功请求，额外写入 slow 日志文件便于运维排查。
  */
 @Slf4j
 @Aspect
@@ -50,8 +54,15 @@ public class ApiAccessLogAspect {
     private static final Pattern TOSTRING_PASSWORD = Pattern.compile("(?i)(password=)[^,)\\s\\]]+");
     private static final String MASK = "******";
 
+    /** 慢请求专用 logger：耗时超阈值的成功请求额外写一份，logback 按此名字路由到 slow 日志文件。 */
+    private static final Logger slowLog = LoggerFactory.getLogger("slow-api");
+
     private final AuthFacade authFacade;
     private final ObjectMapper objectMapper;
+
+    /** 慢请求阈值（毫秒），默认 3 分钟；可用 api-log.slow-threshold-ms 覆盖。 */
+    @Value("${api-log.slow-threshold-ms:180000}")
+    private long slowThresholdMs;
 
     @Around("within(@org.springframework.web.bind.annotation.RestController *)")
     public Object logApiAccess(ProceedingJoinPoint joinPoint) throws Throwable {
@@ -66,8 +77,12 @@ public class ApiAccessLogAspect {
 
         try {
             Object result = joinPoint.proceed();
-            log.info("API访问 | {} | {} | {} | 参数: {} | 耗时: {}ms",
-                    user, api, handler, params, System.currentTimeMillis() - start);
+            long elapsed = System.currentTimeMillis() - start;
+            log.info("API访问 | {} | {} | {} | 参数: {} | 耗时: {}ms", user, api, handler, params, elapsed);
+            if (elapsed > slowThresholdMs) {
+                // 慢请求额外记录到 slow 日志文件（info.log 中的原始记录保留）
+                slowLog.warn("慢接口 | {} | {} | {} | 参数: {} | 耗时: {}ms", user, api, handler, params, elapsed);
+            }
             return result;
         } catch (Throwable e) {
             long elapsed = System.currentTimeMillis() - start;
