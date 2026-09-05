@@ -49,6 +49,9 @@ CLAUDE.md
 #### uploads ###
 uploads/
 
+#### logs ###
+logs/
+
 mcp.json
 
 **/src/main/resources/application-prd.yaml
