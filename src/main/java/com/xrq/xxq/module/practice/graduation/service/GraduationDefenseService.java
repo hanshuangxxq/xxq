@@ -22,8 +22,14 @@ public interface GraduationDefenseService {
     /** 指导教师录入指导分（R-9.2/R-9.3） */
     ScoreResponse submitAdvisorScore(Long teacherUserId, ScoreSubmitRequest request);
 
+    /** 指导评分录入列表：教师名下学生（无成绩记录的补骨架行，保证首次可录入） */
+    List<ScoreResponse> listAdvisorScoreEntries(Long teacherUserId, Long campaignId);
+
     /** 评阅教师录入评阅分（答辩安排的评阅教师） */
     ScoreResponse submitReviewerScore(Long reviewerUserId, ScoreSubmitRequest request);
+
+    /** 评阅评分录入列表：本人为评阅人的学生（含答辩组，无成绩记录的补骨架行） */
+    List<ScoreResponse> listReviewerScoreEntries(Long reviewerUserId, Long campaignId);
 
     /** 院系/教务录入答辩分 */
     ScoreResponse submitDefenseScore(Long userId, String userType, ScoreSubmitRequest request);
