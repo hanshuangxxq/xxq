@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JavaType;
 import tools.jackson.databind.ObjectMapper;
 
 @Slf4j
@@ -30,6 +31,18 @@ public class ClassScheduleCacheManager {
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
 
+    private String writeCourses(List<CourseDto> courses) {
+        try {
+            // CourseDto 按 category 多态（@JsonTypeInfo），序列化时必须显式声明元素类型，
+            // 否则泛型擦除后按 Object 处理，丢失 category 类型标识导致反序列化失败。
+            JavaType listType = objectMapper.getTypeFactory().constructParametricType(List.class, CourseDto.class);
+            return objectMapper.writerFor(listType).writeValueAsString(courses);
+        } catch (JacksonException e) {
+            log.warn("序列化课表缓存失败", e);
+            return null;
+        }
+    }
+
     // ── 班级+周次维度（已有） ──
 
     public List<CourseDto> get(String className, Integer week) {
@@ -46,11 +59,9 @@ public class ClassScheduleCacheManager {
     }
 
     public void put(String className, Integer week, List<CourseDto> courses) {
-        try {
-            String json = objectMapper.writeValueAsString(courses);
+        String json = writeCourses(courses);
+        if (json != null) {
             redisTemplate.opsForValue().set(CLASS_PREFIX + className + ":week:" + week, json, CLASS_TTL);
-        } catch (JacksonException e) {
-            log.warn("序列化课表缓存失败, className={}, week={}", className, week, e);
         }
     }
 
@@ -87,11 +98,9 @@ public class ClassScheduleCacheManager {
 
     public void putUserScope(String userType, Long userId, Long teacherId, Long courseId,
                              Integer week, List<CourseDto> courses) {
-        try {
-            String json = objectMapper.writeValueAsString(courses);
+        String json = writeCourses(courses);
+        if (json != null) {
             redisTemplate.opsForValue().set(userKey(userType, userId, teacherId, courseId, week), json, USER_TTL);
-        } catch (JacksonException e) {
-            log.warn("序列化用户课表缓存失败, userId={}, userType={}", userId, userType, e);
         }
     }
 
