@@ -59,11 +59,25 @@ public class GraduationDefenseController {
         return Result.ok(defenseService.submitAdvisorScore(teacherUserId, body));
     }
 
+    /** 指导评分录入列表：教师名下学生 */
+    @GetMapping("/scores/advisor")
+    public Result<List<ScoreResponse>> advisorScoreEntries(HttpServletRequest request, @RequestParam Long campaignId) {
+        Long teacherUserId = authFacade.requireUserTypesUserId(request, AuthFacade.USER_TYPE_TEACHER);
+        return Result.ok(defenseService.listAdvisorScoreEntries(teacherUserId, campaignId));
+    }
+
     /** 评阅教师录入评阅分 */
     @PostMapping("/scores/reviewer")
     public Result<ScoreResponse> reviewerScore(HttpServletRequest request, @RequestBody ScoreSubmitRequest body) {
         Long reviewerUserId = authFacade.requireUserTypesUserId(request, AuthFacade.USER_TYPE_TEACHER);
         return Result.ok(defenseService.submitReviewerScore(reviewerUserId, body));
+    }
+
+    /** 评阅评分录入列表：本人为评阅人的学生 */
+    @GetMapping("/scores/reviewer")
+    public Result<List<ScoreResponse>> reviewerScoreEntries(HttpServletRequest request, @RequestParam Long campaignId) {
+        Long reviewerUserId = authFacade.requireUserTypesUserId(request, AuthFacade.USER_TYPE_TEACHER);
+        return Result.ok(defenseService.listReviewerScoreEntries(reviewerUserId, campaignId));
     }
 
     /** 院系/教务录入答辩分 */
