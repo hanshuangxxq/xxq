@@ -16,3 +16,11 @@ jwt:
   secret: dGhpcyBpcyBhIHNlY3JldCBrZXkgZm9yIGp3dCB0b2tlbiBnZW5lcmF0aW9uIGFuZCB2YWxpZGF0aW9u
   access-token-expiration: 30m
   refresh-token-expiration: 7d
+
+# 接口防抖/限流阈值（RateLimitAspect + RateLimitService）
+rate-limit:
+  global-per-minute: 120      # 全局限流：同一账号（未登录按 IP）每分钟请求上限
+  selection-per-minute: 300   # 选课宽容档：/api/selection/** 独立桶，选课高峰更宽容
+  login-ip-per-minute: 20     # 登录 IP 限流：同一 IP 每分钟登录尝试上限
+  login-max-failures: 5       # 登录连续失败次数上限（仅 account 渠道）
+  login-lock-minutes: 5       # 触发锁定后的锁定时长（分钟）
