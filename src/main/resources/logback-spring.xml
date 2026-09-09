@@ -87,9 +87,29 @@
         </encoder>
     </appender>
 
+    <!-- 限流日志：RateLimitService 对首次触限/账号锁定事件单独记录（窗口内后续拒绝静默，防日志洪泛） -->
+    <appender name="RATE_LIMIT_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_PATH}/%d{yyyy/MM/dd}/limit.%i.log</fileNamePattern>
+            <maxFileSize>50MB</maxFileSize>
+            <maxHistory>90</maxHistory>
+            <totalSizeCap>3GB</totalSizeCap>
+            <cleanHistoryOnStart>true</cleanHistoryOnStart>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${FILE_LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
     <!-- slow-api 专用 logger：additivity=false 不回传 root，慢请求只进 slow 文件（不重复进 warn 文件/控制台） -->
     <logger name="slow-api" level="INFO" additivity="false">
         <appender-ref ref="SLOW_FILE"/>
+    </logger>
+
+    <!-- rate-limit 专用 logger：additivity=false 不回传 root，限流事件只进 limit 文件 -->
+    <logger name="rate-limit" level="INFO" additivity="false">
+        <appender-ref ref="RATE_LIMIT_FILE"/>
     </logger>
 
     <root level="INFO">
