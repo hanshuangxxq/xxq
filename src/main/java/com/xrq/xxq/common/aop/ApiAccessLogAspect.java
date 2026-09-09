@@ -16,8 +16,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.validation.BindingResult;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.multipart.MultipartFile;
 import tools.jackson.databind.ObjectMapper;
 
@@ -71,9 +69,9 @@ public class ApiAccessLogAspect {
         MethodSignature signature = (MethodSignature) joinPoint.getSignature();
         String handler = signature.getDeclaringType().getSimpleName() + "#" + signature.getName();
 
-        HttpServletRequest request = currentRequest();
+        HttpServletRequest request = WebRequestUtils.currentRequest();
         String user = describeUser(request);
-        String ip = clientIp(request);
+        String ip = WebRequestUtils.clientIp(request);
         String api = request == null ? "-" : request.getMethod() + " " + request.getRequestURI();
         String params = describeParams(signature, joinPoint.getArgs());
 
@@ -101,13 +99,6 @@ public class ApiAccessLogAspect {
         }
     }
 
-    private HttpServletRequest currentRequest() {
-        if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes) {
-            return attributes.getRequest();
-        }
-        return null;
-    }
-
     private String describeUser(HttpServletRequest request) {
         if (request == null) {
             return "用户[-]";
@@ -119,28 +110,6 @@ public class ApiAccessLogAspect {
         }
         return "用户[userId=%d, userType=%s, role=%s]".formatted(
                 userId, authFacade.currentUserType(request), authFacade.currentRole(request));
-    }
-
-    /** 客户端 IP：反向代理场景优先取转发头，X-Forwarded-For 多级时取第一个（真实客户端）。 */
-    private String clientIp(HttpServletRequest request) {
-        if (request == null) {
-            return "-";
-        }
-        String ip = request.getHeader("X-Forwarded-For");
-        if (isUnknownIp(ip)) {
-            ip = request.getHeader("X-Real-IP");
-        }
-        if (isUnknownIp(ip)) {
-            ip = request.getRemoteAddr();
-        }
-        if (ip != null && ip.contains(",")) {
-            ip = ip.split(",")[0].trim();
-        }
-        return ip;
-    }
-
-    private boolean isUnknownIp(String ip) {
-        return ip == null || ip.isBlank() || "unknown".equalsIgnoreCase(ip);
     }
 
     private String describeParams(MethodSignature signature, Object[] args) {
