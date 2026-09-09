@@ -9,6 +9,15 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    /**
+     * 限流拒绝：不记日志（首次触限已由 RateLimitService 记入 rate-limit 专用文件，
+     * 此处再记会让攻击者刷爆 warn 日志），仅返回 429。
+     */
+    @ExceptionHandler(RateLimitException.class)
+    public Result<Void> handleRateLimit(RateLimitException e) {
+        return Result.fail(e.getCode(), e.getMessage());
+    }
+
     @ExceptionHandler(BusinessException.class)
     public Result<Void> handleBusiness(BusinessException e) {
         log.warn("业务异常 — code={}, message={}", e.getCode(), e.getMessage());
