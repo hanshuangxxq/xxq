@@ -29,11 +29,12 @@ import java.util.regex.Pattern;
 
 /**
  * Controller 访问日志切面：拦截所有 {@code @RestController} 方法，记录
- * 「谁（userId/userType/role）、访问了哪个接口（HTTP 方法 + URI + 控制器方法）、
+ * 「谁（userId/userType/role + 客户端 IP）、访问了哪个接口（HTTP 方法 + URI + 控制器方法）、
  * 干了什么（请求参数）、耗时多久」。
  * <p>
  * 用户上下文由 {@link com.xrq.xxq.config.AuthInterceptor} 解析 JWT 后注入 request attribute，
  * 统一经 {@link AuthFacade} 读取；未鉴权接口（如 /api/login）记为「匿名」。
+ * IP 优先取反向代理头（X-Forwarded-For/X-Real-IP），取不到用 remoteAddr。
  * 参数序列化走 Jackson（业务统一 tools.jackson），{@code *password*} 字段打码；
  * Servlet/框架注入对象（request/response/session 等）不计入参数；
  * 文件上传只记文件名与大小；超长参数（如批量导入列表）截断。
@@ -72,28 +73,29 @@ public class ApiAccessLogAspect {
 
         HttpServletRequest request = currentRequest();
         String user = describeUser(request);
+        String ip = clientIp(request);
         String api = request == null ? "-" : request.getMethod() + " " + request.getRequestURI();
         String params = describeParams(signature, joinPoint.getArgs());
 
         try {
             Object result = joinPoint.proceed();
             long elapsed = System.currentTimeMillis() - start;
-            log.info("API访问 | {} | {} | {} | 参数: {} | 耗时: {}ms", user, api, handler, params, elapsed);
+            log.info("API访问 | {} | IP:{} | {} | {} | 参数: {} | 耗时: {}ms", user, ip, api, handler, params, elapsed);
             if (elapsed > slowThresholdMs) {
                 // 慢请求额外记录到 slow 日志文件（info.log 中的原始记录保留）
-                slowLog.warn("慢接口 | {} | {} | {} | 参数: {} | 耗时: {}ms", user, api, handler, params, elapsed);
+                slowLog.warn("慢接口 | {} | IP:{} | {} | {} | 参数: {} | 耗时: {}ms", user, ip, api, handler, params, elapsed);
             }
             return result;
         } catch (Throwable e) {
             long elapsed = System.currentTimeMillis() - start;
             if (e instanceof BusinessException || e instanceof IllegalArgumentException) {
                 // 业务异常：单行摘要即可（GlobalExceptionHandler 已记录）
-                log.warn("API异常 | {} | {} | {} | 参数: {} | 耗时: {}ms | 异常: {}",
-                        user, api, handler, params, elapsed, e.toString());
+                log.warn("API异常 | {} | IP:{} | {} | {} | 参数: {} | 耗时: {}ms | 异常: {}",
+                        user, ip, api, handler, params, elapsed, e.toString());
             } else {
                 // 非预期异常：附堆栈便于排查（GlobalExceptionHandler 只记 message）；末位 Throwable 由 slf4j 特殊处理，占位用 e.toString()
-                log.error("API异常 | {} | {} | {} | 参数: {} | 耗时: {}ms | 异常: {}",
-                        user, api, handler, params, elapsed, e.toString(), e);
+                log.error("API异常 | {} | IP:{} | {} | {} | 参数: {} | 耗时: {}ms | 异常: {}",
+                        user, ip, api, handler, params, elapsed, e.toString(), e);
             }
             throw e;
         }
@@ -117,6 +119,28 @@ public class ApiAccessLogAspect {
         }
         return "用户[userId=%d, userType=%s, role=%s]".formatted(
                 userId, authFacade.currentUserType(request), authFacade.currentRole(request));
+    }
+
+    /** 客户端 IP：反向代理场景优先取转发头，X-Forwarded-For 多级时取第一个（真实客户端）。 */
+    private String clientIp(HttpServletRequest request) {
+        if (request == null) {
+            return "-";
+        }
+        String ip = request.getHeader("X-Forwarded-For");
+        if (isUnknownIp(ip)) {
+            ip = request.getHeader("X-Real-IP");
+        }
+        if (isUnknownIp(ip)) {
+            ip = request.getRemoteAddr();
+        }
+        if (ip != null && ip.contains(",")) {
+            ip = ip.split(",")[0].trim();
+        }
+        return ip;
+    }
+
+    private boolean isUnknownIp(String ip) {
+        return ip == null || ip.isBlank() || "unknown".equalsIgnoreCase(ip);
     }
 
     private String describeParams(MethodSignature signature, Object[] args) {
