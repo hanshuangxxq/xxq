@@ -32,7 +32,9 @@ import java.util.regex.Pattern;
  * <p>
  * 用户上下文由 {@link com.xrq.xxq.config.AuthInterceptor} 解析 JWT 后注入 request attribute，
  * 统一经 {@link AuthFacade} 读取；未鉴权接口（如 /api/login）记为「匿名」。
- * IP 优先取反向代理头（X-Forwarded-For/X-Real-IP），取不到用 remoteAddr。
+ * IP 显示优先用登录成功时登记在会话中的「公网IP|内网IP」（内网 IP 为前端登录时上报的
+ * X-Client-Private-IP，校园网 NAT 下可追溯具体设备）；未登录或无登记时回退实时解析
+ * （X-Forwarded-For 第一跳 / X-Real-IP / remoteAddr）。
  * 参数序列化走 Jackson（业务统一 tools.jackson），{@code *password*} 字段打码；
  * Servlet/框架注入对象（request/response/session 等）不计入参数；
  * 文件上传只记文件名与大小；超长参数（如批量导入列表）截断。
@@ -71,7 +73,7 @@ public class ApiAccessLogAspect {
 
         HttpServletRequest request = WebRequestUtils.currentRequest();
         String user = describeUser(request);
-        String ip = WebRequestUtils.clientIp(request);
+        String ip = describeClientIp(request);
         String api = request == null ? "-" : request.getMethod() + " " + request.getRequestURI();
         String params = describeParams(signature, joinPoint.getArgs());
 
@@ -110,6 +112,20 @@ public class ApiAccessLogAspect {
         }
         return "用户[userId=%d, userType=%s, role=%s]".formatted(
                 userId, authFacade.currentUserType(request), authFacade.currentRole(request));
+    }
+
+    /**
+     * 客户端 IP 显示：已登录请求优先用登录成功时登记的「公网IP|内网IP」（会话携带，
+     * 校园网 NAT 下可追溯具体设备）；未登录/无登记时回退实时解析（X-Forwarded-For 第一跳等）。
+     */
+    private String describeClientIp(HttpServletRequest request) {
+        if (request != null) {
+            String loginIp = authFacade.currentLoginIp(request);
+            if (loginIp != null) {
+                return loginIp;
+            }
+        }
+        return WebRequestUtils.clientIp(request);
     }
 
     private String describeParams(MethodSignature signature, Object[] args) {
