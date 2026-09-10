@@ -25,6 +25,8 @@ public class AuthFacade {
     public static final String ATTR_USER_TYPE = "userType";
     public static final String ATTR_ROLE = "role";
     public static final String ATTR_TOKEN_ID = "tokenId";
+    /** 登录成功时登记的客户端 IP 显示串（公网IP|内网IP），由 AuthInterceptor 从会话注入 */
+    public static final String ATTR_LOGIN_IP = "loginIp";
 
     public static final String USER_TYPE_STUDENT = "student";
     public static final String USER_TYPE_TEACHER = "teacher";
@@ -51,6 +53,14 @@ public class AuthFacade {
 
     public String currentTokenId(HttpServletRequest request) {
         return (String) request.getAttribute(ATTR_TOKEN_ID);
+    }
+
+    /**
+     * 当前请求登录成功时登记的客户端 IP 显示串（公网IP|内网IP），供操作日志展示。
+     * 会话无登记（内网 IP 获取失败 / 重建会话 / 存量旧会话）时返回 null，调用方回退实时解析。
+     */
+    public String currentLoginIp(HttpServletRequest request) {
+        return (String) request.getAttribute(ATTR_LOGIN_IP);
     }
 
     /** 从 Redis 取当前会话的完整快照；若 token 已注销返回 null。 */
