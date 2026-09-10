@@ -16,7 +16,8 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 限流计数服务：全局限流（按账号/按 IP）、选课宽容档、登录 IP 限流、登录失败计数与账号锁定。
+ * 限流计数服务：全局限流（按账号/按 IP）、选课宽容档、登录限流（公网 IP + 内网 IP 复合客户端维度）、
+ * 公网 IP 登录计数删除登记、登录失败计数与账号锁定。
  * <p>
  * 计数全部走 Redis 固定窗口（分钟桶 key 后缀 yyyyMMddHHmm），INCR+EXPIRE 用 Lua 脚本原子完成
  * （沿用 selection 模块 Redis 计数器的 Lua 先例）。Redis 同时是登录会话存储，
@@ -94,18 +95,34 @@ public class RateLimitService {
         }
     }
 
-    /** 登录 IP 限流：同一 IP 一分钟内登录尝试超阈值抛 429。 */
-    public void checkLoginIpLimit(String ip) {
-        Long count = incrWithExpire(LOGIN_IP_PREFIX + ip + ":" + minuteBucket(), BUCKET_TTL_SECONDS);
+    /**
+     * 登录限流：同一客户端一分钟内登录尝试超阈值抛 429。
+     *
+     * @param clientKey 复合客户端维度：公网 IP（X-Forwarded-For 第一跳）+ 前端上报的内网 IP
+     *                  （X-Client-Private-IP），内网 IP 缺失时仅公网 IP —— 校园网 NAT 下
+     *                  同出口 IP 的不同设备不再互相挤占登录额度
+     */
+    public void checkLoginClientLimit(String clientKey) {
+        Long count = incrWithExpire(LOGIN_IP_PREFIX + clientKey + ":" + minuteBucket(), BUCKET_TTL_SECONDS);
         if (count == null) {
             return;
         }
         if (count == loginIpPerMinute + 1) {
-            limitLog.warn("限流触发 | 匿名 | IP:{} | POST /api/login | 阈值: {}/分钟(登录IP)", ip, loginIpPerMinute);
+            limitLog.warn("限流触发 | 匿名 | 客户端:{} | POST /api/login | 阈值: {}/分钟(登录)", clientKey, loginIpPerMinute);
         }
         if (count > loginIpPerMinute) {
             throw new RateLimitException("登录尝试过于频繁，请稍后再试");
         }
+    }
+
+    /**
+     * 删除纯公网 IP 的登录计数登记：内网 IP 获取失败的成功登录不消耗共享额度。
+     * 纯公网桶被校园网 NAT 同出口的所有设备共享，成功登录已证明是正常用户而非爆破源，
+     * 继续计数只会让同 NAT 的其他人被误伤限流。
+     */
+    public void clearLoginClientLimit(String publicIp) {
+        redisTemplate.delete(LOGIN_IP_PREFIX + publicIp + ":" + minuteBucket());
+        limitLog.info("登录计数删除登记 | IP:{} | 登录成功且内网IP缺失，清除公网IP当分钟登录计数", publicIp);
     }
 
     /** 账号锁定检查：锁定中抛 429，消息带剩余分钟数（向上取整）。 */
