@@ -17,6 +17,13 @@ jwt:
   access-token-expiration: 30m
   refresh-token-expiration: 7d
 
+# Timefold 求解器终止条件（不配置时求解器不会自行结束，只能手动停止，前端轮询永不停止）
+timefold:
+  solver:
+    termination:
+      spent-limit: 5m             # 单次求解最长运行时长
+      unimproved-spent-limit: 30s # 最优解持续 30s 无改进则提前收敛
+
 # 接口防抖/限流阈值（RateLimitAspect + RateLimitService）
 rate-limit:
   global-per-minute: 120      # 全局限流：同一账号（未登录按 IP）每分钟请求上限
