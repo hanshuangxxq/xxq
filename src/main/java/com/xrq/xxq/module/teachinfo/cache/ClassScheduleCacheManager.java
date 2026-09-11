@@ -21,10 +21,8 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 public class ClassScheduleCacheManager {
 
-    private static final String CLASS_PREFIX = "schedule:class:";
     private static final String USER_PREFIX = "schedule:user:";
     private static final String CLASS_COURSES_PREFIX = "schedule:class-courses:";
-    private static final Duration CLASS_TTL = Duration.ofHours(1);
     private static final Duration USER_TTL = Duration.ofMinutes(15);
     private static final Duration CLASS_COURSES_TTL = Duration.ofHours(1);
 
@@ -43,35 +41,6 @@ public class ClassScheduleCacheManager {
         }
     }
 
-    // ── 班级+周次维度（已有） ──
-
-    public List<CourseDto> get(String className, Integer week) {
-        String json = redisTemplate.opsForValue().get(CLASS_PREFIX + className + ":week:" + week);
-        if (json == null) {
-            return null;
-        }
-        try {
-            return objectMapper.readValue(json, new TypeReference<List<CourseDto>>() {});
-        } catch (JacksonException e) {
-            log.warn("反序列化课表缓存失败, className={}, week={}", className, week, e);
-            return null;
-        }
-    }
-
-    public void put(String className, Integer week, List<CourseDto> courses) {
-        String json = writeCourses(courses);
-        if (json != null) {
-            redisTemplate.opsForValue().set(CLASS_PREFIX + className + ":week:" + week, json, CLASS_TTL);
-        }
-    }
-
-    public void evict(String className) {
-        var keys = redisTemplate.keys(CLASS_PREFIX + className + ":week:*");
-        if (keys != null && !keys.isEmpty()) {
-            redisTemplate.delete(keys);
-        }
-    }
-
     // ── 用户维度：listByUserScope ──
 
     private String userKey(String userType, Long userId, Long teacherId, Long courseId, Integer week) {
@@ -80,8 +49,6 @@ public class ClassScheduleCacheManager {
                 + ":c" + (courseId != null ? courseId : "_")
                 + ":w" + (week != null ? week : "_");
     }
-
-    private static final String USER_KEY_PREFIX_LIKE = "schedule:user:";
 
     public List<CourseDto> getUserScope(String userType, Long userId, Long teacherId, Long courseId, Integer week) {
         String json = redisTemplate.opsForValue().get(userKey(userType, userId, teacherId, courseId, week));
@@ -106,7 +73,7 @@ public class ClassScheduleCacheManager {
 
     /** 清除指定用户的所有维度缓存（学生/教师/院系切换班级或授课变更时调用）。 */
     public void evictUserScope(Long userId) {
-        var keys = redisTemplate.keys(USER_KEY_PREFIX_LIKE + "*:" + userId + ":*");
+        var keys = redisTemplate.keys(USER_PREFIX + "*:" + userId + ":*");
         if (keys != null && !keys.isEmpty()) {
             redisTemplate.delete(keys);
         }
@@ -136,22 +103,21 @@ public class ClassScheduleCacheManager {
         }
     }
 
-    /** 针对 className 中每一个班级名执行淘汰（合班时拆分）。 */
+    /**
+     * 授课安排变更后的缓存淘汰（按班级名触发）。
+     * <p>
+     * 历史上的「班级+周次」维度缓存（schedule:class:）与学生/教师 user 维度本质是
+     * 同一批课表数据以两套 key 各存一份，冗余且淘汰易漏；该维度的读写早已无调用方，
+     * 故移除。班级名无法反查 user 维度的具体 key，而授课变更属低频管理操作，
+     * 这里直接清空全部课表缓存保证一致性。参数保留仅为兼容既有调用方。
+     */
     public void evictByClassNames(String classNames) {
-        if (classNames == null || classNames.isBlank()) {
-            return;
-        }
-        for (String name : classNames.split(",")) {
-            String trimmed = name.strip();
-            if (!trimmed.isEmpty()) {
-                evict(trimmed);
-            }
-        }
+        clearAll();
     }
 
-    /** 批量删除匹配的所有 key（用于全量刷新场景，谨慎使用）。 */
+    /** 清空所有课表缓存（授课变更、排课完成等全量刷新场景）。 */
     public void clearAll() {
-        for (String prefix : List.of(CLASS_PREFIX, USER_PREFIX, CLASS_COURSES_PREFIX)) {
+        for (String prefix : List.of(USER_PREFIX, CLASS_COURSES_PREFIX)) {
             var keys = redisTemplate.keys(prefix + "*");
             if (keys != null && !keys.isEmpty()) {
                 redisTemplate.delete(keys);
