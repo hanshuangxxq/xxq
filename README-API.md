@@ -1788,6 +1788,7 @@ Authorization: Bearer <accessToken>
 5. 从库中读取时间段、教室、课程、教师等基础数据
 6. 组装为 Timefold 排课问题，启动异步求解
 7. 每次找到更优解时，将分配结果（timeslot、room、startWeek、endWeek）写回 `teach_info` 表
+8. 求解按 `application.yaml` 中 `timefold.solver.termination` 配置自动终止（当前：最长 5 分钟，或最优解 30 秒无改进），终止后轮询返回 `FINISHED`；也可随时调用 8.3 手动终止
 
 **响应示例**
 
