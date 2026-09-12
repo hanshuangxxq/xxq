@@ -30,8 +30,7 @@ import com.xrq.xxq.module.score.entity.ReviewStatusEnum;
 import com.xrq.xxq.module.score.mapper.ScoreMapper;
 import com.xrq.xxq.module.score.mapper.ScoreReviewMapper;
 import com.xrq.xxq.module.score.service.ScoreReviewService;
-import org.springframework.context.ApplicationEventPublisher;
-import com.xrq.xxq.common.event.ReviewStatusEvent;
+import com.xrq.xxq.module.notification.notice.ScoreNoticeScenes;
 import com.xrq.xxq.module.user.entity.user.Teacher;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.module.user.mapper.TeacherMapper;
@@ -57,7 +56,7 @@ public class ScoreReviewServiceImpl extends ServiceImpl<ScoreReviewMapper, Score
     private final UserMapper userMapper;
     private final StudentMapper studentMapper;
     private final TeacherMapper teacherMapper;
-    private final ApplicationEventPublisher eventPublisher;
+    private final ScoreNoticeScenes scoreNoticeScenes;
     private final ReferenceValidator referenceValidator;
 
     // ==================== 申请 ====================
@@ -160,7 +159,7 @@ public class ScoreReviewServiceImpl extends ServiceImpl<ScoreReviewMapper, Score
         if (request.getNewTotalScore() != null) {
             adjustTotal(g, request.getNewTotalScore());
         }
-        notify(r.getStudentUserId(), "成绩复核进展", "教师已回复您的成绩复核申请，请查看。");
+        scoreNoticeScenes.reviewReplied(r.getStudentUserId());
         return toViews(List.of(r)).getFirst();
     }
 
@@ -221,7 +220,7 @@ public class ScoreReviewServiceImpl extends ServiceImpl<ScoreReviewMapper, Score
             g.setLocked(1); // 终审后锁定成绩
             scoreMapper.updateById(g);
         }
-        notify(r.getStudentUserId(), "成绩复核结果", "您的成绩复核申请已处理完毕，请查看结果。");
+        scoreNoticeScenes.reviewResolved(r.getStudentUserId());
         return toViews(List.of(r)).getFirst();
     }
 
@@ -283,9 +282,5 @@ public class ScoreReviewServiceImpl extends ServiceImpl<ScoreReviewMapper, Score
             v.setCreateTime(r.getCreateTime());
             return v;
         }).toList();
-    }
-
-    private void notify(Long studentUserId, String title, String content) {
-        eventPublisher.publishEvent(new ReviewStatusEvent(studentUserId, title, content));
     }
 }

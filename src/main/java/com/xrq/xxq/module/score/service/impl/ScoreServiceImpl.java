@@ -40,8 +40,7 @@ import com.xrq.xxq.module.score.mapper.ScoreConfigMapper;
 import com.xrq.xxq.module.score.mapper.ScoreMapper;
 import com.xrq.xxq.module.score.service.ScoreService;
 import com.xrq.xxq.module.semester.mapper.SemesterMapper;
-import org.springframework.context.ApplicationEventPublisher;
-import com.xrq.xxq.common.event.GradeFailedEvent;
+import com.xrq.xxq.module.notification.notice.ScoreNoticeScenes;
 import com.xrq.xxq.module.semester.entity.Semester;
 import com.xrq.xxq.module.semester.service.SemesterService;
 import com.xrq.xxq.module.teachinfo.entity.TeachInfo;
@@ -77,7 +76,7 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
     private final TeacherMapper teacherMapper;
     private final DepartmentMapper departmentMapper;
     private final ScoreConfigMapper scoreConfigMapper;
-    private final ApplicationEventPublisher eventPublisher;
+    private final ScoreNoticeScenes scoreNoticeScenes;
     private final ExamMapper examMapper;
     private final SemesterService semesterService;
     private final SemesterMapper semesterMapper;
@@ -271,10 +270,10 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
             }
             saved.add(g);
 
-            // 录入即生效：新建且不及格者发布事件，由通知监听器 AFTER_COMMIT 异步发送
+            // 录入即生效：新建且不及格者触发通知场景，由 NotifyAspect 在事务提交后发送
             if (isNew && ScoreStats.isFail(total)) {
-                eventPublisher.publishEvent(new GradeFailedEvent(
-                        e.getStudentUserId(), courseName, total.stripTrailingZeros().toPlainString()));
+                scoreNoticeScenes.gradeFailed(
+                        e.getStudentUserId(), courseName, total.stripTrailingZeros().toPlainString());
             }
         }
         return toViews(saved);
