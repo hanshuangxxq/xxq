@@ -44,9 +44,8 @@ import com.xrq.xxq.util.ParamValidator;
 
 import java.time.format.DateTimeFormatter;
 
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import com.xrq.xxq.common.event.CampaignOpenedEvent;
+import com.xrq.xxq.module.notification.notice.SelectionNoticeScenes;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -70,7 +69,7 @@ public class SelectionCampaignServiceImpl
     private final SemesterService semesterService;
     private final SelectionClassService selectionClassService;
     private final CourseMapper courseMapper;
-    private final ApplicationEventPublisher eventPublisher;
+    private final SelectionNoticeScenes selectionNoticeScenes;
     private final StringRedisTemplate redisTemplate;
 
     @Override
@@ -328,12 +327,12 @@ public class SelectionCampaignServiceImpl
         campaign.setStatus(CampaignStatusEnum.OPEN);
         updateById(campaign);
 
-        // 发布活动开放事件，由通知监听器 AFTER_COMMIT 异步广播（业务与通知解耦）
+        // 触发活动开放广播场景，由 NotifyAspect 在事务提交后广播（业务与通知解耦）
         String endTimeText = campaign.getEndTime() != null
                 ? campaign.getEndTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
                 : "详见系统";
         String courseName = campaign.getCourseName() != null ? campaign.getCourseName() : "未知活动";
-        eventPublisher.publishEvent(new CampaignOpenedEvent(courseName, endTimeText, senderId));
+        selectionNoticeScenes.campaignOpened(courseName, endTimeText, senderId);
     }
 
     @Override
