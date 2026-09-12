@@ -34,8 +34,7 @@ import com.xrq.xxq.util.StudentScopeResolver;
 import com.xrq.xxq.module.clazz.service.ClassNameService;
 import com.xrq.xxq.module.course.mapper.CourseMapper;
 import com.xrq.xxq.module.selection.mapper.SelectionCampaignMapper;
-import org.springframework.context.ApplicationEventPublisher;
-import com.xrq.xxq.common.event.WarningActivatedEvent;
+import com.xrq.xxq.module.notification.notice.WarningNoticeScenes;
 import com.xrq.xxq.module.score.entity.Score;
 import com.xrq.xxq.module.score.entity.ScoreTypeEnum;
 import com.xrq.xxq.module.score.mapper.ScoreMapper;
@@ -74,7 +73,7 @@ public class WarningServiceImpl implements WarningService {
     private final ClassNameService classNameService;
     private final SemesterService semesterService;
     private final SemesterMapper semesterMapper;
-    private final ApplicationEventPublisher eventPublisher;
+    private final WarningNoticeScenes warningNoticeScenes;
     private final StudentScopeResolver scopeResolver;
     private final ReferenceValidator referenceValidator;
 
@@ -270,7 +269,7 @@ public class WarningServiceImpl implements WarningService {
         }
         if (!wasActive) {
             newlyActivated = 1;
-            sendWarningNotification(studentUserId, target, reason);
+            warningNoticeScenes.warningActivated(studentUserId, target.getDescription(), reason);
         }
 
         // 解除其它 ACTIVE 级别（学生已好转或级别变化）
@@ -294,10 +293,6 @@ public class WarningServiceImpl implements WarningService {
             }
         }
         return resolved;
-    }
-
-    private void sendWarningNotification(Long studentUserId, WarningLevelEnum level, String reason) {
-        eventPublisher.publishEvent(new WarningActivatedEvent(studentUserId, level.getDescription(), reason));
     }
 
     // ==================== 看板 / 查询 ====================
