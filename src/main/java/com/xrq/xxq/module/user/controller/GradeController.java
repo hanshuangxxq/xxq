@@ -20,8 +20,7 @@ import com.xrq.xxq.module.user.entity.user.Grade;
 import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.module.user.service.GradeService;
-import com.xrq.xxq.util.auth.RequireAuth;
-import com.xrq.xxq.util.auth.UserType;
+import com.xrq.xxq.util.auth.RequireAcademicAdmin;
 
 import lombok.RequiredArgsConstructor;
 
@@ -33,7 +32,7 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/api/grades")
 @RequiredArgsConstructor
-@RequireAuth(UserType.ACADEMIC_ADMIN)
+@RequireAcademicAdmin
 public class GradeController {
 
     private final GradeService gradeService;

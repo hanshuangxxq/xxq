@@ -3,8 +3,8 @@ package com.xrq.xxq.module.user.controller;
 import com.xrq.xxq.common.Result;
 import com.xrq.xxq.module.mojor.entity.Major;
 import com.xrq.xxq.module.mojor.service.MajorService;
-import com.xrq.xxq.util.auth.RequireAuth;
-import com.xrq.xxq.util.auth.UserType;
+import com.xrq.xxq.util.auth.RequireAcademicAdmin;
+import com.xrq.xxq.util.auth.RequireLogin;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -22,20 +22,20 @@ public class MajorController {
     private final MajorService majorService;
 
     @GetMapping
-    @RequireAuth()
+    @RequireLogin
     public Result<List<Major>> list() {
         return Result.ok(majorService.list());
     }
 
     @PostMapping
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     public Result<Major> create(HttpServletRequest request, @RequestBody Major major) {
         majorService.save(major);
         return Result.ok(major);
     }
 
     @PutMapping("/{id}")
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     public Result<Major> update(HttpServletRequest request, @PathVariable Long id, @RequestBody Major major) {
         major.setId(id);
         majorService.updateById(major);
@@ -43,7 +43,7 @@ public class MajorController {
     }
 
     @DeleteMapping("/{id}")
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     public Result<Void> delete(HttpServletRequest request, @PathVariable Long id) {
         majorService.removeById(id);
         return Result.ok();

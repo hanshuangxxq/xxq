@@ -24,8 +24,10 @@ import com.xrq.xxq.module.practice.internship.dto.TrainingUpdateRequest;
 import com.xrq.xxq.module.practice.internship.entity.TrainingStatusEnum;
 import com.xrq.xxq.module.practice.internship.service.TrainingService;
 import com.xrq.xxq.util.auth.AuthFacade;
-import com.xrq.xxq.util.auth.RequireAuth;
-import com.xrq.xxq.util.auth.UserType;
+import com.xrq.xxq.util.auth.RequireDepartment;
+import com.xrq.xxq.util.auth.RequireLogin;
+import com.xrq.xxq.util.auth.RequireManagement;
+import com.xrq.xxq.util.auth.RequireStudent;
 
 import lombok.RequiredArgsConstructor;
 
@@ -43,7 +45,7 @@ public class TrainingController {
     private final AuthFacade authFacade;
 
     @PostMapping
-    @RequireAuth(UserType.DEPARTMENT)
+    @RequireDepartment
     public Result<TrainingResponse> create(HttpServletRequest request, @RequestBody TrainingCreateRequest body) {
         Long userId = authFacade.currentUserId(request);
         String userType = authFacade.currentUserType(request);
@@ -51,7 +53,7 @@ public class TrainingController {
     }
 
     @PutMapping("/{id}")
-    @RequireAuth({UserType.DEPARTMENT, UserType.ACADEMIC_ADMIN})
+    @RequireManagement
     public Result<TrainingResponse> update(HttpServletRequest request, @PathVariable Long id,
                                            @RequestBody TrainingUpdateRequest body) {
         Long userId = authFacade.currentUserId(request);
@@ -60,7 +62,7 @@ public class TrainingController {
     }
 
     @PutMapping("/{id}/status")
-    @RequireAuth({UserType.DEPARTMENT, UserType.ACADEMIC_ADMIN})
+    @RequireManagement
     public Result<Void> changeStatus(HttpServletRequest request, @PathVariable Long id,
                                      @RequestParam TrainingStatusEnum status) {
         Long userId = authFacade.currentUserId(request);
@@ -70,7 +72,7 @@ public class TrainingController {
     }
 
     @GetMapping
-    @RequireAuth({UserType.DEPARTMENT, UserType.ACADEMIC_ADMIN})
+    @RequireManagement
     public Result<PageResult<TrainingResponse>> list(HttpServletRequest request,
                                                      @RequestParam(required = false) Long teacherId,
                                                      @RequestParam(required = false) TrainingStatusEnum status,
@@ -83,20 +85,20 @@ public class TrainingController {
     }
 
     @GetMapping("/{id}")
-    @RequireAuth()
+    @RequireLogin
     public Result<TrainingResponse> get(@PathVariable Long id) {
         return Result.ok(trainingService.getCourse(id));
     }
 
     @GetMapping("/available")
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     public Result<List<TrainingResponse>> listAvailable(HttpServletRequest request) {
         Long studentUserId = authFacade.currentUserId(request);
         return Result.ok(trainingService.listAvailableCourses(studentUserId));
     }
 
     @DeleteMapping("/{id}")
-    @RequireAuth({UserType.DEPARTMENT, UserType.ACADEMIC_ADMIN})
+    @RequireManagement
     public Result<Void> delete(HttpServletRequest request, @PathVariable Long id) {
         Long userId = authFacade.currentUserId(request);
         String userType = authFacade.currentUserType(request);
@@ -105,14 +107,14 @@ public class TrainingController {
     }
 
     @PostMapping("/{courseId}/enrollments")
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     public Result<TrainingEnrollmentResponse> enroll(HttpServletRequest request, @PathVariable Long courseId) {
         Long studentUserId = authFacade.currentUserId(request);
         return Result.ok(trainingService.enroll(studentUserId, courseId));
     }
 
     @DeleteMapping("/enrollments/{id}")
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     public Result<Void> cancelEnroll(HttpServletRequest request, @PathVariable Long id) {
         Long studentUserId = authFacade.currentUserId(request);
         trainingService.cancelEnroll(studentUserId, id);
@@ -120,14 +122,14 @@ public class TrainingController {
     }
 
     @GetMapping("/enrollments/my")
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     public Result<List<TrainingEnrollmentResponse>> myEnrollments(HttpServletRequest request) {
         Long studentUserId = authFacade.currentUserId(request);
         return Result.ok(trainingService.listMyEnrollments(studentUserId));
     }
 
     @GetMapping("/{courseId}/enrollments")
-    @RequireAuth({UserType.DEPARTMENT, UserType.ACADEMIC_ADMIN})
+    @RequireManagement
     public Result<PageResult<TrainingEnrollmentResponse>> enrollmentsByCourse(HttpServletRequest request,
                                                                               @PathVariable Long courseId,
                                                                               @RequestParam(required = false) Integer page,

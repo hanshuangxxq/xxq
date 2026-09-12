@@ -26,8 +26,10 @@ import com.xrq.xxq.module.practice.internship.dto.InternshipUpdateRequest;
 import com.xrq.xxq.module.practice.internship.entity.InternshipStatusEnum;
 import com.xrq.xxq.module.practice.internship.service.InternshipService;
 import com.xrq.xxq.util.auth.AuthFacade;
-import com.xrq.xxq.util.auth.RequireAuth;
-import com.xrq.xxq.util.auth.UserType;
+import com.xrq.xxq.util.auth.RequireDepartment;
+import com.xrq.xxq.util.auth.RequireLogin;
+import com.xrq.xxq.util.auth.RequireManagement;
+import com.xrq.xxq.util.auth.RequireStudent;
 
 import lombok.RequiredArgsConstructor;
 
@@ -45,7 +47,7 @@ public class InternshipController {
     private final AuthFacade authFacade;
 
     @PostMapping
-    @RequireAuth(UserType.DEPARTMENT)
+    @RequireDepartment
     public Result<InternshipResponse> create(HttpServletRequest request, @RequestBody InternshipCreateRequest body) {
         Long userId = authFacade.currentUserId(request);
         String userType = authFacade.currentUserType(request);
@@ -53,7 +55,7 @@ public class InternshipController {
     }
 
     @PutMapping("/{id}")
-    @RequireAuth({UserType.DEPARTMENT, UserType.ACADEMIC_ADMIN})
+    @RequireManagement
     public Result<InternshipResponse> update(HttpServletRequest request, @PathVariable Long id,
                                              @RequestBody InternshipUpdateRequest body) {
         Long userId = authFacade.currentUserId(request);
@@ -62,7 +64,7 @@ public class InternshipController {
     }
 
     @PutMapping("/{id}/status")
-    @RequireAuth({UserType.DEPARTMENT, UserType.ACADEMIC_ADMIN})
+    @RequireManagement
     public Result<Void> changeStatus(HttpServletRequest request, @PathVariable Long id,
                                      @RequestParam InternshipStatusEnum status) {
         Long userId = authFacade.currentUserId(request);
@@ -72,7 +74,7 @@ public class InternshipController {
     }
 
     @GetMapping
-    @RequireAuth({UserType.DEPARTMENT, UserType.ACADEMIC_ADMIN})
+    @RequireManagement
     public Result<PageResult<InternshipResponse>> list(HttpServletRequest request,
                                                        @RequestParam(required = false) Long supervisorId,
                                                        @RequestParam(required = false) InternshipStatusEnum status,
@@ -85,20 +87,20 @@ public class InternshipController {
     }
 
     @GetMapping("/{id}")
-    @RequireAuth()
+    @RequireLogin
     public Result<InternshipResponse> get(@PathVariable Long id) {
         return Result.ok(internshipService.getInternship(id));
     }
 
     @GetMapping("/available")
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     public Result<List<InternshipResponse>> listAvailable(HttpServletRequest request) {
         Long studentUserId = authFacade.currentUserId(request);
         return Result.ok(internshipService.listAvailableInternships(studentUserId));
     }
 
     @DeleteMapping("/{id}")
-    @RequireAuth({UserType.DEPARTMENT, UserType.ACADEMIC_ADMIN})
+    @RequireManagement
     public Result<Void> delete(HttpServletRequest request, @PathVariable Long id) {
         Long userId = authFacade.currentUserId(request);
         String userType = authFacade.currentUserType(request);
@@ -107,7 +109,7 @@ public class InternshipController {
     }
 
     @PostMapping("/applications")
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     public Result<InternshipApplicationResponse> apply(HttpServletRequest request,
                                                        @RequestBody InternshipApplyRequest body) {
         Long studentUserId = authFacade.currentUserId(request);
@@ -115,7 +117,7 @@ public class InternshipController {
     }
 
     @DeleteMapping("/applications/{id}")
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     public Result<Void> cancel(HttpServletRequest request, @PathVariable Long id) {
         Long studentUserId = authFacade.currentUserId(request);
         internshipService.cancelApplication(studentUserId, id);
@@ -123,7 +125,7 @@ public class InternshipController {
     }
 
     @PostMapping("/applications/{id}/review")
-    @RequireAuth({UserType.DEPARTMENT, UserType.ACADEMIC_ADMIN})
+    @RequireManagement
     public Result<InternshipApplicationResponse> review(HttpServletRequest request, @PathVariable Long id,
                                                         @RequestBody InternshipReviewRequest body) {
         Long userId = authFacade.currentUserId(request);
@@ -132,14 +134,14 @@ public class InternshipController {
     }
 
     @GetMapping("/applications/my")
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     public Result<List<InternshipApplicationResponse>> myApplications(HttpServletRequest request) {
         Long studentUserId = authFacade.currentUserId(request);
         return Result.ok(internshipService.listMyApplications(studentUserId));
     }
 
     @GetMapping("/{internshipId}/applications")
-    @RequireAuth({UserType.DEPARTMENT, UserType.ACADEMIC_ADMIN})
+    @RequireManagement
     public Result<PageResult<InternshipApplicationResponse>> applicationsByInternship(HttpServletRequest request,
                                                                                       @PathVariable Long internshipId,
                                                                                       @RequestParam(required = false) Integer page,

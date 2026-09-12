@@ -54,7 +54,7 @@ accessToken 由登录接口返回，默认有效期 30 分钟。过期后调用�
 
 **接口鉴权（用户类型）：**
 
-认证通过后，服务端按接口声明的用户类型要求做二次校验（`@RequireAuth` 注解，未登录错误 401 优先于类型不符 403）：
+认证通过后，服务端按接口声明的用户类型要求做二次校验（`@RequireAuth` 注解及其组合快捷注解 `@RequireStudent`/`@RequireTeacher`/`@RequireAcademicAdmin`/`@RequireDepartment`/`@RequireManagement`/`@RequireLogin`，未登录错误 401 优先于类型不符 403）：
 
 | 场景 | 结果 |
 |------|------|

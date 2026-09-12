@@ -18,6 +18,7 @@ import com.xrq.xxq.module.college.dto.CollegeCreateRequest;
 import com.xrq.xxq.module.college.dto.CollegeResponse;
 import com.xrq.xxq.module.college.dto.CollegeUpdateRequest;
 import com.xrq.xxq.module.college.service.CollegeService;
+import com.xrq.xxq.util.auth.RequireAcademicAdmin;
 import com.xrq.xxq.util.auth.RequireAuth;
 import com.xrq.xxq.util.auth.UserType;
 
@@ -56,7 +57,7 @@ public class CollegeController {
 
     /** 新建院系（教务）。 */
     @PostMapping
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     public Result<CollegeResponse> create(HttpServletRequest request,
                                           @RequestBody CollegeCreateRequest body) {
         return Result.ok(collegeService.create(body));
@@ -64,7 +65,7 @@ public class CollegeController {
 
     /** 更新院系（教务）。 */
     @PutMapping("/{id}")
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     public Result<CollegeResponse> update(HttpServletRequest request, @PathVariable Long id,
                                           @RequestBody CollegeUpdateRequest body) {
         return Result.ok(collegeService.update(id, body));
@@ -72,7 +73,7 @@ public class CollegeController {
 
     /** 删除院系（教务）。 */
     @DeleteMapping("/{id}")
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     public Result<Void> delete(HttpServletRequest request, @PathVariable Long id) {
         collegeService.delete(id);
         return Result.ok();

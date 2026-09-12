@@ -11,8 +11,8 @@ import com.xrq.xxq.common.Result;
 import com.xrq.xxq.module.analysis.dto.LearningProgressDto;
 import com.xrq.xxq.module.analysis.service.ProgressService;
 import com.xrq.xxq.util.auth.AuthFacade;
-import com.xrq.xxq.util.auth.RequireAuth;
-import com.xrq.xxq.util.auth.UserType;
+import com.xrq.xxq.util.auth.RequireManagement;
+import com.xrq.xxq.util.auth.RequireStudent;
 
 import lombok.RequiredArgsConstructor;
 
@@ -30,7 +30,7 @@ public class ProgressController {
 
     /** 学生查询本人学习进度。 */
     @GetMapping("/me")
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     public Result<LearningProgressDto> myProgress(HttpServletRequest request) {
         Long userId = authFacade.currentUserId(request);
         return Result.ok(progressService.getProgress(userId, userId, AuthFacade.USER_TYPE_STUDENT));
@@ -38,7 +38,7 @@ public class ProgressController {
 
     /** 教务/院系查询指定学生学习进度。 */
     @GetMapping("/{studentUserId}")
-    @RequireAuth({UserType.ACADEMIC_ADMIN, UserType.DEPARTMENT})
+    @RequireManagement
     public Result<LearningProgressDto> progress(HttpServletRequest request,
                                                 @PathVariable Long studentUserId) {
         Long userId = authFacade.currentUserId(request);

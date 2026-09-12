@@ -34,7 +34,9 @@ import com.xrq.xxq.module.practice.socialpractice.dto.SocialPracticeReportSubmit
 import com.xrq.xxq.module.practice.socialpractice.entity.SocialPracticeReport;
 import com.xrq.xxq.module.practice.socialpractice.service.SocialPracticeReportService;
 import com.xrq.xxq.util.auth.AuthFacade;
+import com.xrq.xxq.util.auth.RequireAcademicAdmin;
 import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.RequireStudent;
 import com.xrq.xxq.util.auth.UserType;
 
 import lombok.RequiredArgsConstructor;
@@ -54,7 +56,7 @@ public class SocialPracticeReportController {
     private final AuthFacade authFacade;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     public Result<SocialPracticeReportResponse> submit(HttpServletRequest request,
                                                        @RequestPart("data") SocialPracticeReportSubmitRequest body,
                                                        @RequestPart("file") MultipartFile file) {
@@ -63,14 +65,14 @@ public class SocialPracticeReportController {
     }
 
     @GetMapping("/my")
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     public Result<List<SocialPracticeReportResponse>> my(HttpServletRequest request) {
         Long studentUserId = authFacade.currentUserId(request);
         return Result.ok(reportService.listMyReports(studentUserId));
     }
 
     @GetMapping
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     public Result<PageResult<SocialPracticeReportResponse>> list(HttpServletRequest request,
                                                                  @RequestParam(required = false) ReportStatusEnum status,
                                                                  @RequestParam(required = false) Integer page,
@@ -79,7 +81,7 @@ public class SocialPracticeReportController {
     }
 
     @PostMapping("/{id}/review")
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     public Result<SocialPracticeReportResponse> review(HttpServletRequest request, @PathVariable Long id,
                                                        @RequestBody SocialPracticeReportReviewRequest body) {
         return Result.ok(reportService.review(id, body));

@@ -15,8 +15,7 @@ import com.xrq.xxq.common.Result;
 import com.xrq.xxq.module.selection.dto.AssignTeacherRequest;
 import com.xrq.xxq.module.selection.dto.SelectionClassResponse;
 import com.xrq.xxq.module.selection.service.SelectionClassService;
-import com.xrq.xxq.util.auth.RequireAuth;
-import com.xrq.xxq.util.auth.UserType;
+import com.xrq.xxq.util.auth.RequireAcademicAdmin;
 
 import lombok.RequiredArgsConstructor;
 
@@ -27,7 +26,7 @@ import lombok.RequiredArgsConstructor;
  */
 @RestController
 @RequestMapping("/api/selection/campaigns/{campaignId}/classes")
-@RequireAuth(UserType.ACADEMIC_ADMIN)
+@RequireAcademicAdmin
 @RequiredArgsConstructor
 public class SelectionClassController {
 

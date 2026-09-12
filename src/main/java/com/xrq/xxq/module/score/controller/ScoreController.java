@@ -31,6 +31,8 @@ import com.xrq.xxq.module.score.service.ScoreService;
 import com.xrq.xxq.module.semester.entity.Semester;
 import com.xrq.xxq.util.auth.AuthFacade;
 import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.RequireManagement;
+import com.xrq.xxq.util.auth.RequireStudent;
 import com.xrq.xxq.util.auth.UserType;
 
 import lombok.RequiredArgsConstructor;
@@ -125,7 +127,7 @@ public class ScoreController {
     }
 
     /** 学生查询自己的成绩：默认当前学期，传 semesterId 时查指定学期。 */
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     @GetMapping("/my")
     public Result<List<ScoreView>> myScores(HttpServletRequest request,
                                             @RequestParam(required = false) Long semesterId) {
@@ -134,7 +136,7 @@ public class ScoreController {
     }
 
     /** 学生查询自己有成绩的学期列表（用于成绩页学期切换下拉）。 */
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     @GetMapping("/my/semesters")
     public Result<List<Semester>> myScoreSemesters(HttpServletRequest request) {
         Long studentUserId = authFacade.currentUserId(request);
@@ -147,7 +149,7 @@ public class ScoreController {
      * 成绩统计：按课程聚合分布。院系仅本院学生、教务全校；
      * 可按课程/班级/学期过滤（仅院系与教务可查）。
      */
-    @RequireAuth({UserType.DEPARTMENT, UserType.ACADEMIC_ADMIN})
+    @RequireManagement
     @GetMapping("/statistics")
     public Result<List<ScoreStatisticsDto>> statistics(HttpServletRequest request,
                                                        @RequestParam(required = false) Long courseId,

@@ -28,7 +28,10 @@ import com.xrq.xxq.module.exam.service.ExamService;
 import com.xrq.xxq.module.score.dto.ScoreView;
 import com.xrq.xxq.module.score.service.ScoreService;
 import com.xrq.xxq.util.auth.AuthFacade;
+import com.xrq.xxq.util.auth.RequireAcademicAdmin;
 import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.RequireStudent;
+import com.xrq.xxq.util.auth.RequireTeacher;
 import com.xrq.xxq.util.auth.UserType;
 
 import lombok.RequiredArgsConstructor;
@@ -48,7 +51,7 @@ public class ExamController {
     private final AuthFacade authFacade;
 
     /** 教务安排考试（期末/期中，需绑授课安排）。 */
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     @PostMapping
     public Result<ExamView> create(HttpServletRequest request,
                                    @RequestBody ExamCreateRequest body) {
@@ -57,7 +60,7 @@ public class ExamController {
     }
 
     /** 教务修改考试。 */
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     @PutMapping("/{id}")
     public Result<ExamView> update(HttpServletRequest request,
                                    @PathVariable Long id,
@@ -67,7 +70,7 @@ public class ExamController {
     }
 
     /** 教务删除考试。 */
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     @DeleteMapping("/{id}")
     public Result<Void> delete(HttpServletRequest request,
                                @PathVariable Long id) {
@@ -77,7 +80,7 @@ public class ExamController {
     }
 
     /** 教务查询考试列表（可按学期/课程/类型过滤；source=SELECTION_CAMPAIGN 时按公选课过滤）。 */
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     @GetMapping
     public Result<PageResult<ExamView>> list(HttpServletRequest request,
                                              @RequestParam(required = false) Long semesterId,
@@ -90,7 +93,7 @@ public class ExamController {
     }
 
     /** 教务按班级查询可排考的课程（建考用，合班自动命中）。 */
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     @GetMapping("/class-courses")
     public Result<List<ClassCourseOptionDto>> listClassCourses(
             HttpServletRequest request,
@@ -99,7 +102,7 @@ public class ExamController {
     }
 
     /** 教师查询自己课程相关的考试。 */
-    @RequireAuth(UserType.TEACHER)
+    @RequireTeacher
     @GetMapping("/teacher")
     public Result<List<ExamView>> listForTeacher(HttpServletRequest request) {
         Long userId = authFacade.currentUserId(request);
@@ -107,7 +110,7 @@ public class ExamController {
     }
 
     /** 学生查询自己的考试（常规考试含公选课 ∪ 补考/重修）。 */
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     @GetMapping("/my")
     public Result<List<ExamView>> myExams(HttpServletRequest request) {
         Long studentUserId = authFacade.currentUserId(request);
@@ -117,7 +120,7 @@ public class ExamController {
     // ──────────────────────── 补考/重修 ────────────────────────
 
     /** 教务查询不及格学生名单（补考候选，自动生成；source=SELECTION_CAMPAIGN 时按公选课过滤）。 */
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     @GetMapping("/makeup/candidates")
     public Result<List<MakeupCandidateDto>> makeupCandidates(HttpServletRequest request,
                                                              @RequestParam Long courseId,
@@ -127,7 +130,7 @@ public class ExamController {
     }
 
     /** 教务建补考/重修考试（按不及格名单自动生成考生）。 */
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     @PostMapping("/makeup")
     public Result<ExamView> createMakeupExam(HttpServletRequest request,
                                              @RequestBody MakeupExamCreateRequest body) {
@@ -136,7 +139,7 @@ public class ExamController {
     }
 
     /** 教务查询补考/重修考试列表。 */
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     @GetMapping("/makeup")
     public Result<List<ExamView>> listMakeupExams(HttpServletRequest request,
                                                   @RequestParam(required = false) Long semesterId) {

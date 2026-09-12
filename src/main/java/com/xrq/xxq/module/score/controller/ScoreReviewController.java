@@ -22,7 +22,10 @@ import com.xrq.xxq.module.score.dto.ReviewView;
 import com.xrq.xxq.module.score.entity.ReviewStatusEnum;
 import com.xrq.xxq.module.score.service.ScoreReviewService;
 import com.xrq.xxq.util.auth.AuthFacade;
+import com.xrq.xxq.util.auth.RequireAcademicAdmin;
 import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.RequireStudent;
+import com.xrq.xxq.util.auth.RequireTeacher;
 import com.xrq.xxq.util.auth.UserType;
 
 import lombok.RequiredArgsConstructor;
@@ -41,7 +44,7 @@ public class ScoreReviewController {
     private final AuthFacade authFacade;
 
     /** 学生提交复核申请。 */
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     @PostMapping
     public Result<ReviewView> apply(HttpServletRequest request,
                                     @RequestBody ReviewApplyRequest body) {
@@ -50,7 +53,7 @@ public class ScoreReviewController {
     }
 
     /** 学生查询自己的复核申请。 */
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     @GetMapping("/my")
     public Result<List<ReviewView>> listMy(HttpServletRequest request) {
         Long studentUserId = authFacade.currentUserId(request);
@@ -70,7 +73,7 @@ public class ScoreReviewController {
     }
 
     /** 教师回复复核申请（可调分）。 */
-    @RequireAuth(UserType.TEACHER)
+    @RequireTeacher
     @PostMapping("/{id}/reply")
     public Result<ReviewView> teacherReply(HttpServletRequest request,
                                            @PathVariable Long id,
@@ -81,7 +84,7 @@ public class ScoreReviewController {
     }
 
     /** 学生升级到教务。 */
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     @PostMapping("/{id}/escalate")
     public Result<Void> escalate(HttpServletRequest request,
                                  @PathVariable Long id) {
@@ -91,7 +94,7 @@ public class ScoreReviewController {
     }
 
     /** 教务终审（可调分并锁定成绩）。 */
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     @PostMapping("/{id}/resolve")
     public Result<ReviewView> adminResolve(HttpServletRequest request,
                                            @PathVariable Long id,

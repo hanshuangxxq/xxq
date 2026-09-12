@@ -28,8 +28,9 @@ import com.xrq.xxq.module.practice.competition.dto.RegistrationReviewRequest;
 import com.xrq.xxq.module.practice.competition.entity.CompetitionStatusEnum;
 import com.xrq.xxq.module.practice.competition.service.CompetitionService;
 import com.xrq.xxq.util.auth.AuthFacade;
-import com.xrq.xxq.util.auth.RequireAuth;
-import com.xrq.xxq.util.auth.UserType;
+import com.xrq.xxq.util.auth.RequireAcademicAdmin;
+import com.xrq.xxq.util.auth.RequireLogin;
+import com.xrq.xxq.util.auth.RequireStudent;
 
 import lombok.RequiredArgsConstructor;
 
@@ -47,20 +48,20 @@ public class CompetitionController {
     private final AuthFacade authFacade;
 
     @PostMapping
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     public Result<CompetitionResponse> create(HttpServletRequest request, @RequestBody CompetitionCreateRequest body) {
         return Result.ok(competitionService.createCompetition(body));
     }
 
     @PutMapping("/{id}")
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     public Result<CompetitionResponse> update(HttpServletRequest request, @PathVariable Long id,
                                               @RequestBody CompetitionUpdateRequest body) {
         return Result.ok(competitionService.updateCompetition(id, body));
     }
 
     @PutMapping("/{id}/status")
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     public Result<Void> changeStatus(HttpServletRequest request, @PathVariable Long id,
                                      @RequestParam CompetitionStatusEnum status) {
         competitionService.changeCompetitionStatus(id, status);
@@ -68,7 +69,7 @@ public class CompetitionController {
     }
 
     @GetMapping
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     public Result<PageResult<CompetitionResponse>> list(HttpServletRequest request,
                                                         @RequestParam(required = false) CompetitionStatusEnum status,
                                                         @RequestParam(required = false) Integer page,
@@ -77,34 +78,34 @@ public class CompetitionController {
     }
 
     @GetMapping("/{id}")
-    @RequireAuth()
+    @RequireLogin
     public Result<CompetitionResponse> get(@PathVariable Long id) {
         return Result.ok(competitionService.getCompetition(id));
     }
 
     @GetMapping("/available")
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     public Result<List<CompetitionResponse>> listAvailable(HttpServletRequest request) {
         Long studentUserId = authFacade.currentUserId(request);
         return Result.ok(competitionService.listAvailableCompetitions(studentUserId));
     }
 
     @DeleteMapping("/{id}")
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     public Result<Void> delete(HttpServletRequest request, @PathVariable Long id) {
         competitionService.deleteCompetition(id);
         return Result.ok();
     }
 
     @PostMapping("/registrations")
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     public Result<RegistrationResponse> register(HttpServletRequest request, @RequestBody RegistrationRequest body) {
         Long studentUserId = authFacade.currentUserId(request);
         return Result.ok(competitionService.register(studentUserId, body));
     }
 
     @DeleteMapping("/registrations/{id}")
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     public Result<Void> cancel(HttpServletRequest request, @PathVariable Long id) {
         Long studentUserId = authFacade.currentUserId(request);
         competitionService.cancelRegistration(studentUserId, id);
@@ -112,21 +113,21 @@ public class CompetitionController {
     }
 
     @PostMapping("/registrations/{id}/review")
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     public Result<RegistrationResponse> review(HttpServletRequest request, @PathVariable Long id,
                                                @RequestBody RegistrationReviewRequest body) {
         return Result.ok(competitionService.reviewRegistration(id, body));
     }
 
     @GetMapping("/registrations/my")
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     public Result<List<RegistrationResponse>> myRegistrations(HttpServletRequest request) {
         Long studentUserId = authFacade.currentUserId(request);
         return Result.ok(competitionService.listMyRegistrations(studentUserId));
     }
 
     @GetMapping("/{competitionId}/registrations")
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     public Result<PageResult<RegistrationResponse>> registrationsByCompetition(HttpServletRequest request,
                                                                               @PathVariable Long competitionId,
                                                                               @RequestParam(required = false) Integer page,
@@ -135,27 +136,27 @@ public class CompetitionController {
     }
 
     @PostMapping("/results")
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     public Result<CompetitionResultResponse> recordResult(HttpServletRequest request,
                                                           @RequestBody CompetitionResultRequest body) {
         return Result.ok(competitionService.recordResult(body));
     }
 
     @DeleteMapping("/results/{id}")
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     public Result<Void> deleteResult(HttpServletRequest request, @PathVariable Long id) {
         competitionService.deleteResult(id);
         return Result.ok();
     }
 
     @GetMapping("/{competitionId}/results")
-    @RequireAuth()
+    @RequireLogin
     public Result<List<CompetitionResultResponse>> results(@PathVariable Long competitionId) {
         return Result.ok(competitionService.listResults(competitionId));
     }
 
     @GetMapping("/{competitionId}/results/my")
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     public Result<CompetitionResultResponse> myResult(HttpServletRequest request, @PathVariable Long competitionId) {
         Long studentUserId = authFacade.currentUserId(request);
         return Result.ok(competitionService.getMyResult(studentUserId, competitionId));

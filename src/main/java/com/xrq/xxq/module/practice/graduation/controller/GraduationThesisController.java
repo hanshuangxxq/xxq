@@ -33,7 +33,10 @@ import com.xrq.xxq.module.practice.graduation.entity.ThesisStatusEnum;
 import com.xrq.xxq.module.practice.graduation.service.GraduationThesisService;
 import com.xrq.xxq.module.practice.graduation.service.GraduationThesisService.FileView;
 import com.xrq.xxq.util.auth.AuthFacade;
+import com.xrq.xxq.util.auth.RequireAcademicAdmin;
 import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.RequireStudent;
+import com.xrq.xxq.util.auth.RequireTeacher;
 import com.xrq.xxq.util.auth.UserType;
 
 import lombok.RequiredArgsConstructor;
@@ -51,7 +54,7 @@ public class GraduationThesisController {
     private final AuthFacade authFacade;
 
     /** 学生提交/重提论文（R-8.1/R-8.2，版本管理） */
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Result<ThesisResponse> submit(HttpServletRequest request,
                                          @RequestPart("data") ThesisSubmitRequest body,
@@ -61,7 +64,7 @@ public class GraduationThesisController {
     }
 
     /** 指导教师形式审查（R-8.3） */
-    @RequireAuth(UserType.TEACHER)
+    @RequireTeacher
     @PutMapping("/{id:\\d+}/review")
     public Result<ThesisResponse> review(HttpServletRequest request, @PathVariable Long id,
                                          @RequestBody ThesisReviewRequest body) {
@@ -70,7 +73,7 @@ public class GraduationThesisController {
     }
 
     /** 学生查看我的论文（含版本与查重记录） */
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     @GetMapping("/my")
     public Result<List<ThesisResponse>> my(HttpServletRequest request,
                                            @RequestParam(required = false) Long campaignId) {
@@ -79,7 +82,7 @@ public class GraduationThesisController {
     }
 
     /** 教师查看名下学生的论文 */
-    @RequireAuth(UserType.TEACHER)
+    @RequireTeacher
     @GetMapping("/teacher")
     public Result<List<ThesisResponse>> teacher(HttpServletRequest request, @RequestParam Long campaignId) {
         Long teacherUserId = authFacade.currentUserId(request);
@@ -87,7 +90,7 @@ public class GraduationThesisController {
     }
 
     /** 教务查看活动内论文（按状态筛选） */
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     @GetMapping("/campaign")
     public Result<List<ThesisResponse>> campaign(HttpServletRequest request, @RequestParam Long campaignId,
                                                  @RequestParam(required = false) ThesisStatusEnum status) {
@@ -95,7 +98,7 @@ public class GraduationThesisController {
     }
 
     /** 教务导出查重数据包（R-8.4：zip 内含 xlsx 名单 + 论文文件） */
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     @GetMapping("/export-package")
     public ResponseEntity<byte[]> exportPackage(HttpServletRequest request, @RequestParam Long campaignId,
                                                 @RequestParam(required = false) ThesisStatusEnum status)
@@ -110,7 +113,7 @@ public class GraduationThesisController {
     }
 
     /** 教务登记查重结果（R-8.5/R-8.6） */
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     @PostMapping("/duplicate-checks")
     public Result<DuplicateCheckResponse> registerDuplicateCheck(HttpServletRequest request,
                                                                  @RequestBody DuplicateCheckRegisterRequest body) {

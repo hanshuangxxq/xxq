@@ -35,6 +35,8 @@ import com.xrq.xxq.module.practice.internship.entity.InternshipReport;
 import com.xrq.xxq.module.practice.internship.service.InternshipReportService;
 import com.xrq.xxq.util.auth.AuthFacade;
 import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.RequireManagement;
+import com.xrq.xxq.util.auth.RequireStudent;
 import com.xrq.xxq.util.auth.UserType;
 
 import lombok.RequiredArgsConstructor;
@@ -54,7 +56,7 @@ public class InternshipReportController {
     private final AuthFacade authFacade;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     public Result<InternshipReportResponse> submit(HttpServletRequest request,
                                                    @RequestPart("data") InternshipReportSubmitRequest body,
                                                    @RequestPart("file") MultipartFile file) {
@@ -63,14 +65,14 @@ public class InternshipReportController {
     }
 
     @GetMapping("/my")
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     public Result<List<InternshipReportResponse>> my(HttpServletRequest request) {
         Long studentUserId = authFacade.currentUserId(request);
         return Result.ok(reportService.listMyReports(studentUserId));
     }
 
     @GetMapping
-    @RequireAuth({UserType.DEPARTMENT, UserType.ACADEMIC_ADMIN})
+    @RequireManagement
     public Result<PageResult<InternshipReportResponse>> list(HttpServletRequest request,
                                                              @RequestParam(required = false) ReportStatusEnum status,
                                                              @RequestParam(required = false) Integer page,
@@ -81,7 +83,7 @@ public class InternshipReportController {
     }
 
     @PostMapping("/{id}/review")
-    @RequireAuth({UserType.DEPARTMENT, UserType.ACADEMIC_ADMIN})
+    @RequireManagement
     public Result<InternshipReportResponse> review(HttpServletRequest request, @PathVariable Long id,
                                                    @RequestBody InternshipReportReviewRequest body) {
         Long userId = authFacade.currentUserId(request);

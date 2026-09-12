@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.xrq.xxq.common.Result;
 import com.xrq.xxq.module.preference.service.UserPreferenceService;
 import com.xrq.xxq.util.auth.AuthFacade;
-import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.RequireLogin;
 
 import lombok.RequiredArgsConstructor;
 
@@ -23,7 +23,7 @@ import lombok.RequiredArgsConstructor;
  */
 @RestController
 @RequestMapping("/api/preferences")
-@RequireAuth()
+@RequireLogin
 @RequiredArgsConstructor
 public class UserPreferenceController {
 

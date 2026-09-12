@@ -36,6 +36,8 @@ import com.xrq.xxq.module.practice.graduation.service.GraduationProcessService;
 import com.xrq.xxq.module.practice.graduation.service.GraduationProcessService.FileView;
 import com.xrq.xxq.util.auth.AuthFacade;
 import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.RequireStudent;
+import com.xrq.xxq.util.auth.RequireTeacher;
 import com.xrq.xxq.util.auth.UserType;
 
 import lombok.RequiredArgsConstructor;
@@ -55,7 +57,7 @@ public class GraduationProcessController {
     // ==================== 开题报告 ====================
 
     /** 学生提交/重提开题报告（R-7.1，附件可选） */
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     @PostMapping(value = "/opening-reports", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Result<OpeningReportResponse> submitOpening(HttpServletRequest request,
                                                        @RequestPart("data") OpeningReportSubmitRequest body,
@@ -65,7 +67,7 @@ public class GraduationProcessController {
     }
 
     /** 指导教师审核开题报告（R-7.2） */
-    @RequireAuth(UserType.TEACHER)
+    @RequireTeacher
     @PutMapping("/opening-reports/{id:\\d+}/review")
     public Result<OpeningReportResponse> reviewOpening(HttpServletRequest request, @PathVariable Long id,
                                                        @RequestBody OpeningReportReviewRequest body) {
@@ -74,7 +76,7 @@ public class GraduationProcessController {
     }
 
     /** 学生查看我的开题报告 */
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     @GetMapping("/opening-reports/my")
     public Result<OpeningReportResponse> myOpening(HttpServletRequest request, @RequestParam Long campaignId) {
         Long studentUserId = authFacade.currentUserId(request);
@@ -82,7 +84,7 @@ public class GraduationProcessController {
     }
 
     /** 教师查看名下学生的开题报告 */
-    @RequireAuth(UserType.TEACHER)
+    @RequireTeacher
     @GetMapping("/opening-reports/teacher")
     public Result<List<OpeningReportResponse>> teacherOpenings(HttpServletRequest request,
                                                                @RequestParam Long campaignId) {
@@ -108,7 +110,7 @@ public class GraduationProcessController {
     // ==================== 中期检查 ====================
 
     /** 学生提交中期检查（R-7.4，附件可选） */
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     @PostMapping(value = "/midterms", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Result<MidtermResponse> submitMidterm(HttpServletRequest request,
                                                  @RequestPart("data") MidtermSubmitRequest body,
@@ -118,7 +120,7 @@ public class GraduationProcessController {
     }
 
     /** 指导教师审核中期并给出结论（R-7.5） */
-    @RequireAuth(UserType.TEACHER)
+    @RequireTeacher
     @PutMapping("/midterms/{id:\\d+}/review")
     public Result<MidtermResponse> reviewMidterm(HttpServletRequest request, @PathVariable Long id,
                                                  @RequestBody MidtermReviewRequest body) {
@@ -127,7 +129,7 @@ public class GraduationProcessController {
     }
 
     /** 学生查看我的中期检查 */
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     @GetMapping("/midterms/my")
     public Result<MidtermResponse> myMidterm(HttpServletRequest request, @RequestParam Long campaignId) {
         Long studentUserId = authFacade.currentUserId(request);
@@ -135,7 +137,7 @@ public class GraduationProcessController {
     }
 
     /** 教师查看名下学生的中期检查 */
-    @RequireAuth(UserType.TEACHER)
+    @RequireTeacher
     @GetMapping("/midterms/teacher")
     public Result<List<MidtermResponse>> teacherMidterms(HttpServletRequest request, @RequestParam Long campaignId) {
         Long teacherUserId = authFacade.currentUserId(request);
@@ -160,7 +162,7 @@ public class GraduationProcessController {
     // ==================== 过程指导记录 ====================
 
     /** 教师记录过程指导日志（R-7.7） */
-    @RequireAuth(UserType.TEACHER)
+    @RequireTeacher
     @PostMapping("/guidance-logs")
     public Result<GuidanceLogResponse> createGuidanceLog(HttpServletRequest request,
                                                          @RequestBody GuidanceLogCreateRequest body) {

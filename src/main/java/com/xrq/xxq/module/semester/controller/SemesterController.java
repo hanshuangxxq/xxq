@@ -4,7 +4,7 @@ import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.common.Result;
 import com.xrq.xxq.module.semester.entity.Semester;
 import com.xrq.xxq.module.semester.service.SemesterService;
-import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.RequireLogin;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -13,7 +13,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/semester")
-@RequireAuth()
+@RequireLogin
 @RequiredArgsConstructor
 public class SemesterController {
 

@@ -21,7 +21,12 @@ import com.xrq.xxq.module.practice.graduation.dto.ScoreResponse;
 import com.xrq.xxq.module.practice.graduation.dto.ScoreSubmitRequest;
 import com.xrq.xxq.module.practice.graduation.service.GraduationDefenseService;
 import com.xrq.xxq.util.auth.AuthFacade;
+import com.xrq.xxq.util.auth.RequireAcademicAdmin;
 import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.RequireDepartment;
+import com.xrq.xxq.util.auth.RequireManagement;
+import com.xrq.xxq.util.auth.RequireStudent;
+import com.xrq.xxq.util.auth.RequireTeacher;
 import com.xrq.xxq.util.auth.UserType;
 
 import lombok.RequiredArgsConstructor;
@@ -38,7 +43,7 @@ public class GraduationDefenseController {
     private final AuthFacade authFacade;
 
     /** 院系安排/更新答辩（R-9.1，门禁：查重通过） */
-    @RequireAuth(UserType.DEPARTMENT)
+    @RequireDepartment
     @PostMapping("/arrange")
     public Result<DefenseResponse> arrange(HttpServletRequest request, @RequestBody DefenseArrangeRequest body) {
         Long deptUserId = authFacade.currentUserId(request);
@@ -55,7 +60,7 @@ public class GraduationDefenseController {
     }
 
     /** 指导教师录入指导分（R-9.2/R-9.3） */
-    @RequireAuth(UserType.TEACHER)
+    @RequireTeacher
     @PostMapping("/scores/advisor")
     public Result<ScoreResponse> advisorScore(HttpServletRequest request, @RequestBody ScoreSubmitRequest body) {
         Long teacherUserId = authFacade.currentUserId(request);
@@ -63,7 +68,7 @@ public class GraduationDefenseController {
     }
 
     /** 指导评分录入列表：教师名下学生 */
-    @RequireAuth(UserType.TEACHER)
+    @RequireTeacher
     @GetMapping("/scores/advisor")
     public Result<List<ScoreResponse>> advisorScoreEntries(HttpServletRequest request, @RequestParam Long campaignId) {
         Long teacherUserId = authFacade.currentUserId(request);
@@ -71,7 +76,7 @@ public class GraduationDefenseController {
     }
 
     /** 评阅教师录入评阅分 */
-    @RequireAuth(UserType.TEACHER)
+    @RequireTeacher
     @PostMapping("/scores/reviewer")
     public Result<ScoreResponse> reviewerScore(HttpServletRequest request, @RequestBody ScoreSubmitRequest body) {
         Long reviewerUserId = authFacade.currentUserId(request);
@@ -79,7 +84,7 @@ public class GraduationDefenseController {
     }
 
     /** 评阅评分录入列表：本人为评阅人的学生 */
-    @RequireAuth(UserType.TEACHER)
+    @RequireTeacher
     @GetMapping("/scores/reviewer")
     public Result<List<ScoreResponse>> reviewerScoreEntries(HttpServletRequest request, @RequestParam Long campaignId) {
         Long reviewerUserId = authFacade.currentUserId(request);
@@ -87,7 +92,7 @@ public class GraduationDefenseController {
     }
 
     /** 院系/教务录入答辩分 */
-    @RequireAuth({UserType.DEPARTMENT, UserType.ACADEMIC_ADMIN})
+    @RequireManagement
     @PostMapping("/scores/defense")
     public Result<ScoreResponse> defenseScore(HttpServletRequest request, @RequestBody ScoreSubmitRequest body) {
         Long userId = authFacade.currentUserId(request);
@@ -96,7 +101,7 @@ public class GraduationDefenseController {
     }
 
     /** 院系确认并发布总评成绩（R-9.3） */
-    @RequireAuth(UserType.DEPARTMENT)
+    @RequireDepartment
     @PostMapping("/scores/confirm")
     public Result<ScoreResponse> confirm(HttpServletRequest request, @RequestBody ScoreConfirmRequest body) {
         Long deptUserId = authFacade.currentUserId(request);
@@ -113,7 +118,7 @@ public class GraduationDefenseController {
     }
 
     /** 学生查看本人成绩 */
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     @GetMapping("/scores/my")
     public Result<ScoreResponse> myScore(HttpServletRequest request, @RequestParam Long campaignId) {
         Long studentUserId = authFacade.currentUserId(request);
@@ -121,7 +126,7 @@ public class GraduationDefenseController {
     }
 
     /** 教务导出成绩总表（R-9.4，复用导出能力） */
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     @GetMapping("/scores/export")
     public ResponseEntity<byte[]> exportScores(HttpServletRequest request, @RequestParam Long campaignId)
             throws java.io.IOException {

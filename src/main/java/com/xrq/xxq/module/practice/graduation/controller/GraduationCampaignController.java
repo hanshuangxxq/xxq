@@ -18,7 +18,9 @@ import com.xrq.xxq.module.practice.graduation.dto.CampaignUpdateRequest;
 import com.xrq.xxq.module.practice.graduation.entity.CampaignStatusEnum;
 import com.xrq.xxq.module.practice.graduation.service.GraduationCampaignService;
 import com.xrq.xxq.util.auth.AuthFacade;
+import com.xrq.xxq.util.auth.RequireAcademicAdmin;
 import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.RequireStudent;
 import com.xrq.xxq.util.auth.UserType;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -36,7 +38,7 @@ public class GraduationCampaignController {
     private final AuthFacade authFacade;
 
     /** 教务创建毕设活动 */
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     @PostMapping
     public Result<CampaignResponse> create(HttpServletRequest request, @RequestBody CampaignCreateRequest body) {
         Long operatorId = authFacade.currentUserId(request);
@@ -44,7 +46,7 @@ public class GraduationCampaignController {
     }
 
     /** 教务更新毕设活动（R-4.1 开始后仅允许延长截止/上调名额） */
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     @PutMapping("/{id:\\d+}")
     public Result<CampaignResponse> update(HttpServletRequest request, @PathVariable Long id,
                                            @RequestBody CampaignUpdateRequest body) {
@@ -53,7 +55,7 @@ public class GraduationCampaignController {
     }
 
     /** 教务切换活动状态（DRAFT/OPEN/CLOSED） */
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     @PutMapping("/{id:\\d+}/status")
     public Result<Void> changeStatus(HttpServletRequest request, @PathVariable Long id,
                                      @RequestParam CampaignStatusEnum status) {
@@ -63,7 +65,7 @@ public class GraduationCampaignController {
     }
 
     /** 教务分页查看活动 */
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     @GetMapping
     public Result<PageResult<CampaignResponse>> list(HttpServletRequest request,
                                                      @RequestParam(required = false) CampaignStatusEnum status,
@@ -79,7 +81,7 @@ public class GraduationCampaignController {
     }
 
     /** 学生可见的进行中活动（参与年级匹配） */
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     @GetMapping("/available")
     public Result<java.util.List<CampaignResponse>> available(HttpServletRequest request) {
         Long studentUserId = authFacade.currentUserId(request);
@@ -94,7 +96,7 @@ public class GraduationCampaignController {
     }
 
     /** 教务查看活动详情（含分配总览的详情页入口，复用 get） */
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     @GetMapping("/{id:\\d+}/detail")
     public Result<CampaignResponse> detail(HttpServletRequest request, @PathVariable Long id) {
         return Result.ok(campaignService.getCampaign(id));

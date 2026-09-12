@@ -23,8 +23,7 @@ import com.xrq.xxq.module.selection.dto.SelectionGroupResponse;
 import com.xrq.xxq.module.selection.dto.SelectionGroupUpdateRequest;
 import com.xrq.xxq.module.selection.service.SelectionCampaignService;
 import com.xrq.xxq.module.selection.service.SelectionGroupService;
-import com.xrq.xxq.util.auth.RequireAuth;
-import com.xrq.xxq.util.auth.UserType;
+import com.xrq.xxq.util.auth.RequireAcademicAdmin;
 
 import lombok.RequiredArgsConstructor;
 
@@ -38,7 +37,7 @@ import lombok.RequiredArgsConstructor;
  */
 @RestController
 @RequestMapping("/api/selection/groups")
-@RequireAuth(UserType.ACADEMIC_ADMIN)
+@RequireAcademicAdmin
 @RequiredArgsConstructor
 public class SelectionGroupController {
 

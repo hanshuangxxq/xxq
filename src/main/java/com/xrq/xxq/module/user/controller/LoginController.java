@@ -6,7 +6,7 @@ import com.xrq.xxq.module.user.dto.LoginRequest;
 import com.xrq.xxq.module.user.dto.RegisterRequest;
 import com.xrq.xxq.module.user.service.login.LoginService;
 import com.xrq.xxq.util.auth.AuthFacade;
-import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.RequireLogin;
 import com.xrq.xxq.util.auth.UserSession;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -30,7 +30,7 @@ public class LoginController {
     }
 
     @PostMapping("/register")
-    @RequireAuth()
+    @RequireLogin
     public Result<Boolean> register(@RequestBody RegisterRequest request) {
         return Result.ok(loginService.register(request));
     }
@@ -42,14 +42,14 @@ public class LoginController {
     }
 
     @PostMapping("/login/logout")
-    @RequireAuth()
+    @RequireLogin
     public Result<Boolean> logout(HttpServletRequest request) {
         String tokenId = authFacade.currentTokenId(request);
         return Result.ok(loginService.logout(tokenId));
     }
 
     @PostMapping("/password/change")
-    @RequireAuth()
+    @RequireLogin
     public Result<Boolean> changePassword(@RequestBody ChangePasswordRequest request) {
         return Result.ok(loginService.changePassword(request));
     }

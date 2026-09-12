@@ -22,8 +22,7 @@ import com.xrq.xxq.module.analysis.dto.TemplateUpdateRequest;
 import com.xrq.xxq.module.analysis.entity.EvaluationTemplateStatusEnum;
 import com.xrq.xxq.module.analysis.service.EvaluationTemplateService;
 import com.xrq.xxq.util.auth.AuthFacade;
-import com.xrq.xxq.util.auth.RequireAuth;
-import com.xrq.xxq.util.auth.UserType;
+import com.xrq.xxq.util.auth.RequireAcademicAdmin;
 
 import lombok.RequiredArgsConstructor;
 
@@ -34,7 +33,7 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/api/analysis/evaluation-templates")
 @RequiredArgsConstructor
-@RequireAuth(UserType.ACADEMIC_ADMIN)
+@RequireAcademicAdmin
 public class EvaluationTemplateController {
 
     private final EvaluationTemplateService templateService;

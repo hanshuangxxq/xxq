@@ -14,8 +14,7 @@ import com.xrq.xxq.module.analysis.dto.ClassAnalysisDto;
 import com.xrq.xxq.module.analysis.dto.ClassTrendDto;
 import com.xrq.xxq.module.analysis.service.ClassAnalysisService;
 import com.xrq.xxq.util.auth.AuthFacade;
-import com.xrq.xxq.util.auth.RequireAuth;
-import com.xrq.xxq.util.auth.UserType;
+import com.xrq.xxq.util.auth.RequireManagement;
 
 import lombok.RequiredArgsConstructor;
 
@@ -26,7 +25,7 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/api/analysis/class-analysis")
 @RequiredArgsConstructor
-@RequireAuth({UserType.ACADEMIC_ADMIN, UserType.DEPARTMENT})
+@RequireManagement
 public class ClassAnalysisController {
 
     private final ClassAnalysisService classAnalysisService;

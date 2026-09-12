@@ -19,8 +19,7 @@ import com.xrq.xxq.module.selection.dto.SelectionRecordResponse;
 import com.xrq.xxq.module.selection.dto.StudentCampaignResponse;
 import com.xrq.xxq.module.selection.service.SelectionRecordService;
 import com.xrq.xxq.util.auth.AuthFacade;
-import com.xrq.xxq.util.auth.RequireAuth;
-import com.xrq.xxq.util.auth.UserType;
+import com.xrq.xxq.util.auth.RequireStudent;
 
 import lombok.RequiredArgsConstructor;
 
@@ -31,7 +30,7 @@ import lombok.RequiredArgsConstructor;
  */
 @RestController
 @RequestMapping("/api/selection/student")
-@RequireAuth(UserType.STUDENT)
+@RequireStudent
 @RequiredArgsConstructor
 public class SelectionRecordController {
 

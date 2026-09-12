@@ -25,8 +25,8 @@ import com.xrq.xxq.module.course.service.CourseService;
 import com.xrq.xxq.module.selection.entity.SelectionCampaign;
 import com.xrq.xxq.module.selection.service.SelectionCampaignService;
 import com.xrq.xxq.util.auth.AuthFacade;
-import com.xrq.xxq.util.auth.RequireAuth;
-import com.xrq.xxq.util.auth.UserType;
+import com.xrq.xxq.util.auth.RequireAcademicAdmin;
+import com.xrq.xxq.util.auth.RequireLogin;
 
 import lombok.RequiredArgsConstructor;
 
@@ -47,7 +47,7 @@ public class CourseController {
     private final AuthFacade authFacade;
 
     @GetMapping
-    @RequireAuth()
+    @RequireLogin
     public Result<PageResult<Course>> list(HttpServletRequest request,
                                            @RequestParam(required = false) Integer page,
                                            @RequestParam(required = false) Integer pageSize) {
@@ -64,7 +64,7 @@ public class CourseController {
     }
 
     @GetMapping("/{id}")
-    @RequireAuth()
+    @RequireLogin
     public Result<Course> getById(@PathVariable Long id,
                                   @RequestParam(required = false) String source) {
         // source=SELECTION_CAMPAIGN 表示查询公选课合成条目（id 为 campaign.id）
@@ -103,14 +103,14 @@ public class CourseController {
     }
 
     @PostMapping
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     public Result<Course> create(HttpServletRequest request, @RequestBody Course course) {
         courseService.save(course);
         return Result.ok(course);
     }
 
     @PutMapping("/{id}")
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     public Result<Course> update(HttpServletRequest request, @PathVariable Long id, @RequestBody Course course) {
         course.setId(id);
         courseService.updateById(course);
@@ -118,7 +118,7 @@ public class CourseController {
     }
 
     @DeleteMapping("/{id}")
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     public Result<Void> delete(HttpServletRequest request, @PathVariable Long id,
                                @RequestParam(required = false) String source) {
         // source=SELECTION_CAMPAIGN 时 id 为 campaign.id，走选课活动删除（避免误删同 id 的常规课）

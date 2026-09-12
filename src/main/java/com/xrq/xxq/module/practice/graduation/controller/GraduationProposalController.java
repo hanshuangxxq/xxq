@@ -18,8 +18,9 @@ import com.xrq.xxq.module.practice.graduation.dto.ProposalReviewRequest;
 import com.xrq.xxq.module.practice.graduation.entity.ProposalReviewStageEnum;
 import com.xrq.xxq.module.practice.graduation.service.GraduationProposalService;
 import com.xrq.xxq.util.auth.AuthFacade;
-import com.xrq.xxq.util.auth.RequireAuth;
-import com.xrq.xxq.util.auth.UserType;
+import com.xrq.xxq.util.auth.RequireAcademicAdmin;
+import com.xrq.xxq.util.auth.RequireDepartment;
+import com.xrq.xxq.util.auth.RequireStudent;
 
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -36,7 +37,7 @@ public class GraduationProposalController {
     private final AuthFacade authFacade;
 
     /** 学生提交/重提选题申请（R-5.1~R-5.4） */
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     @PostMapping
     public Result<ProposalResponse> declare(HttpServletRequest request, @RequestBody ProposalDeclareRequest body) {
         Long studentUserId = authFacade.currentUserId(request);
@@ -44,7 +45,7 @@ public class GraduationProposalController {
     }
 
     /** 院系初审（R-5.5，仅本院系学生） */
-    @RequireAuth(UserType.DEPARTMENT)
+    @RequireDepartment
     @PutMapping("/{id:\\d+}/review/dept")
     public Result<ProposalResponse> reviewDept(HttpServletRequest request, @PathVariable Long id,
                                                @RequestBody ProposalReviewRequest body) {
@@ -54,7 +55,7 @@ public class GraduationProposalController {
     }
 
     /** 教务终审（R-5.6） */
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     @PutMapping("/{id:\\d+}/review/academic")
     public Result<ProposalResponse> reviewAcademic(HttpServletRequest request, @PathVariable Long id,
                                                    @RequestBody ProposalReviewRequest body) {
@@ -64,7 +65,7 @@ public class GraduationProposalController {
     }
 
     /** 学生查看我的申请列表 */
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     @GetMapping("/my")
     public Result<List<ProposalResponse>> my(HttpServletRequest request) {
         Long studentUserId = authFacade.currentUserId(request);
@@ -72,7 +73,7 @@ public class GraduationProposalController {
     }
 
     /** 院系待初审队列（本院系） */
-    @RequireAuth(UserType.DEPARTMENT)
+    @RequireDepartment
     @GetMapping("/pending/dept")
     public Result<List<ProposalResponse>> pendingDept(HttpServletRequest request,
                                                       @RequestParam Long campaignId) {
@@ -81,7 +82,7 @@ public class GraduationProposalController {
     }
 
     /** 教务待终审队列 */
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     @GetMapping("/pending/academic")
     public Result<List<ProposalResponse>> pendingAcademic(HttpServletRequest request,
                                                           @RequestParam Long campaignId) {

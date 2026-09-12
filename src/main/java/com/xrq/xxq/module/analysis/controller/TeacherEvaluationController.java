@@ -23,7 +23,12 @@ import com.xrq.xxq.module.analysis.dto.TeachingEvaluationView;
 import com.xrq.xxq.module.analysis.service.EvaluationTemplateService;
 import com.xrq.xxq.module.analysis.service.TeachingEvaluationService;
 import com.xrq.xxq.util.auth.AuthFacade;
+import com.xrq.xxq.util.auth.RequireAcademicAdmin;
 import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.RequireLogin;
+import com.xrq.xxq.util.auth.RequireManagement;
+import com.xrq.xxq.util.auth.RequireStudent;
+import com.xrq.xxq.util.auth.RequireTeacher;
 import com.xrq.xxq.util.auth.UserType;
 
 import lombok.RequiredArgsConstructor;
@@ -43,7 +48,7 @@ public class TeacherEvaluationController {
 
     /** 学生取评教表单（解析课程所用模板：课程覆盖优先，否则全局默认）。任意登录用户可查看。 */
     @GetMapping("/evaluations/form")
-    @RequireAuth()
+    @RequireLogin
     public Result<EvaluationTemplateView> evaluationForm(HttpServletRequest request,
                                                          @RequestParam Long teachInfoId) {
         authFacade.currentUserId(request);
@@ -52,7 +57,7 @@ public class TeacherEvaluationController {
 
     /** 学生提交评教（一人一授课安排一条，重复为更新）。 */
     @PostMapping("/evaluations")
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     public Result<TeachingEvaluationView> submit(HttpServletRequest request,
                                                  @RequestBody EvaluationSubmitRequest body) {
         Long studentUserId = authFacade.currentUserId(request);
@@ -61,7 +66,7 @@ public class TeacherEvaluationController {
 
     /** 学生查询本人已提交的评教。 */
     @GetMapping("/evaluations/my")
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     public Result<List<TeachingEvaluationView>> myEvaluations(HttpServletRequest request) {
         Long studentUserId = authFacade.currentUserId(request);
         return Result.ok(evaluationService.myEvaluations(studentUserId));
@@ -69,7 +74,7 @@ public class TeacherEvaluationController {
 
     /** 教务开启当前学期评教周期（统一触发）。 */
     @PostMapping("/evaluations/period/open")
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     public Result<EvaluationStatusDto> openPeriod(HttpServletRequest request) {
         Long userId = authFacade.currentUserId(request);
         return Result.ok(evaluationService.openPeriod(userId));
@@ -77,7 +82,7 @@ public class TeacherEvaluationController {
 
     /** 教务关闭当前学期评教周期。 */
     @PostMapping("/evaluations/period/close")
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     public Result<EvaluationStatusDto> closePeriod(HttpServletRequest request) {
         Long userId = authFacade.currentUserId(request);
         return Result.ok(evaluationService.closePeriod(userId));
@@ -85,7 +90,7 @@ public class TeacherEvaluationController {
 
     /** 查询当前学期评教周期状态（学生评教页用；未开放返回 message=暂无评教，开放时附带可评课程列表）。 */
     @GetMapping("/evaluations/period")
-    @RequireAuth()
+    @RequireLogin
     public Result<EvaluationStatusDto> periodStatus(HttpServletRequest request) {
         Long userId = authFacade.currentUserId(request);
         String userType = authFacade.currentUserType(request);
@@ -94,7 +99,7 @@ public class TeacherEvaluationController {
 
     /** 教师查询本人教学质量。 */
     @GetMapping("/teacher-quality/me")
-    @RequireAuth(UserType.TEACHER)
+    @RequireTeacher
     public Result<TeacherQualityDto> myQuality(HttpServletRequest request,
                                                @RequestParam(required = false) Long semesterId) {
         Long userId = authFacade.currentUserId(request);
@@ -114,7 +119,7 @@ public class TeacherEvaluationController {
 
     /** 教师质量列表/对比（教务全校、院系本院），可按学期过滤。 */
     @GetMapping("/teacher-quality")
-    @RequireAuth({UserType.ACADEMIC_ADMIN, UserType.DEPARTMENT})
+    @RequireManagement
     public Result<PageResult<TeacherQualityDto>> list(HttpServletRequest request,
                                                       @RequestParam(required = false) Long semesterId,
                                                       @RequestParam(required = false) Integer page,

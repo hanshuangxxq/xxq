@@ -26,8 +26,9 @@ import com.xrq.xxq.module.practice.socialpractice.dto.SocialPracticeUpdateReques
 import com.xrq.xxq.module.practice.socialpractice.entity.SocialPracticeStatusEnum;
 import com.xrq.xxq.module.practice.socialpractice.service.SocialPracticeService;
 import com.xrq.xxq.util.auth.AuthFacade;
-import com.xrq.xxq.util.auth.RequireAuth;
-import com.xrq.xxq.util.auth.UserType;
+import com.xrq.xxq.util.auth.RequireAcademicAdmin;
+import com.xrq.xxq.util.auth.RequireLogin;
+import com.xrq.xxq.util.auth.RequireStudent;
 
 import lombok.RequiredArgsConstructor;
 
@@ -45,20 +46,20 @@ public class SocialPracticeController {
     private final AuthFacade authFacade;
 
     @PostMapping
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     public Result<SocialPracticeResponse> create(HttpServletRequest request, @RequestBody SocialPracticeCreateRequest body) {
         return Result.ok(socialPracticeService.createPractice(body));
     }
 
     @PutMapping("/{id}")
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     public Result<SocialPracticeResponse> update(HttpServletRequest request, @PathVariable Long id,
                                                  @RequestBody SocialPracticeUpdateRequest body) {
         return Result.ok(socialPracticeService.updatePractice(id, body));
     }
 
     @PutMapping("/{id}/status")
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     public Result<Void> changeStatus(HttpServletRequest request, @PathVariable Long id,
                                      @RequestParam SocialPracticeStatusEnum status) {
         socialPracticeService.changePracticeStatus(id, status);
@@ -66,7 +67,7 @@ public class SocialPracticeController {
     }
 
     @GetMapping
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     public Result<PageResult<SocialPracticeResponse>> list(HttpServletRequest request,
                                                            @RequestParam(required = false) SocialPracticeStatusEnum status,
                                                            @RequestParam(required = false) Integer page,
@@ -75,27 +76,27 @@ public class SocialPracticeController {
     }
 
     @GetMapping("/{id}")
-    @RequireAuth()
+    @RequireLogin
     public Result<SocialPracticeResponse> get(@PathVariable Long id) {
         return Result.ok(socialPracticeService.getPractice(id));
     }
 
     @GetMapping("/available")
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     public Result<List<SocialPracticeResponse>> listAvailable(HttpServletRequest request) {
         Long studentUserId = authFacade.currentUserId(request);
         return Result.ok(socialPracticeService.listAvailablePractices(studentUserId));
     }
 
     @DeleteMapping("/{id}")
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     public Result<Void> delete(HttpServletRequest request, @PathVariable Long id) {
         socialPracticeService.deletePractice(id);
         return Result.ok();
     }
 
     @PostMapping("/applications")
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     public Result<SocialPracticeApplicationResponse> apply(HttpServletRequest request,
                                                            @RequestBody SocialPracticeApplyRequest body) {
         Long studentUserId = authFacade.currentUserId(request);
@@ -103,7 +104,7 @@ public class SocialPracticeController {
     }
 
     @DeleteMapping("/applications/{id}")
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     public Result<Void> cancel(HttpServletRequest request, @PathVariable Long id) {
         Long studentUserId = authFacade.currentUserId(request);
         socialPracticeService.cancelApplication(studentUserId, id);
@@ -111,21 +112,21 @@ public class SocialPracticeController {
     }
 
     @PostMapping("/applications/{id}/review")
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     public Result<SocialPracticeApplicationResponse> review(HttpServletRequest request, @PathVariable Long id,
                                                            @RequestBody SocialPracticeReviewRequest body) {
         return Result.ok(socialPracticeService.reviewApplication(id, body));
     }
 
     @GetMapping("/applications/my")
-    @RequireAuth(UserType.STUDENT)
+    @RequireStudent
     public Result<List<SocialPracticeApplicationResponse>> myApplications(HttpServletRequest request) {
         Long studentUserId = authFacade.currentUserId(request);
         return Result.ok(socialPracticeService.listMyApplications(studentUserId));
     }
 
     @GetMapping("/{practiceId}/applications")
-    @RequireAuth(UserType.ACADEMIC_ADMIN)
+    @RequireAcademicAdmin
     public Result<PageResult<SocialPracticeApplicationResponse>> applicationsByPractice(HttpServletRequest request,
                                                                                        @PathVariable Long practiceId,
                                                                                        @RequestParam(required = false) Integer page,

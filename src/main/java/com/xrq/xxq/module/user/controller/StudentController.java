@@ -10,8 +10,7 @@ import com.xrq.xxq.module.user.dto.UpdateStudentRequest;
 import com.xrq.xxq.module.mojor.entity.Major;
 import com.xrq.xxq.module.mojor.service.MajorService;
 import com.xrq.xxq.module.user.service.StudentService;
-import com.xrq.xxq.util.auth.RequireAuth;
-import com.xrq.xxq.util.auth.UserType;
+import com.xrq.xxq.util.auth.RequireAcademicAdmin;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -27,7 +26,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/students")
 @RequiredArgsConstructor
-@RequireAuth(UserType.ACADEMIC_ADMIN)
+@RequireAcademicAdmin
 public class StudentController {
 
     private final StudentService studentService;
