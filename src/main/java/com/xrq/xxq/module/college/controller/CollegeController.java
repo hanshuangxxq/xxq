@@ -18,7 +18,8 @@ import com.xrq.xxq.module.college.dto.CollegeCreateRequest;
 import com.xrq.xxq.module.college.dto.CollegeResponse;
 import com.xrq.xxq.module.college.dto.CollegeUpdateRequest;
 import com.xrq.xxq.module.college.service.CollegeService;
-import com.xrq.xxq.util.auth.AuthFacade;
+import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.UserType;
 
 import lombok.RequiredArgsConstructor;
 
@@ -33,15 +34,11 @@ import lombok.RequiredArgsConstructor;
 public class CollegeController {
 
     private final CollegeService collegeService;
-    private final AuthFacade authFacade;
 
     /** 院系列表（教务/院系/教师可查）。 */
     @GetMapping
+    @RequireAuth({UserType.ACADEMIC_ADMIN, UserType.DEPARTMENT, UserType.TEACHER})
     public Result<List<CollegeResponse>> list(HttpServletRequest request) {
-        authFacade.requireUserTypes(request,
-                AuthFacade.USER_TYPE_ACADEMIC_ADMIN,
-                AuthFacade.USER_TYPE_DEPARTMENT,
-                AuthFacade.USER_TYPE_TEACHER);
         List<CollegeResponse> list = collegeService.list().stream()
                 .map(c -> {
                     CollegeResponse resp = new CollegeResponse();
@@ -59,24 +56,24 @@ public class CollegeController {
 
     /** 新建院系（教务）。 */
     @PostMapping
+    @RequireAuth(UserType.ACADEMIC_ADMIN)
     public Result<CollegeResponse> create(HttpServletRequest request,
                                           @RequestBody CollegeCreateRequest body) {
-        authFacade.requireAcademicAdmin(request);
         return Result.ok(collegeService.create(body));
     }
 
     /** 更新院系（教务）。 */
     @PutMapping("/{id}")
+    @RequireAuth(UserType.ACADEMIC_ADMIN)
     public Result<CollegeResponse> update(HttpServletRequest request, @PathVariable Long id,
                                           @RequestBody CollegeUpdateRequest body) {
-        authFacade.requireAcademicAdmin(request);
         return Result.ok(collegeService.update(id, body));
     }
 
     /** 删除院系（教务）。 */
     @DeleteMapping("/{id}")
+    @RequireAuth(UserType.ACADEMIC_ADMIN)
     public Result<Void> delete(HttpServletRequest request, @PathVariable Long id) {
-        authFacade.requireAcademicAdmin(request);
         collegeService.delete(id);
         return Result.ok();
     }

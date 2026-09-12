@@ -18,7 +18,8 @@ import com.xrq.xxq.module.practice.graduation.dto.CampaignUpdateRequest;
 import com.xrq.xxq.module.practice.graduation.entity.CampaignStatusEnum;
 import com.xrq.xxq.module.practice.graduation.service.GraduationCampaignService;
 import com.xrq.xxq.util.auth.AuthFacade;
-import com.xrq.xxq.util.auth.AuthFacade.AuthContext;
+import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.UserType;
 
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -35,65 +36,67 @@ public class GraduationCampaignController {
     private final AuthFacade authFacade;
 
     /** 教务创建毕设活动 */
+    @RequireAuth(UserType.ACADEMIC_ADMIN)
     @PostMapping
     public Result<CampaignResponse> create(HttpServletRequest request, @RequestBody CampaignCreateRequest body) {
-        Long operatorId = authFacade.requireAcademicAdminUserId(request);
+        Long operatorId = authFacade.currentUserId(request);
         return Result.ok(campaignService.createCampaign(operatorId, AuthFacade.USER_TYPE_ACADEMIC_ADMIN, body));
     }
 
     /** 教务更新毕设活动（R-4.1 开始后仅允许延长截止/上调名额） */
+    @RequireAuth(UserType.ACADEMIC_ADMIN)
     @PutMapping("/{id:\\d+}")
     public Result<CampaignResponse> update(HttpServletRequest request, @PathVariable Long id,
                                            @RequestBody CampaignUpdateRequest body) {
-        Long operatorId = authFacade.requireAcademicAdminUserId(request);
+        Long operatorId = authFacade.currentUserId(request);
         return Result.ok(campaignService.updateCampaign(operatorId, AuthFacade.USER_TYPE_ACADEMIC_ADMIN, id, body));
     }
 
     /** 教务切换活动状态（DRAFT/OPEN/CLOSED） */
+    @RequireAuth(UserType.ACADEMIC_ADMIN)
     @PutMapping("/{id:\\d+}/status")
     public Result<Void> changeStatus(HttpServletRequest request, @PathVariable Long id,
                                      @RequestParam CampaignStatusEnum status) {
-        Long operatorId = authFacade.requireAcademicAdminUserId(request);
+        Long operatorId = authFacade.currentUserId(request);
         campaignService.changeCampaignStatus(operatorId, AuthFacade.USER_TYPE_ACADEMIC_ADMIN, id, status);
         return Result.ok();
     }
 
     /** 教务分页查看活动 */
+    @RequireAuth(UserType.ACADEMIC_ADMIN)
     @GetMapping
     public Result<PageResult<CampaignResponse>> list(HttpServletRequest request,
                                                      @RequestParam(required = false) CampaignStatusEnum status,
                                                      PageQuery pageQuery) {
-        authFacade.requireAcademicAdmin(request);
         return Result.ok(campaignService.listCampaigns(status, pageQuery));
     }
 
     /** 活动详情（四角色可见） */
+    @RequireAuth({UserType.ACADEMIC_ADMIN, UserType.DEPARTMENT, UserType.TEACHER, UserType.STUDENT})
     @GetMapping("/{id:\\d+}")
     public Result<CampaignResponse> get(HttpServletRequest request, @PathVariable Long id) {
-        authFacade.requireUserTypes(request, AuthFacade.USER_TYPE_ACADEMIC_ADMIN, AuthFacade.USER_TYPE_DEPARTMENT,
-                AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_STUDENT);
         return Result.ok(campaignService.getCampaign(id));
     }
 
     /** 学生可见的进行中活动（参与年级匹配） */
+    @RequireAuth(UserType.STUDENT)
     @GetMapping("/available")
     public Result<java.util.List<CampaignResponse>> available(HttpServletRequest request) {
-        Long studentUserId = authFacade.requireStudentUserId(request);
+        Long studentUserId = authFacade.currentUserId(request);
         return Result.ok(campaignService.listAvailableCampaignsForStudent(studentUserId));
     }
 
     /** 教师/院系活动选择器（返回所有非草稿活动，供下拉选择用） */
+    @RequireAuth({UserType.TEACHER, UserType.DEPARTMENT})
     @GetMapping("/selector")
     public Result<java.util.List<CampaignResponse>> selector(HttpServletRequest request) {
-        authFacade.requireUserTypes(request,
-                AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_DEPARTMENT);
         return Result.ok(campaignService.listCampaignsForSelector());
     }
 
     /** 教务查看活动详情（含分配总览的详情页入口，复用 get） */
+    @RequireAuth(UserType.ACADEMIC_ADMIN)
     @GetMapping("/{id:\\d+}/detail")
     public Result<CampaignResponse> detail(HttpServletRequest request, @PathVariable Long id) {
-        authFacade.requireAcademicAdmin(request);
         return Result.ok(campaignService.getCampaign(id));
     }
 }

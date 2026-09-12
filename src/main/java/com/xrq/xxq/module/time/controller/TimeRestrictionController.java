@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.xrq.xxq.common.Result;
 import com.xrq.xxq.module.time.entity.TimeRestriction;
 import com.xrq.xxq.module.time.service.TimeRestrictionService;
+import com.xrq.xxq.util.auth.RequireAuth;
 
 import lombok.RequiredArgsConstructor;
 
@@ -22,6 +23,7 @@ import lombok.RequiredArgsConstructor;
  */
 @RestController
 @RequestMapping("/api/time-restrictions")
+@RequireAuth()
 @RequiredArgsConstructor
 public class TimeRestrictionController {
 

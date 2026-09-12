@@ -18,6 +18,7 @@ import com.xrq.xxq.common.Result;
 import com.xrq.xxq.module.local.entity.Local;
 import com.xrq.xxq.module.local.entity.LocalTypeEnum;
 import com.xrq.xxq.module.local.service.LocalService;
+import com.xrq.xxq.util.auth.RequireAuth;
 
 import lombok.RequiredArgsConstructor;
 
@@ -26,6 +27,7 @@ import lombok.RequiredArgsConstructor;
  */
 @RestController
 @RequestMapping("/api/locals")
+@RequireAuth()
 @RequiredArgsConstructor
 public class LocalController {
 

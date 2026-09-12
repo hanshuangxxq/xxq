@@ -23,7 +23,8 @@ import com.xrq.xxq.module.selection.dto.SelectionGroupResponse;
 import com.xrq.xxq.module.selection.dto.SelectionGroupUpdateRequest;
 import com.xrq.xxq.module.selection.service.SelectionCampaignService;
 import com.xrq.xxq.module.selection.service.SelectionGroupService;
-import com.xrq.xxq.util.auth.AuthFacade;
+import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.UserType;
 
 import lombok.RequiredArgsConstructor;
 
@@ -37,17 +38,16 @@ import lombok.RequiredArgsConstructor;
  */
 @RestController
 @RequestMapping("/api/selection/groups")
+@RequireAuth(UserType.ACADEMIC_ADMIN)
 @RequiredArgsConstructor
 public class SelectionGroupController {
 
     private final SelectionGroupService groupService;
     private final SelectionCampaignService campaignService;
-    private final AuthFacade authFacade;
 
     @PostMapping
     public Result<SelectionGroupResponse> create(HttpServletRequest httpRequest,
                                                  @RequestBody SelectionGroupCreateRequest body) {
-        authFacade.requireAcademicAdmin(httpRequest);
         return Result.ok(groupService.create(body));
     }
 
@@ -55,14 +55,12 @@ public class SelectionGroupController {
     public Result<PageResult<SelectionGroupResponse>> list(HttpServletRequest httpRequest,
                                                            @RequestParam(required = false) Integer page,
                                                            @RequestParam(required = false) Integer pageSize) {
-        authFacade.requireAcademicAdmin(httpRequest);
         return Result.ok(groupService.listAll(new PageQuery(page, pageSize)));
     }
 
     @GetMapping("/{groupId}")
     public Result<SelectionGroupResponse> detail(HttpServletRequest httpRequest,
                                                  @PathVariable Long groupId) {
-        authFacade.requireAcademicAdmin(httpRequest);
         return Result.ok(groupService.getDetail(groupId));
     }
 
@@ -75,7 +73,6 @@ public class SelectionGroupController {
     @GetMapping("/{groupId}/bindable-campaigns")
     public Result<List<CampaignResponse>> listBindableCampaigns(HttpServletRequest httpRequest,
                                                                 @PathVariable Long groupId) {
-        authFacade.requireAcademicAdmin(httpRequest);
         return Result.ok(campaignService.listBindableForGroup(groupId));
     }
 
@@ -83,14 +80,12 @@ public class SelectionGroupController {
     public Result<SelectionGroupResponse> update(HttpServletRequest httpRequest,
                                                  @PathVariable Long groupId,
                                                  @RequestBody SelectionGroupUpdateRequest body) {
-        authFacade.requireAcademicAdmin(httpRequest);
         return Result.ok(groupService.update(groupId, body));
     }
 
     @DeleteMapping("/{groupId}")
     public Result<Void> delete(HttpServletRequest httpRequest,
                                @PathVariable Long groupId) {
-        authFacade.requireAcademicAdmin(httpRequest);
         groupService.delete(groupId);
         return Result.ok();
     }

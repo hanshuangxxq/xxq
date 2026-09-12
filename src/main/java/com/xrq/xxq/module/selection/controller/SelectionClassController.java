@@ -15,7 +15,8 @@ import com.xrq.xxq.common.Result;
 import com.xrq.xxq.module.selection.dto.AssignTeacherRequest;
 import com.xrq.xxq.module.selection.dto.SelectionClassResponse;
 import com.xrq.xxq.module.selection.service.SelectionClassService;
-import com.xrq.xxq.util.auth.AuthFacade;
+import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.UserType;
 
 import lombok.RequiredArgsConstructor;
 
@@ -26,16 +27,15 @@ import lombok.RequiredArgsConstructor;
  */
 @RestController
 @RequestMapping("/api/selection/campaigns/{campaignId}/classes")
+@RequireAuth(UserType.ACADEMIC_ADMIN)
 @RequiredArgsConstructor
 public class SelectionClassController {
 
     private final SelectionClassService selectionClassService;
-    private final AuthFacade authFacade;
 
     @GetMapping
     public Result<List<SelectionClassResponse>> list(HttpServletRequest request,
                                                      @PathVariable Long campaignId) {
-        authFacade.requireAcademicAdmin(request);
         return Result.ok(selectionClassService.listByCampaign(campaignId));
     }
 
@@ -49,7 +49,6 @@ public class SelectionClassController {
                                                        @PathVariable Long campaignId,
                                                        @PathVariable Long classId,
                                                        @RequestBody AssignTeacherRequest body) {
-        authFacade.requireAcademicAdmin(request);
         return Result.ok(selectionClassService.assignTeacher(campaignId, classId, body.getTeacherId()));
     }
 }

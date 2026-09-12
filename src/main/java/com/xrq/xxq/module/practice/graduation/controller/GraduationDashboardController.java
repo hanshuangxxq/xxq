@@ -22,7 +22,8 @@ import com.xrq.xxq.module.practice.graduation.service.GraduationDashboardService
 import com.xrq.xxq.module.practice.graduation.service.GraduationDashboardService.ExportFile;
 import com.xrq.xxq.module.practice.graduation.service.GraduationLogService;
 import com.xrq.xxq.util.auth.AuthFacade;
-import com.xrq.xxq.util.auth.AuthFacade.AuthContext;
+import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.UserType;
 
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -40,29 +41,31 @@ public class GraduationDashboardController {
     private final AuthFacade authFacade;
 
     /** 看板分页（R-5.8/R-5.9，教务全校 / 院系本院系） */
+    @RequireAuth({UserType.ACADEMIC_ADMIN, UserType.DEPARTMENT})
     @GetMapping("/{campaignId:\\d+}")
     public Result<PageResult<DashboardRow>> list(HttpServletRequest request, @PathVariable Long campaignId,
                                                  @RequestParam(required = false) String status,
                                                  @RequestParam(required = false) String keyword,
                                                  @RequestParam(required = false) Long collegeId,
                                                  PageQuery pageQuery) {
-        AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_ACADEMIC_ADMIN, AuthFacade.USER_TYPE_DEPARTMENT);
+        Long userId = authFacade.currentUserId(request);
+        String userType = authFacade.currentUserType(request);
         return Result.ok(dashboardService.listDashboard(campaignId, status, keyword, collegeId,
-                ctx.userType(), ctx.userId(), pageQuery));
+                userType, userId, pageQuery));
     }
 
     /** 看板导出（R-5.10 xlsx/csv，导出动作记日志） */
+    @RequireAuth({UserType.ACADEMIC_ADMIN, UserType.DEPARTMENT})
     @GetMapping("/{campaignId:\\d+}/export")
     public ResponseEntity<byte[]> export(HttpServletRequest request, @PathVariable Long campaignId,
                                          @RequestParam(defaultValue = "xlsx") String format,
                                          @RequestParam(required = false) String status,
                                          @RequestParam(required = false) String keyword,
                                          @RequestParam(required = false) Long collegeId) throws IOException {
-        AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_ACADEMIC_ADMIN, AuthFacade.USER_TYPE_DEPARTMENT);
+        Long userId = authFacade.currentUserId(request);
+        String userType = authFacade.currentUserType(request);
         ExportFile file = dashboardService.exportDashboard(campaignId, format, status, keyword, collegeId,
-                ctx.userType(), ctx.userId(), ctx.userId(), ctx.userType());
+                userType, userId, userId, userType);
         String encoded = URLEncoder.encode(file.fileName(), StandardCharsets.UTF_8).replace("+", "%20");
         MediaType mediaType = "csv".equals(format)
                 ? new MediaType("text", "csv", StandardCharsets.UTF_8)
@@ -74,10 +77,10 @@ public class GraduationDashboardController {
     }
 
     /** 操作日志（R-10.4，教务） */
+    @RequireAuth(UserType.ACADEMIC_ADMIN)
     @GetMapping("/{campaignId:\\d+}/logs")
     public Result<PageResult<OperationLogResponse>> logs(HttpServletRequest request, @PathVariable Long campaignId,
                                                          PageQuery pageQuery) {
-        authFacade.requireAcademicAdmin(request);
         return Result.ok(logService.listLogs(campaignId, pageQuery));
     }
 }

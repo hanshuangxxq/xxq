@@ -19,6 +19,8 @@ import com.xrq.xxq.module.selection.dto.SelectionRecordResponse;
 import com.xrq.xxq.module.selection.dto.StudentCampaignResponse;
 import com.xrq.xxq.module.selection.service.SelectionRecordService;
 import com.xrq.xxq.util.auth.AuthFacade;
+import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.UserType;
 
 import lombok.RequiredArgsConstructor;
 
@@ -29,6 +31,7 @@ import lombok.RequiredArgsConstructor;
  */
 @RestController
 @RequestMapping("/api/selection/student")
+@RequireAuth(UserType.STUDENT)
 @RequiredArgsConstructor
 public class SelectionRecordController {
 
@@ -37,28 +40,28 @@ public class SelectionRecordController {
 
     @GetMapping("/campaigns")
     public Result<List<StudentCampaignResponse>> listOpenCampaigns(HttpServletRequest request) {
-        Long studentUserId = authFacade.requireStudentUserId(request);
+        Long studentUserId = authFacade.currentUserId(request);
         return Result.ok(selectionRecordService.listOpenCampaignsForStudent(studentUserId));
     }
 
     @GetMapping("/campaigns/{campaignId}")
     public Result<StudentCampaignResponse> getCampaign(HttpServletRequest request,
                                                        @PathVariable Long campaignId) {
-        Long studentUserId = authFacade.requireStudentUserId(request);
+        Long studentUserId = authFacade.currentUserId(request);
         return Result.ok(selectionRecordService.getCampaignForStudent(campaignId, studentUserId));
     }
 
     @PostMapping("/records")
     public Result<SelectionRecordResponse> select(HttpServletRequest request,
                                                   @RequestBody SelectionRecordRequest body) {
-        Long studentUserId = authFacade.requireStudentUserId(request);
+        Long studentUserId = authFacade.currentUserId(request);
         return Result.ok(selectionRecordService.select(studentUserId, body));
     }
 
     @DeleteMapping("/records/{recordId}")
     public Result<Void> drop(HttpServletRequest request,
                              @PathVariable Long recordId) {
-        Long studentUserId = authFacade.requireStudentUserId(request);
+        Long studentUserId = authFacade.currentUserId(request);
         selectionRecordService.drop(studentUserId, recordId);
         return Result.ok();
     }
@@ -66,7 +69,7 @@ public class SelectionRecordController {
     @GetMapping("/records")
     public Result<List<SelectionRecordResponse>> listMy(HttpServletRequest request,
                                                         @RequestParam Long campaignId) {
-        Long studentUserId = authFacade.requireStudentUserId(request);
+        Long studentUserId = authFacade.currentUserId(request);
         return Result.ok(selectionRecordService.listMy(studentUserId, campaignId));
     }
 }

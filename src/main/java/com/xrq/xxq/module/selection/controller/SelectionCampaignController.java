@@ -20,6 +20,8 @@ import com.xrq.xxq.module.selection.dto.CampaignResponse;
 import com.xrq.xxq.module.selection.dto.CampaignUpdateRequest;
 import com.xrq.xxq.module.selection.service.SelectionCampaignService;
 import com.xrq.xxq.util.auth.AuthFacade;
+import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.UserType;
 
 import lombok.RequiredArgsConstructor;
 
@@ -30,6 +32,7 @@ import lombok.RequiredArgsConstructor;
  */
 @RestController
 @RequestMapping("/api/selection/campaigns")
+@RequireAuth(UserType.ACADEMIC_ADMIN)
 @RequiredArgsConstructor
 public class SelectionCampaignController {
 
@@ -39,7 +42,6 @@ public class SelectionCampaignController {
     @PostMapping
     public Result<CampaignResponse> create(HttpServletRequest request,
                                            @RequestBody CampaignCreateRequest body) {
-        authFacade.requireAcademicAdmin(request);
         return Result.ok(campaignService.create(body));
     }
 
@@ -47,14 +49,12 @@ public class SelectionCampaignController {
     public Result<PageResult<CampaignResponse>> list(HttpServletRequest request,
                                                      @RequestParam(required = false) Integer page,
                                                      @RequestParam(required = false) Integer pageSize) {
-        authFacade.requireAcademicAdmin(request);
         return Result.ok(campaignService.listAll(new PageQuery(page, pageSize)));
     }
 
     @GetMapping("/{id}")
     public Result<CampaignResponse> detail(HttpServletRequest request,
                                            @PathVariable Long id) {
-        authFacade.requireAcademicAdmin(request);
         return Result.ok(campaignService.getDetail(id));
     }
 
@@ -62,14 +62,12 @@ public class SelectionCampaignController {
     public Result<CampaignResponse> update(HttpServletRequest request,
                                            @PathVariable Long id,
                                            @RequestBody CampaignUpdateRequest body) {
-        authFacade.requireAcademicAdmin(request);
         return Result.ok(campaignService.update(id, body));
     }
 
     @DeleteMapping("/{id}")
     public Result<Void> delete(HttpServletRequest request,
                                @PathVariable Long id) {
-        authFacade.requireAcademicAdmin(request);
         campaignService.delete(id);
         return Result.ok();
     }
@@ -77,7 +75,6 @@ public class SelectionCampaignController {
     @PostMapping("/{id}/open")
     public Result<Void> open(HttpServletRequest request,
                              @PathVariable Long id) {
-        authFacade.requireAcademicAdmin(request);
         campaignService.open(id, authFacade.currentUserId(request));
         return Result.ok();
     }
@@ -85,7 +82,6 @@ public class SelectionCampaignController {
     @PostMapping("/{id}/close")
     public Result<Void> close(HttpServletRequest request,
                               @PathVariable Long id) {
-        authFacade.requireAcademicAdmin(request);
         campaignService.close(id);
         return Result.ok();
     }
@@ -93,7 +89,6 @@ public class SelectionCampaignController {
     @PostMapping("/{id}/finalize")
     public Result<Void> finalize(HttpServletRequest request,
                                  @PathVariable Long id) {
-        authFacade.requireAcademicAdmin(request);
         campaignService.finalizeCampaign(id);
         return Result.ok();
     }

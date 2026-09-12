@@ -24,6 +24,8 @@ import com.xrq.xxq.module.clazz.service.ClassNameService;
 import com.xrq.xxq.module.user.entity.user.Department;
 import com.xrq.xxq.module.user.mapper.DepartmentMapper;
 import com.xrq.xxq.util.auth.AuthFacade;
+import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.UserType;
 
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -54,6 +56,7 @@ public class ClassNameController {
      * </ul>
      */
     @GetMapping
+    @RequireAuth()
     public Result<PageResult<ClassName>> list(HttpServletRequest request,
                                               @RequestParam(required = false) Integer page,
                                               @RequestParam(required = false) Integer pageSize) {
@@ -70,6 +73,7 @@ public class ClassNameController {
 
     /** 查询本院系的班级。仅院系管理者可用。 */
     @GetMapping("/department")
+    @RequireAuth(UserType.DEPARTMENT)
     public Result<List<ClassName>> listByDepartment(HttpServletRequest request) {
         Department dept = resolveDepartment(request);
         List<ClassName> list = classNameService.list(
@@ -78,6 +82,7 @@ public class ClassNameController {
     }
 
     @GetMapping("/{id}")
+    @RequireAuth()
     public Result<ClassName> getById(HttpServletRequest request, @PathVariable Long id) {
         ClassName className = classNameService.getById(id);
         if (className == null) {
@@ -96,23 +101,23 @@ public class ClassNameController {
     }
 
     @PostMapping
+    @RequireAuth(UserType.ACADEMIC_ADMIN)
     public Result<ClassName> create(HttpServletRequest request, @RequestBody ClassName className) {
-        authFacade.requireAcademicAdmin(request);
         classNameService.save(className);
         return Result.ok(className);
     }
 
     @PutMapping("/{id}")
+    @RequireAuth(UserType.ACADEMIC_ADMIN)
     public Result<ClassName> update(HttpServletRequest request, @PathVariable Long id, @RequestBody ClassName className) {
-        authFacade.requireAcademicAdmin(request);
         className.setId(id);
         classNameService.updateById(className);
         return Result.ok(className);
     }
 
     @DeleteMapping("/{id}")
+    @RequireAuth(UserType.ACADEMIC_ADMIN)
     public Result<Void> delete(HttpServletRequest request, @PathVariable Long id) {
-        authFacade.requireAcademicAdmin(request);
         classNameService.removeById(id);
         return Result.ok();
     }
@@ -123,7 +128,7 @@ public class ClassNameController {
      * @throws BusinessException(403) 非院系管理者或院系记录不存在
      */
     private Department resolveDepartment(HttpServletRequest request) {
-        Long userId = authFacade.requireDepartmentUserId(request);
+        Long userId = authFacade.currentUserId(request);
 
         Department dept = departmentMapper.findByUserId(userId);
         if (dept == null) {

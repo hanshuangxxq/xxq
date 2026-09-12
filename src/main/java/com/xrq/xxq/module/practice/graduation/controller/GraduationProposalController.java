@@ -18,6 +18,8 @@ import com.xrq.xxq.module.practice.graduation.dto.ProposalReviewRequest;
 import com.xrq.xxq.module.practice.graduation.entity.ProposalReviewStageEnum;
 import com.xrq.xxq.module.practice.graduation.service.GraduationProposalService;
 import com.xrq.xxq.util.auth.AuthFacade;
+import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.UserType;
 
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -34,50 +36,55 @@ public class GraduationProposalController {
     private final AuthFacade authFacade;
 
     /** 学生提交/重提选题申请（R-5.1~R-5.4） */
+    @RequireAuth(UserType.STUDENT)
     @PostMapping
     public Result<ProposalResponse> declare(HttpServletRequest request, @RequestBody ProposalDeclareRequest body) {
-        Long studentUserId = authFacade.requireStudentUserId(request);
+        Long studentUserId = authFacade.currentUserId(request);
         return Result.ok(proposalService.declareProposal(studentUserId, body));
     }
 
     /** 院系初审（R-5.5，仅本院系学生） */
+    @RequireAuth(UserType.DEPARTMENT)
     @PutMapping("/{id:\\d+}/review/dept")
     public Result<ProposalResponse> reviewDept(HttpServletRequest request, @PathVariable Long id,
                                                @RequestBody ProposalReviewRequest body) {
-        Long deptUserId = authFacade.requireDepartmentUserId(request);
+        Long deptUserId = authFacade.currentUserId(request);
         return Result.ok(proposalService.reviewProposal(deptUserId, AuthFacade.USER_TYPE_DEPARTMENT,
                 id, ProposalReviewStageEnum.DEPT, body));
     }
 
     /** 教务终审（R-5.6） */
+    @RequireAuth(UserType.ACADEMIC_ADMIN)
     @PutMapping("/{id:\\d+}/review/academic")
     public Result<ProposalResponse> reviewAcademic(HttpServletRequest request, @PathVariable Long id,
                                                    @RequestBody ProposalReviewRequest body) {
-        Long academicUserId = authFacade.requireAcademicAdminUserId(request);
+        Long academicUserId = authFacade.currentUserId(request);
         return Result.ok(proposalService.reviewProposal(academicUserId, AuthFacade.USER_TYPE_ACADEMIC_ADMIN,
                 id, ProposalReviewStageEnum.ACADEMIC, body));
     }
 
     /** 学生查看我的申请列表 */
+    @RequireAuth(UserType.STUDENT)
     @GetMapping("/my")
     public Result<List<ProposalResponse>> my(HttpServletRequest request) {
-        Long studentUserId = authFacade.requireStudentUserId(request);
+        Long studentUserId = authFacade.currentUserId(request);
         return Result.ok(proposalService.listMyProposals(studentUserId));
     }
 
     /** 院系待初审队列（本院系） */
+    @RequireAuth(UserType.DEPARTMENT)
     @GetMapping("/pending/dept")
     public Result<List<ProposalResponse>> pendingDept(HttpServletRequest request,
                                                       @RequestParam Long campaignId) {
-        Long deptUserId = authFacade.requireDepartmentUserId(request);
+        Long deptUserId = authFacade.currentUserId(request);
         return Result.ok(proposalService.listPendingDept(deptUserId, campaignId));
     }
 
     /** 教务待终审队列 */
+    @RequireAuth(UserType.ACADEMIC_ADMIN)
     @GetMapping("/pending/academic")
     public Result<List<ProposalResponse>> pendingAcademic(HttpServletRequest request,
                                                           @RequestParam Long campaignId) {
-        authFacade.requireAcademicAdmin(request);
         return Result.ok(proposalService.listPendingAcademic(campaignId));
     }
 }

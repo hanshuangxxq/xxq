@@ -34,6 +34,8 @@ import com.xrq.xxq.module.practice.internship.dto.InternshipReportSubmitRequest;
 import com.xrq.xxq.module.practice.internship.entity.InternshipReport;
 import com.xrq.xxq.module.practice.internship.service.InternshipReportService;
 import com.xrq.xxq.util.auth.AuthFacade;
+import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.UserType;
 
 import lombok.RequiredArgsConstructor;
 
@@ -52,51 +54,57 @@ public class InternshipReportController {
     private final AuthFacade authFacade;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @RequireAuth(UserType.STUDENT)
     public Result<InternshipReportResponse> submit(HttpServletRequest request,
                                                    @RequestPart("data") InternshipReportSubmitRequest body,
                                                    @RequestPart("file") MultipartFile file) {
-        Long studentUserId = authFacade.requireStudentUserId(request);
+        Long studentUserId = authFacade.currentUserId(request);
         return Result.ok(reportService.submit(studentUserId, body, file));
     }
 
     @GetMapping("/my")
+    @RequireAuth(UserType.STUDENT)
     public Result<List<InternshipReportResponse>> my(HttpServletRequest request) {
-        Long studentUserId = authFacade.requireStudentUserId(request);
+        Long studentUserId = authFacade.currentUserId(request);
         return Result.ok(reportService.listMyReports(studentUserId));
     }
 
     @GetMapping
+    @RequireAuth({UserType.DEPARTMENT, UserType.ACADEMIC_ADMIN})
     public Result<PageResult<InternshipReportResponse>> list(HttpServletRequest request,
                                                              @RequestParam(required = false) ReportStatusEnum status,
                                                              @RequestParam(required = false) Integer page,
                                                              @RequestParam(required = false) Integer pageSize) {
-        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_DEPARTMENT, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
-        return Result.ok(reportService.listForHandler(ctx.userId(), ctx.userType(), status, new PageQuery(page, pageSize)));
+        Long userId = authFacade.currentUserId(request);
+        String userType = authFacade.currentUserType(request);
+        return Result.ok(reportService.listForHandler(userId, userType, status, new PageQuery(page, pageSize)));
     }
 
     @PostMapping("/{id}/review")
+    @RequireAuth({UserType.DEPARTMENT, UserType.ACADEMIC_ADMIN})
     public Result<InternshipReportResponse> review(HttpServletRequest request, @PathVariable Long id,
                                                    @RequestBody InternshipReportReviewRequest body) {
-        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_DEPARTMENT, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
-        return Result.ok(reportService.review(id, body, ctx.userId(), ctx.userType()));
+        Long userId = authFacade.currentUserId(request);
+        String userType = authFacade.currentUserType(request);
+        return Result.ok(reportService.review(id, body, userId, userType));
     }
 
     /** 删除报告（教务全权；院系管理者负责实习；学生仅本人且未评审）。 */
     @DeleteMapping("/{id}")
+    @RequireAuth({UserType.DEPARTMENT, UserType.ACADEMIC_ADMIN, UserType.STUDENT})
     public Result<Void> delete(HttpServletRequest request, @PathVariable Long id) {
-        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_DEPARTMENT, AuthFacade.USER_TYPE_ACADEMIC_ADMIN, AuthFacade.USER_TYPE_STUDENT);
-        reportService.deleteReport(id, ctx.userId(), ctx.userType());
+        Long userId = authFacade.currentUserId(request);
+        String userType = authFacade.currentUserType(request);
+        reportService.deleteReport(id, userId, userType);
         return Result.ok();
     }
 
     @GetMapping("/{id}/download")
+    @RequireAuth({UserType.DEPARTMENT, UserType.ACADEMIC_ADMIN, UserType.STUDENT})
     public ResponseEntity<Resource> download(HttpServletRequest request, @PathVariable Long id) {
-        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_DEPARTMENT, AuthFacade.USER_TYPE_ACADEMIC_ADMIN, AuthFacade.USER_TYPE_STUDENT);
-        InternshipReport report = reportService.loadForDownload(id, ctx.userId(), ctx.userType());
+        Long userId = authFacade.currentUserId(request);
+        String userType = authFacade.currentUserType(request);
+        InternshipReport report = reportService.loadForDownload(id, userId, userType);
         Path file = fileService.resolve(report.getFileName());
         String filename = report.getFileOriginal() != null ? report.getFileOriginal() : report.getFileName();
         String encoded = URLEncoder.encode(filename, StandardCharsets.UTF_8).replace("+", "%20");

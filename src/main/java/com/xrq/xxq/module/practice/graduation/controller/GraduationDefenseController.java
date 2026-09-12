@@ -21,7 +21,8 @@ import com.xrq.xxq.module.practice.graduation.dto.ScoreResponse;
 import com.xrq.xxq.module.practice.graduation.dto.ScoreSubmitRequest;
 import com.xrq.xxq.module.practice.graduation.service.GraduationDefenseService;
 import com.xrq.xxq.util.auth.AuthFacade;
-import com.xrq.xxq.util.auth.AuthFacade.AuthContext;
+import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.UserType;
 
 import lombok.RequiredArgsConstructor;
 
@@ -37,85 +38,94 @@ public class GraduationDefenseController {
     private final AuthFacade authFacade;
 
     /** 院系安排/更新答辩（R-9.1，门禁：查重通过） */
+    @RequireAuth(UserType.DEPARTMENT)
     @PostMapping("/arrange")
     public Result<DefenseResponse> arrange(HttpServletRequest request, @RequestBody DefenseArrangeRequest body) {
-        Long deptUserId = authFacade.requireDepartmentUserId(request);
+        Long deptUserId = authFacade.currentUserId(request);
         return Result.ok(defenseService.arrangeDefense(deptUserId, body));
     }
 
     /** 答辩安排列表（教务全部/院系本院系/学生本人） */
+    @RequireAuth({UserType.ACADEMIC_ADMIN, UserType.DEPARTMENT, UserType.STUDENT})
     @GetMapping("/list")
     public Result<List<DefenseResponse>> list(HttpServletRequest request, @RequestParam Long campaignId) {
-        AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_ACADEMIC_ADMIN, AuthFacade.USER_TYPE_DEPARTMENT,
-                AuthFacade.USER_TYPE_STUDENT);
-        return Result.ok(defenseService.listDefenses(campaignId, ctx.userType(), ctx.userId()));
+        Long userId = authFacade.currentUserId(request);
+        String userType = authFacade.currentUserType(request);
+        return Result.ok(defenseService.listDefenses(campaignId, userType, userId));
     }
 
     /** 指导教师录入指导分（R-9.2/R-9.3） */
+    @RequireAuth(UserType.TEACHER)
     @PostMapping("/scores/advisor")
     public Result<ScoreResponse> advisorScore(HttpServletRequest request, @RequestBody ScoreSubmitRequest body) {
-        Long teacherUserId = authFacade.requireUserTypesUserId(request, AuthFacade.USER_TYPE_TEACHER);
+        Long teacherUserId = authFacade.currentUserId(request);
         return Result.ok(defenseService.submitAdvisorScore(teacherUserId, body));
     }
 
     /** 指导评分录入列表：教师名下学生 */
+    @RequireAuth(UserType.TEACHER)
     @GetMapping("/scores/advisor")
     public Result<List<ScoreResponse>> advisorScoreEntries(HttpServletRequest request, @RequestParam Long campaignId) {
-        Long teacherUserId = authFacade.requireUserTypesUserId(request, AuthFacade.USER_TYPE_TEACHER);
+        Long teacherUserId = authFacade.currentUserId(request);
         return Result.ok(defenseService.listAdvisorScoreEntries(teacherUserId, campaignId));
     }
 
     /** 评阅教师录入评阅分 */
+    @RequireAuth(UserType.TEACHER)
     @PostMapping("/scores/reviewer")
     public Result<ScoreResponse> reviewerScore(HttpServletRequest request, @RequestBody ScoreSubmitRequest body) {
-        Long reviewerUserId = authFacade.requireUserTypesUserId(request, AuthFacade.USER_TYPE_TEACHER);
+        Long reviewerUserId = authFacade.currentUserId(request);
         return Result.ok(defenseService.submitReviewerScore(reviewerUserId, body));
     }
 
     /** 评阅评分录入列表：本人为评阅人的学生 */
+    @RequireAuth(UserType.TEACHER)
     @GetMapping("/scores/reviewer")
     public Result<List<ScoreResponse>> reviewerScoreEntries(HttpServletRequest request, @RequestParam Long campaignId) {
-        Long reviewerUserId = authFacade.requireUserTypesUserId(request, AuthFacade.USER_TYPE_TEACHER);
+        Long reviewerUserId = authFacade.currentUserId(request);
         return Result.ok(defenseService.listReviewerScoreEntries(reviewerUserId, campaignId));
     }
 
     /** 院系/教务录入答辩分 */
+    @RequireAuth({UserType.DEPARTMENT, UserType.ACADEMIC_ADMIN})
     @PostMapping("/scores/defense")
     public Result<ScoreResponse> defenseScore(HttpServletRequest request, @RequestBody ScoreSubmitRequest body) {
-        AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_DEPARTMENT, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
-        return Result.ok(defenseService.submitDefenseScore(ctx.userId(), ctx.userType(), body));
+        Long userId = authFacade.currentUserId(request);
+        String userType = authFacade.currentUserType(request);
+        return Result.ok(defenseService.submitDefenseScore(userId, userType, body));
     }
 
     /** 院系确认并发布总评成绩（R-9.3） */
+    @RequireAuth(UserType.DEPARTMENT)
     @PostMapping("/scores/confirm")
     public Result<ScoreResponse> confirm(HttpServletRequest request, @RequestBody ScoreConfirmRequest body) {
-        Long deptUserId = authFacade.requireDepartmentUserId(request);
+        Long deptUserId = authFacade.currentUserId(request);
         return Result.ok(defenseService.confirmScore(deptUserId, body));
     }
 
     /** 成绩列表（教务全部/院系本院系/学生本人/教师名下） */
+    @RequireAuth({UserType.ACADEMIC_ADMIN, UserType.DEPARTMENT, UserType.STUDENT, UserType.TEACHER})
     @GetMapping("/scores")
     public Result<List<ScoreResponse>> scores(HttpServletRequest request, @RequestParam Long campaignId) {
-        AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_ACADEMIC_ADMIN, AuthFacade.USER_TYPE_DEPARTMENT,
-                AuthFacade.USER_TYPE_STUDENT, AuthFacade.USER_TYPE_TEACHER);
-        return Result.ok(defenseService.listScores(campaignId, ctx.userType(), ctx.userId()));
+        Long userId = authFacade.currentUserId(request);
+        String userType = authFacade.currentUserType(request);
+        return Result.ok(defenseService.listScores(campaignId, userType, userId));
     }
 
     /** 学生查看本人成绩 */
+    @RequireAuth(UserType.STUDENT)
     @GetMapping("/scores/my")
     public Result<ScoreResponse> myScore(HttpServletRequest request, @RequestParam Long campaignId) {
-        Long studentUserId = authFacade.requireStudentUserId(request);
+        Long studentUserId = authFacade.currentUserId(request);
         return Result.ok(defenseService.getMyScore(studentUserId, campaignId));
     }
 
     /** 教务导出成绩总表（R-9.4，复用导出能力） */
+    @RequireAuth(UserType.ACADEMIC_ADMIN)
     @GetMapping("/scores/export")
     public ResponseEntity<byte[]> exportScores(HttpServletRequest request, @RequestParam Long campaignId)
             throws java.io.IOException {
-        Long academicUserId = authFacade.requireAcademicAdminUserId(request);
+        Long academicUserId = authFacade.currentUserId(request);
         var file = defenseService.exportScores(academicUserId, campaignId);
         String encoded = java.net.URLEncoder.encode(file.fileName(), java.nio.charset.StandardCharsets.UTF_8)
                 .replace("+", "%20");

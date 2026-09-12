@@ -14,6 +14,8 @@ import com.xrq.xxq.module.analysis.dto.ClassAnalysisDto;
 import com.xrq.xxq.module.analysis.dto.ClassTrendDto;
 import com.xrq.xxq.module.analysis.service.ClassAnalysisService;
 import com.xrq.xxq.util.auth.AuthFacade;
+import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.UserType;
 
 import lombok.RequiredArgsConstructor;
 
@@ -24,6 +26,7 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/api/analysis/class-analysis")
 @RequiredArgsConstructor
+@RequireAuth({UserType.ACADEMIC_ADMIN, UserType.DEPARTMENT})
 public class ClassAnalysisController {
 
     private final ClassAnalysisService classAnalysisService;
@@ -34,9 +37,9 @@ public class ClassAnalysisController {
     public Result<List<ClassAnalysisDto>> aggregate(HttpServletRequest request,
                                                     @RequestParam(defaultValue = "class") String groupBy,
                                                     @RequestParam(required = false) Long semesterId) {
-        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_ACADEMIC_ADMIN, AuthFacade.USER_TYPE_DEPARTMENT);
-        return Result.ok(classAnalysisService.aggregate(groupBy, semesterId, ctx.userId(), ctx.userType()));
+        Long userId = authFacade.currentUserId(request);
+        String userType = authFacade.currentUserType(request);
+        return Result.ok(classAnalysisService.aggregate(groupBy, semesterId, userId, userType));
     }
 
     /** 单组（班级/专业）跨学期趋势。 */
@@ -44,8 +47,8 @@ public class ClassAnalysisController {
     public Result<ClassTrendDto> trend(HttpServletRequest request,
                                        @RequestParam(defaultValue = "class") String groupBy,
                                        @RequestParam String groupKey) {
-        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_ACADEMIC_ADMIN, AuthFacade.USER_TYPE_DEPARTMENT);
-        return Result.ok(classAnalysisService.trend(groupBy, groupKey, ctx.userId(), ctx.userType()));
+        Long userId = authFacade.currentUserId(request);
+        String userType = authFacade.currentUserType(request);
+        return Result.ok(classAnalysisService.trend(groupBy, groupKey, userId, userType));
     }
 }

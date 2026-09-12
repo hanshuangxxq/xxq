@@ -22,6 +22,8 @@ import com.xrq.xxq.module.analysis.dto.WarningScanResultDto;
 import com.xrq.xxq.module.analysis.entity.WarningLevelEnum;
 import com.xrq.xxq.module.analysis.service.WarningService;
 import com.xrq.xxq.util.auth.AuthFacade;
+import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.UserType;
 
 import lombok.RequiredArgsConstructor;
 
@@ -39,44 +41,47 @@ public class WarningController {
 
     /** 预警阈值配置查询（教务）。 */
     @GetMapping("/config")
+    @RequireAuth(UserType.ACADEMIC_ADMIN)
     public Result<List<WarningConfigDto>> listConfig(HttpServletRequest request) {
-        authFacade.requireAcademicAdmin(request);
         return Result.ok(warningService.listConfig());
     }
 
     /** 预警阈值配置更新（教务）。 */
     @PutMapping("/config")
+    @RequireAuth(UserType.ACADEMIC_ADMIN)
     public Result<Void> updateConfig(HttpServletRequest request, @RequestBody WarningConfigRequest body) {
-        authFacade.requireAcademicAdmin(request);
         warningService.updateConfig(body.getConfigs());
         return Result.ok();
     }
 
     /** 触发扫描：评估全体学生，upsert 预警记录并推送通知（教务）。 */
     @PostMapping("/scan")
+    @RequireAuth(UserType.ACADEMIC_ADMIN)
     public Result<WarningScanResultDto> scan(HttpServletRequest request) {
-        Long userId = authFacade.requireAcademicAdminUserId(request);
+        Long userId = authFacade.currentUserId(request);
         return Result.ok(warningService.scan(userId));
     }
 
     /** 预警看板：教务全校、院系本院；按学期/级别过滤，默认当前学期生效中预警。 */
     @GetMapping
+    @RequireAuth({UserType.ACADEMIC_ADMIN, UserType.DEPARTMENT})
     public Result<PageResult<WarningItemDto>> list(HttpServletRequest request,
                                                    @RequestParam(required = false) Long semesterId,
                                                    @RequestParam(required = false) String level,
                                                    @RequestParam(required = false) Integer page,
                                                    @RequestParam(required = false) Integer pageSize) {
-        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_ACADEMIC_ADMIN, AuthFacade.USER_TYPE_DEPARTMENT);
+        Long userId = authFacade.currentUserId(request);
+        String userType = authFacade.currentUserType(request);
         WarningLevelEnum levelEnum = (level == null || level.isBlank())
                 ? null : WarningLevelEnum.fromValue(level);
-        return Result.ok(warningService.list(semesterId, levelEnum, ctx.userId(), ctx.userType(), new PageQuery(page, pageSize)));
+        return Result.ok(warningService.list(semesterId, levelEnum, userId, userType, new PageQuery(page, pageSize)));
     }
 
     /** 学生查询本人生效中的预警。 */
     @GetMapping("/me")
+    @RequireAuth(UserType.STUDENT)
     public Result<List<WarningItemDto>> myWarnings(HttpServletRequest request) {
-        Long studentUserId = authFacade.requireStudentUserId(request);
+        Long studentUserId = authFacade.currentUserId(request);
         return Result.ok(warningService.myWarnings(studentUserId));
     }
 }

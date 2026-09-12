@@ -22,6 +22,8 @@ import com.xrq.xxq.module.notification.dto.SendNotificationRequest;
 import com.xrq.xxq.module.notification.dto.UnreadCountResponse;
 import com.xrq.xxq.module.notification.service.NotificationService;
 import com.xrq.xxq.util.auth.AuthFacade;
+import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.UserType;
 
 import lombok.RequiredArgsConstructor;
 
@@ -38,6 +40,7 @@ public class NotificationController {
     private final NotificationService notificationService;
     private final AuthFacade authFacade;
 
+    @RequireAuth()
     @GetMapping("/unread-count")
     public Result<UnreadCountResponse> unreadCount(HttpServletRequest request) {
         Long userId = authFacade.currentUserId(request);
@@ -45,6 +48,7 @@ public class NotificationController {
         return Result.ok(new UnreadCountResponse(notificationService.unreadCount(userId, userType)));
     }
 
+    @RequireAuth()
     @GetMapping("/list")
     public Result<PageResult<NotificationResponse>> list(HttpServletRequest request,
                                                          @RequestParam(required = false) String status,
@@ -55,6 +59,7 @@ public class NotificationController {
         return Result.ok(notificationService.listByUser(userId, userType, status, new PageQuery(page, pageSize)));
     }
 
+    @RequireAuth()
     @PutMapping("/{id}/read")
     public Result<Void> markRead(HttpServletRequest request, @PathVariable Long id) {
         Long userId = authFacade.currentUserId(request);
@@ -63,6 +68,7 @@ public class NotificationController {
         return Result.ok();
     }
 
+    @RequireAuth()
     @PutMapping("/broadcast/{id}/read")
     public Result<Void> markBroadcastRead(HttpServletRequest request, @PathVariable Long id) {
         Long userId = authFacade.currentUserId(request);
@@ -71,6 +77,7 @@ public class NotificationController {
         return Result.ok();
     }
 
+    @RequireAuth()
     @PutMapping("/read-all")
     public Result<Void> markAllRead(HttpServletRequest request) {
         Long userId = authFacade.currentUserId(request);
@@ -79,6 +86,7 @@ public class NotificationController {
         return Result.ok();
     }
 
+    @RequireAuth()
     @DeleteMapping("/{id}")
     public Result<Void> delete(HttpServletRequest request, @PathVariable Long id) {
         Long userId = authFacade.currentUserId(request);
@@ -86,9 +94,9 @@ public class NotificationController {
         return Result.ok();
     }
 
+    @RequireAuth({UserType.ACADEMIC_ADMIN, UserType.DEPARTMENT})
     @PostMapping("/send")
     public Result<NotificationResponse> send(HttpServletRequest request, @RequestBody SendNotificationRequest body) {
-        authFacade.requireUserTypes(request, AuthFacade.USER_TYPE_ACADEMIC_ADMIN, AuthFacade.USER_TYPE_DEPARTMENT);
         return Result.ok(notificationService.send(body));
     }
 }

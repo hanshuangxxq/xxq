@@ -11,6 +11,8 @@ import com.xrq.xxq.common.Result;
 import com.xrq.xxq.module.analysis.dto.LearningProgressDto;
 import com.xrq.xxq.module.analysis.service.ProgressService;
 import com.xrq.xxq.util.auth.AuthFacade;
+import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.UserType;
 
 import lombok.RequiredArgsConstructor;
 
@@ -28,17 +30,19 @@ public class ProgressController {
 
     /** 学生查询本人学习进度。 */
     @GetMapping("/me")
+    @RequireAuth(UserType.STUDENT)
     public Result<LearningProgressDto> myProgress(HttpServletRequest request) {
-        Long userId = authFacade.requireStudentUserId(request);
+        Long userId = authFacade.currentUserId(request);
         return Result.ok(progressService.getProgress(userId, userId, AuthFacade.USER_TYPE_STUDENT));
     }
 
     /** 教务/院系查询指定学生学习进度。 */
     @GetMapping("/{studentUserId}")
+    @RequireAuth({UserType.ACADEMIC_ADMIN, UserType.DEPARTMENT})
     public Result<LearningProgressDto> progress(HttpServletRequest request,
                                                 @PathVariable Long studentUserId) {
-        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_ACADEMIC_ADMIN, AuthFacade.USER_TYPE_DEPARTMENT);
-        return Result.ok(progressService.getProgress(studentUserId, ctx.userId(), ctx.userType()));
+        Long userId = authFacade.currentUserId(request);
+        String userType = authFacade.currentUserType(request);
+        return Result.ok(progressService.getProgress(studentUserId, userId, userType));
     }
 }

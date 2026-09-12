@@ -3,6 +3,7 @@ package com.xrq.xxq.module.time.controller;
 import com.xrq.xxq.common.Result;
 import com.xrq.xxq.module.time.entity.Time;
 import com.xrq.xxq.module.time.service.TimeService;
+import com.xrq.xxq.util.auth.RequireAuth;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -10,6 +11,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/time")
+@RequireAuth()
 @RequiredArgsConstructor
 public class TimeController {
 

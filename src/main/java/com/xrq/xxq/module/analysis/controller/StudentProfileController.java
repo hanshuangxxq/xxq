@@ -11,6 +11,8 @@ import com.xrq.xxq.common.Result;
 import com.xrq.xxq.module.analysis.dto.StudentProfileDto;
 import com.xrq.xxq.module.analysis.service.StudentProfileService;
 import com.xrq.xxq.util.auth.AuthFacade;
+import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.UserType;
 
 import lombok.RequiredArgsConstructor;
 
@@ -28,17 +30,19 @@ public class StudentProfileController {
 
     /** 学生查询本人画像。 */
     @GetMapping("/me")
+    @RequireAuth(UserType.STUDENT)
     public Result<StudentProfileDto> myProfile(HttpServletRequest request) {
-        Long userId = authFacade.requireStudentUserId(request);
+        Long userId = authFacade.currentUserId(request);
         return Result.ok(studentProfileService.getProfile(userId, userId, AuthFacade.USER_TYPE_STUDENT));
     }
 
     /** 教务/院系查询指定学生画像。 */
     @GetMapping("/{studentUserId}")
+    @RequireAuth({UserType.ACADEMIC_ADMIN, UserType.DEPARTMENT})
     public Result<StudentProfileDto> profile(HttpServletRequest request,
                                              @PathVariable Long studentUserId) {
-        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_ACADEMIC_ADMIN, AuthFacade.USER_TYPE_DEPARTMENT);
-        return Result.ok(studentProfileService.getProfile(studentUserId, ctx.userId(), ctx.userType()));
+        Long userId = authFacade.currentUserId(request);
+        String userType = authFacade.currentUserType(request);
+        return Result.ok(studentProfileService.getProfile(studentUserId, userId, userType));
     }
 }

@@ -34,6 +34,8 @@ import com.xrq.xxq.module.practice.socialpractice.dto.SocialPracticeReportSubmit
 import com.xrq.xxq.module.practice.socialpractice.entity.SocialPracticeReport;
 import com.xrq.xxq.module.practice.socialpractice.service.SocialPracticeReportService;
 import com.xrq.xxq.util.auth.AuthFacade;
+import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.UserType;
 
 import lombok.RequiredArgsConstructor;
 
@@ -52,49 +54,53 @@ public class SocialPracticeReportController {
     private final AuthFacade authFacade;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @RequireAuth(UserType.STUDENT)
     public Result<SocialPracticeReportResponse> submit(HttpServletRequest request,
                                                        @RequestPart("data") SocialPracticeReportSubmitRequest body,
                                                        @RequestPart("file") MultipartFile file) {
-        Long studentUserId = authFacade.requireStudentUserId(request);
+        Long studentUserId = authFacade.currentUserId(request);
         return Result.ok(reportService.submit(studentUserId, body, file));
     }
 
     @GetMapping("/my")
+    @RequireAuth(UserType.STUDENT)
     public Result<List<SocialPracticeReportResponse>> my(HttpServletRequest request) {
-        Long studentUserId = authFacade.requireStudentUserId(request);
+        Long studentUserId = authFacade.currentUserId(request);
         return Result.ok(reportService.listMyReports(studentUserId));
     }
 
     @GetMapping
+    @RequireAuth(UserType.ACADEMIC_ADMIN)
     public Result<PageResult<SocialPracticeReportResponse>> list(HttpServletRequest request,
                                                                  @RequestParam(required = false) ReportStatusEnum status,
                                                                  @RequestParam(required = false) Integer page,
                                                                  @RequestParam(required = false) Integer pageSize) {
-        authFacade.requireAcademicAdmin(request);
         return Result.ok(reportService.listForHandler(status, new PageQuery(page, pageSize)));
     }
 
     @PostMapping("/{id}/review")
+    @RequireAuth(UserType.ACADEMIC_ADMIN)
     public Result<SocialPracticeReportResponse> review(HttpServletRequest request, @PathVariable Long id,
                                                        @RequestBody SocialPracticeReportReviewRequest body) {
-        authFacade.requireAcademicAdmin(request);
         return Result.ok(reportService.review(id, body));
     }
 
     /** 删除报告（教务全权；学生仅本人且未评审）。 */
     @DeleteMapping("/{id}")
+    @RequireAuth({UserType.ACADEMIC_ADMIN, UserType.STUDENT})
     public Result<Void> delete(HttpServletRequest request, @PathVariable Long id) {
-        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_ACADEMIC_ADMIN, AuthFacade.USER_TYPE_STUDENT);
-        reportService.deleteReport(id, ctx.userId(), ctx.userType());
+        Long userId = authFacade.currentUserId(request);
+        String userType = authFacade.currentUserType(request);
+        reportService.deleteReport(id, userId, userType);
         return Result.ok();
     }
 
     @GetMapping("/{id}/download")
+    @RequireAuth({UserType.ACADEMIC_ADMIN, UserType.STUDENT})
     public ResponseEntity<Resource> download(HttpServletRequest request, @PathVariable Long id) {
-        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_ACADEMIC_ADMIN, AuthFacade.USER_TYPE_STUDENT);
-        SocialPracticeReport report = reportService.loadForDownload(id, ctx.userId(), ctx.userType());
+        Long userId = authFacade.currentUserId(request);
+        String userType = authFacade.currentUserType(request);
+        SocialPracticeReport report = reportService.loadForDownload(id, userId, userType);
         Path file = fileService.resolve(report.getFileName());
         String filename = report.getFileOriginal() != null ? report.getFileOriginal() : report.getFileName();
         String encoded = URLEncoder.encode(filename, StandardCharsets.UTF_8).replace("+", "%20");

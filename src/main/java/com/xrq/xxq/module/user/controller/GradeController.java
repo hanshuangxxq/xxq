@@ -20,7 +20,8 @@ import com.xrq.xxq.module.user.entity.user.Grade;
 import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.module.user.service.GradeService;
-import com.xrq.xxq.util.auth.AuthFacade;
+import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.UserType;
 
 import lombok.RequiredArgsConstructor;
 
@@ -32,21 +33,19 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/api/grades")
 @RequiredArgsConstructor
+@RequireAuth(UserType.ACADEMIC_ADMIN)
 public class GradeController {
 
     private final GradeService gradeService;
     private final StudentMapper studentMapper;
-    private final AuthFacade authFacade;
 
     @GetMapping
     public Result<List<Grade>> list(HttpServletRequest request) {
-        authFacade.requireAcademicAdmin(request);
         return Result.ok(gradeService.list());
     }
 
     @GetMapping("/{id}")
     public Result<Grade> getById(HttpServletRequest request, @PathVariable Long id) {
-        authFacade.requireAcademicAdmin(request);
         Grade grade = gradeService.getById(id);
         if (grade == null) {
             throw new BusinessException(404, "年级不存在");
@@ -56,7 +55,6 @@ public class GradeController {
 
     @PostMapping
     public Result<Grade> create(HttpServletRequest request, @RequestBody Grade grade) {
-        authFacade.requireAcademicAdmin(request);
         if (grade.getName() == null || grade.getName().isBlank()) {
             throw new BusinessException(400, "年级名称不能为空");
         }
@@ -72,7 +70,6 @@ public class GradeController {
     public Result<Grade> update(HttpServletRequest request,
                                 @PathVariable Long id,
                                 @RequestBody Grade grade) {
-        authFacade.requireAcademicAdmin(request);
         Grade exists = gradeService.getById(id);
         if (exists == null) {
             throw new BusinessException(404, "年级不存在");
@@ -90,7 +87,6 @@ public class GradeController {
 
     @DeleteMapping("/{id}")
     public Result<Void> delete(HttpServletRequest request, @PathVariable Long id) {
-        authFacade.requireAcademicAdmin(request);
         Grade grade = gradeService.getById(id);
         if (grade == null) {
             throw new BusinessException(404, "年级不存在");

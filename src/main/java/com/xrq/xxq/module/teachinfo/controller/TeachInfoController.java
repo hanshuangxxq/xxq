@@ -31,6 +31,8 @@ import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.mapper.DepartmentMapper;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.util.auth.AuthFacade;
+import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.UserType;
 
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -52,6 +54,7 @@ public class TeachInfoController {
     private final AuthFacade authFacade;
 
     @GetMapping
+    @RequireAuth()
     public Result<UserCourseDto> list(
             HttpServletRequest request,
             @RequestParam(required = false) Long teacherId,
@@ -63,6 +66,7 @@ public class TeachInfoController {
     }
 
     @GetMapping("/{id}")
+    @RequireAuth()
     public Result<CourseDto> getById(HttpServletRequest request, @PathVariable Long id) {
         Long userId = authFacade.currentUserId(request);
         String userType = authFacade.currentUserType(request);
@@ -74,6 +78,7 @@ public class TeachInfoController {
     }
 
     @GetMapping("/class-courses")
+    @RequireAuth()
     public Result<List<ClassCourseDto>> listClassCourses(HttpServletRequest request) {
         Long userId = authFacade.currentUserId(request);
         return Result.ok(teachInfoService.listClassCourses(userId));
@@ -81,14 +86,16 @@ public class TeachInfoController {
 
     /** 学生查询指定周次的个人课表（含必修课 + 选课班，走 Redis 缓存）。 */
     @GetMapping("/week-schedule")
+    @RequireAuth(UserType.STUDENT)
     public Result<WeekScheduleDto> getWeekSchedule(HttpServletRequest request,
                                                     @RequestParam Integer week) {
-        Long userId = authFacade.requireStudentUserId(request);
+        Long userId = authFacade.currentUserId(request);
         return Result.ok(teachInfoService.getWeekSchedule(userId, week));
     }
 
     /** 新增授课安排。合班时 className 用逗号分隔：如 "计科2201,计科2101"。 */
     @PostMapping
+    @RequireAuth()
     public Result<TeachInfo> create(@RequestBody TeachInfo teachInfo) {
         teachInfoService.save(teachInfo);
         return Result.ok(teachInfo);
@@ -96,6 +103,7 @@ public class TeachInfoController {
 
     /** 修改授课安排（部分更新用 PUT，排课结果由 scheduling 模块自动写回）。 */
     @PutMapping("/{id}")
+    @RequireAuth()
     public Result<TeachInfo> update(@PathVariable Long id, @RequestBody TeachInfo teachInfo) {
         teachInfo.setId(id);
         teachInfoService.updateById(teachInfo);
@@ -104,6 +112,7 @@ public class TeachInfoController {
 
     /** 删除授课安排。 */
     @DeleteMapping("/{id}")
+    @RequireAuth()
     public Result<Void> delete(@PathVariable Long id) {
         teachInfoService.removeById(id);
         return Result.ok();
@@ -116,10 +125,8 @@ public class TeachInfoController {
      * 教务管理员和院系管理者可操作。
      */
     @PostMapping("/draft")
+    @RequireAuth({UserType.ACADEMIC_ADMIN, UserType.DEPARTMENT})
     public Result<Integer> addDrafts(HttpServletRequest request, @RequestBody List<TeachInfo> drafts) {
-        authFacade.requireUserTypes(request,
-                AuthFacade.USER_TYPE_ACADEMIC_ADMIN,
-                AuthFacade.USER_TYPE_DEPARTMENT);
         draftCacheManager.addDrafts(drafts);
         return Result.ok(draftCacheManager.size());
     }
@@ -132,6 +139,7 @@ public class TeachInfoController {
      * </ul>
      */
     @GetMapping("/draft")
+    @RequireAuth()
     public Result<List<DraftItem>> getDrafts(HttpServletRequest request) {
         String userType = authFacade.currentUserType(request);
 
@@ -149,6 +157,7 @@ public class TeachInfoController {
 
     /** 查看缓存中已配置的班级汇总（去重）、每个班的课程数及学期信息。 */
     @GetMapping("/draft/classes")
+    @RequireAuth()
     public Result<java.util.Map<String, Object>> getDraftClasses(HttpServletRequest request) {
         List<DraftItem> drafts = resolveDraftsByRole(request);
         var result = new java.util.LinkedHashMap<String, Object>();
@@ -201,8 +210,8 @@ public class TeachInfoController {
 
     /** 清空全部草稿。仅教务管理员可操作。 */
     @DeleteMapping("/draft")
+    @RequireAuth(UserType.ACADEMIC_ADMIN)
     public Result<Void> clearDrafts(HttpServletRequest request) {
-        authFacade.requireAcademicAdmin(request);
         draftCacheManager.clear();
         return Result.ok();
     }
@@ -212,6 +221,7 @@ public class TeachInfoController {
      * 教务管理员可删任意记录；院系管理者仅可删本院系记录。
      */
     @DeleteMapping("/draft/item")
+    @RequireAuth({UserType.ACADEMIC_ADMIN, UserType.DEPARTMENT})
     public Result<Void> removeDraftItem(HttpServletRequest request,
                                         @RequestParam Long courseId,
                                         @RequestParam Long teacherId,
@@ -228,10 +238,6 @@ public class TeachInfoController {
             if (!belongsToDept) {
                 throw new BusinessException(403, "无权删除其他院系的草稿");
             }
-        } else {
-            authFacade.requireUserTypes(request,
-                    AuthFacade.USER_TYPE_ACADEMIC_ADMIN,
-                    AuthFacade.USER_TYPE_DEPARTMENT);
         }
 
         Boolean removed = draftCacheManager.removeByKey(courseId, teacherId, className);
@@ -246,6 +252,7 @@ public class TeachInfoController {
      * 教务管理员可移除任意班级；院系管理者仅可移除本院系班级。
      */
     @DeleteMapping("/draft/{className}")
+    @RequireAuth({UserType.ACADEMIC_ADMIN, UserType.DEPARTMENT})
     public Result<Void> removeDraftsByClass(HttpServletRequest request, @PathVariable String className) {
         String userType = authFacade.currentUserType(request);
 
@@ -266,10 +273,6 @@ public class TeachInfoController {
             if (!belongsToDept) {
                 throw new BusinessException(403, "无权移除其他院系的草稿");
             }
-        } else {
-            authFacade.requireUserTypes(request,
-                    AuthFacade.USER_TYPE_ACADEMIC_ADMIN,
-                    AuthFacade.USER_TYPE_DEPARTMENT);
         }
 
         draftCacheManager.removeByClassName(className);
@@ -294,7 +297,7 @@ public class TeachInfoController {
     }
 
     private Department resolveDepartment(HttpServletRequest request) {
-        Long userId = authFacade.requireDepartmentUserId(request);
+        Long userId = authFacade.currentUserId(request);
 
         Department dept = departmentMapper.findByUserId(userId);
         if (dept == null) {

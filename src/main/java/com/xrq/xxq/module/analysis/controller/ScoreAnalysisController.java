@@ -13,6 +13,8 @@ import com.xrq.xxq.module.analysis.dto.ScoreDistributionDto;
 import com.xrq.xxq.module.analysis.dto.ScoreTrendDto;
 import com.xrq.xxq.module.analysis.service.ScoreAnalysisService;
 import com.xrq.xxq.util.auth.AuthFacade;
+import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.UserType;
 
 import lombok.RequiredArgsConstructor;
 
@@ -23,6 +25,7 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/api/analysis/scores")
 @RequiredArgsConstructor
+@RequireAuth({UserType.TEACHER, UserType.DEPARTMENT, UserType.ACADEMIC_ADMIN})
 public class ScoreAnalysisController {
 
     private final ScoreAnalysisService scoreAnalysisService;
@@ -35,9 +38,9 @@ public class ScoreAnalysisController {
                                                      @RequestParam(required = false) String source,
                                                      @RequestParam(required = false) String className,
                                                      @RequestParam(required = false) Long semesterId) {
-        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_DEPARTMENT, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
-        return Result.ok(scoreAnalysisService.distribution(courseId, source, className, semesterId, ctx.userId(), ctx.userType()));
+        Long userId = authFacade.currentUserId(request);
+        String userType = authFacade.currentUserType(request);
+        return Result.ok(scoreAnalysisService.distribution(courseId, source, className, semesterId, userId, userType));
     }
 
     /** 课程成绩跨学期趋势。source=SELECTION_CAMPAIGN 时按公选课过滤。 */
@@ -46,9 +49,9 @@ public class ScoreAnalysisController {
                                        @RequestParam Long courseId,
                                        @RequestParam(required = false) String source,
                                        @RequestParam(required = false) String className) {
-        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_DEPARTMENT, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
-        return Result.ok(scoreAnalysisService.trend(courseId, source, className, ctx.userId(), ctx.userType()));
+        Long userId = authFacade.currentUserId(request);
+        String userType = authFacade.currentUserType(request);
+        return Result.ok(scoreAnalysisService.trend(courseId, source, className, userId, userType));
     }
 
     /** 同课程各班级成绩横向对比（默认当前学期）。source=SELECTION_CAMPAIGN 时按公选课过滤。 */
@@ -57,8 +60,8 @@ public class ScoreAnalysisController {
                                                  @RequestParam Long courseId,
                                                  @RequestParam(required = false) String source,
                                                  @RequestParam(required = false) Long semesterId) {
-        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_DEPARTMENT, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
-        return Result.ok(scoreAnalysisService.comparison(courseId, source, semesterId, ctx.userId(), ctx.userType()));
+        Long userId = authFacade.currentUserId(request);
+        String userType = authFacade.currentUserType(request);
+        return Result.ok(scoreAnalysisService.comparison(courseId, source, semesterId, userId, userType));
     }
 }

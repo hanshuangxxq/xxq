@@ -10,12 +10,14 @@ import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.common.Result;
 import com.xrq.xxq.module.user.dto.TeacherDto;
 import com.xrq.xxq.module.user.service.TeacherService;
+import com.xrq.xxq.util.auth.RequireAuth;
 
 import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/teachers")
 @RequiredArgsConstructor
+@RequireAuth()
 public class TeacherController {
 
     private final TeacherService teacherService;

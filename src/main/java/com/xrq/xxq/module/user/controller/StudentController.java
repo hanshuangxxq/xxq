@@ -10,7 +10,8 @@ import com.xrq.xxq.module.user.dto.UpdateStudentRequest;
 import com.xrq.xxq.module.mojor.entity.Major;
 import com.xrq.xxq.module.mojor.service.MajorService;
 import com.xrq.xxq.module.user.service.StudentService;
-import com.xrq.xxq.util.auth.AuthFacade;
+import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.UserType;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -26,12 +27,12 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/students")
 @RequiredArgsConstructor
+@RequireAuth(UserType.ACADEMIC_ADMIN)
 public class StudentController {
 
     private final StudentService studentService;
     private final ClassNameService classNameService;
     private final MajorService majorService;
-    private final AuthFacade authFacade;
 
 
     /**
@@ -47,8 +48,6 @@ public class StudentController {
                                                @RequestParam(required = false) String name,
                                                @RequestParam(required = false) Integer page,
                                                @RequestParam(required = false) Integer pageSize) {
-        authFacade.requireAcademicAdmin(request);
-
         List<Long> classIds = Collections.emptyList();
         if (className != null && !className.isBlank()) {
             classIds = classNameService
@@ -80,7 +79,6 @@ public class StudentController {
     public Result<Boolean> update(HttpServletRequest request,
                                   @PathVariable Long id,
                                   @RequestBody UpdateStudentRequest updateRequest) {
-        authFacade.requireAcademicAdmin(request);
         return Result.ok(studentService.updateStudentInfo(id, updateRequest));
     }
 }

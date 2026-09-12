@@ -22,6 +22,8 @@ import com.xrq.xxq.module.analysis.dto.TemplateUpdateRequest;
 import com.xrq.xxq.module.analysis.entity.EvaluationTemplateStatusEnum;
 import com.xrq.xxq.module.analysis.service.EvaluationTemplateService;
 import com.xrq.xxq.util.auth.AuthFacade;
+import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.UserType;
 
 import lombok.RequiredArgsConstructor;
 
@@ -32,6 +34,7 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/api/analysis/evaluation-templates")
 @RequiredArgsConstructor
+@RequireAuth(UserType.ACADEMIC_ADMIN)
 public class EvaluationTemplateController {
 
     private final EvaluationTemplateService templateService;
@@ -40,20 +43,18 @@ public class EvaluationTemplateController {
     @PostMapping
     public Result<TemplateResponse> create(HttpServletRequest request,
                                            @RequestBody TemplateCreateRequest body) {
-        Long userId = authFacade.requireAcademicAdminUserId(request);
+        Long userId = authFacade.currentUserId(request);
         return Result.ok(templateService.createTemplate(body, userId));
     }
 
     @GetMapping
     public Result<List<TemplateResponse>> list(HttpServletRequest request) {
-        authFacade.requireAcademicAdmin(request);
         return Result.ok(templateService.listTemplates());
     }
 
     @GetMapping("/{id}")
     public Result<TemplateResponse> detail(HttpServletRequest request,
                                            @PathVariable Long id) {
-        authFacade.requireAcademicAdmin(request);
         return Result.ok(templateService.getTemplate(id));
     }
 
@@ -61,14 +62,12 @@ public class EvaluationTemplateController {
     public Result<TemplateResponse> update(HttpServletRequest request,
                                            @PathVariable Long id,
                                            @RequestBody TemplateUpdateRequest body) {
-        authFacade.requireAcademicAdmin(request);
         return Result.ok(templateService.updateTemplate(id, body));
     }
 
     @DeleteMapping("/{id}")
     public Result<Void> delete(HttpServletRequest request,
                                @PathVariable Long id) {
-        authFacade.requireAcademicAdmin(request);
         templateService.deleteTemplate(id);
         return Result.ok();
     }
@@ -77,7 +76,6 @@ public class EvaluationTemplateController {
     @PutMapping("/{id}/default")
     public Result<Void> setDefault(HttpServletRequest request,
                                    @PathVariable Long id) {
-        authFacade.requireAcademicAdmin(request);
         templateService.setDefault(id);
         return Result.ok();
     }
@@ -87,7 +85,6 @@ public class EvaluationTemplateController {
     public Result<Void> updateStatus(HttpServletRequest request,
                                      @PathVariable Long id,
                                      @RequestParam EvaluationTemplateStatusEnum status) {
-        authFacade.requireAcademicAdmin(request);
         templateService.updateStatus(id, status);
         return Result.ok();
     }
@@ -97,7 +94,6 @@ public class EvaluationTemplateController {
     public Result<Void> setOverride(HttpServletRequest request,
                                     @PathVariable Long teachInfoId,
                                     @RequestBody(required = false) TemplateOverrideRequest body) {
-        authFacade.requireAcademicAdmin(request);
         templateService.setOverride(teachInfoId, body);
         return Result.ok();
     }
@@ -106,7 +102,6 @@ public class EvaluationTemplateController {
     @GetMapping("/override/{teachInfoId}")
     public Result<TemplateResponse> getOverride(HttpServletRequest request,
                                                 @PathVariable Long teachInfoId) {
-        authFacade.requireAcademicAdmin(request);
         return Result.ok(templateService.getOverride(teachInfoId));
     }
 }

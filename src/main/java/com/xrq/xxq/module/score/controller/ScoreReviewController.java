@@ -22,6 +22,8 @@ import com.xrq.xxq.module.score.dto.ReviewView;
 import com.xrq.xxq.module.score.entity.ReviewStatusEnum;
 import com.xrq.xxq.module.score.service.ScoreReviewService;
 import com.xrq.xxq.util.auth.AuthFacade;
+import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.UserType;
 
 import lombok.RequiredArgsConstructor;
 
@@ -39,55 +41,62 @@ public class ScoreReviewController {
     private final AuthFacade authFacade;
 
     /** 学生提交复核申请。 */
+    @RequireAuth(UserType.STUDENT)
     @PostMapping
     public Result<ReviewView> apply(HttpServletRequest request,
                                     @RequestBody ReviewApplyRequest body) {
-        Long studentUserId = authFacade.requireStudentUserId(request);
+        Long studentUserId = authFacade.currentUserId(request);
         return Result.ok(scoreReviewService.apply(body, studentUserId));
     }
 
     /** 学生查询自己的复核申请。 */
+    @RequireAuth(UserType.STUDENT)
     @GetMapping("/my")
     public Result<List<ReviewView>> listMy(HttpServletRequest request) {
-        Long studentUserId = authFacade.requireStudentUserId(request);
+        Long studentUserId = authFacade.currentUserId(request);
         return Result.ok(scoreReviewService.listMy(studentUserId));
     }
 
     /** 处理人查询待办（教师其课程 / 教务全部，可按状态过滤）。 */
+    @RequireAuth({UserType.TEACHER, UserType.ACADEMIC_ADMIN})
     @GetMapping
     public Result<PageResult<ReviewView>> listForHandler(HttpServletRequest request,
                                                          @RequestParam(required = false) ReviewStatusEnum status,
                                                          @RequestParam(required = false) Integer page,
                                                          @RequestParam(required = false) Integer pageSize) {
-        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request,
-                AuthFacade.USER_TYPE_TEACHER, AuthFacade.USER_TYPE_ACADEMIC_ADMIN);
-        return Result.ok(scoreReviewService.listForHandler(ctx.userId(), ctx.userType(), status, new PageQuery(page, pageSize)));
+        Long userId = authFacade.currentUserId(request);
+        String userType = authFacade.currentUserType(request);
+        return Result.ok(scoreReviewService.listForHandler(userId, userType, status, new PageQuery(page, pageSize)));
     }
 
     /** 教师回复复核申请（可调分）。 */
+    @RequireAuth(UserType.TEACHER)
     @PostMapping("/{id}/reply")
     public Result<ReviewView> teacherReply(HttpServletRequest request,
                                            @PathVariable Long id,
                                            @RequestBody ReviewReplyRequest body) {
-        AuthFacade.AuthContext ctx = authFacade.requireUserTypesContext(request, AuthFacade.USER_TYPE_TEACHER);
-        return Result.ok(scoreReviewService.teacherReply(id, body, ctx.userId(), ctx.userType()));
+        Long userId = authFacade.currentUserId(request);
+        String userType = authFacade.currentUserType(request);
+        return Result.ok(scoreReviewService.teacherReply(id, body, userId, userType));
     }
 
     /** 学生升级到教务。 */
+    @RequireAuth(UserType.STUDENT)
     @PostMapping("/{id}/escalate")
     public Result<Void> escalate(HttpServletRequest request,
                                  @PathVariable Long id) {
-        Long studentUserId = authFacade.requireStudentUserId(request);
+        Long studentUserId = authFacade.currentUserId(request);
         scoreReviewService.escalate(id, studentUserId);
         return Result.ok();
     }
 
     /** 教务终审（可调分并锁定成绩）。 */
+    @RequireAuth(UserType.ACADEMIC_ADMIN)
     @PostMapping("/{id}/resolve")
     public Result<ReviewView> adminResolve(HttpServletRequest request,
                                            @PathVariable Long id,
                                            @RequestBody ReviewResolveRequest body) {
-        Long adminUserId = authFacade.requireAcademicAdminUserId(request);
+        Long adminUserId = authFacade.currentUserId(request);
         return Result.ok(scoreReviewService.adminResolve(id, body, adminUserId));
     }
 }

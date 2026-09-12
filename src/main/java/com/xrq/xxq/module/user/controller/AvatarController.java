@@ -1,6 +1,7 @@
 package com.xrq.xxq.module.user.controller;
 
 import com.xrq.xxq.module.user.service.avatar.AvatarService;
+import com.xrq.xxq.util.auth.RequireAuth;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/avatar")
 @RequiredArgsConstructor
+@RequireAuth()
 public class AvatarController {
 
     private final AvatarService avatarService;

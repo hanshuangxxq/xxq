@@ -19,6 +19,8 @@ import com.xrq.xxq.module.analysis.dto.ItemResponse;
 import com.xrq.xxq.module.analysis.dto.ItemUpdateRequest;
 import com.xrq.xxq.module.analysis.service.EvaluationItemService;
 import com.xrq.xxq.util.auth.AuthFacade;
+import com.xrq.xxq.util.auth.RequireAuth;
+import com.xrq.xxq.util.auth.UserType;
 
 import lombok.RequiredArgsConstructor;
 
@@ -30,6 +32,7 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/api/analysis/evaluation-items")
 @RequiredArgsConstructor
+@RequireAuth(UserType.ACADEMIC_ADMIN)
 public class EvaluationItemController {
 
     private final EvaluationItemService itemService;
@@ -38,13 +41,12 @@ public class EvaluationItemController {
     @PostMapping
     public Result<ItemResponse> create(HttpServletRequest request,
                                        @RequestBody ItemCreateRequest body) {
-        Long userId = authFacade.requireAcademicAdminUserId(request);
+        Long userId = authFacade.currentUserId(request);
         return Result.ok(itemService.createItem(body, userId));
     }
 
     @GetMapping
     public Result<List<ItemResponse>> list(HttpServletRequest request) {
-        authFacade.requireAcademicAdmin(request);
         return Result.ok(itemService.listItems());
     }
 
@@ -52,14 +54,12 @@ public class EvaluationItemController {
     public Result<ItemResponse> update(HttpServletRequest request,
                                        @PathVariable Long id,
                                        @RequestBody ItemUpdateRequest body) {
-        authFacade.requireAcademicAdmin(request);
         return Result.ok(itemService.updateItem(id, body));
     }
 
     @DeleteMapping("/{id}")
     public Result<Void> delete(HttpServletRequest request,
                                @PathVariable Long id) {
-        authFacade.requireAcademicAdmin(request);
         itemService.deleteItem(id);
         return Result.ok();
     }

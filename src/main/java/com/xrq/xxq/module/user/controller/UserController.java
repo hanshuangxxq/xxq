@@ -5,6 +5,7 @@ import com.xrq.xxq.module.user.dto.UpdateProfileRequest;
 import com.xrq.xxq.module.user.dto.UserProfileResponse;
 import com.xrq.xxq.module.user.service.UserService;
 import com.xrq.xxq.module.user.service.avatar.AvatarService;
+import com.xrq.xxq.util.auth.RequireAuth;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -14,6 +15,7 @@ import java.io.IOException;
 @RestController
 @RequestMapping("/api/user")
 @RequiredArgsConstructor
+@RequireAuth()
 public class UserController {
 
     private final UserService userService;
