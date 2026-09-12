@@ -125,7 +125,7 @@ accessToken 由登录接口返回，默认有效期 30 分钟。过期后调用�
 | POST | `/api/time-restrictions` | 新增时段限制 | 是 | 7.4 |
 | PUT | `/api/time-restrictions/{id}` | 修改时段限制 | 是 | 7.5 |
 | DELETE | `/api/time-restrictions/{id}` | 删除时段限制 | 是 | 7.6 |
-| POST | `/api/aAdmin/batch-import` | 批量导入学生和教师 | 是 | 4.5 |
+| POST | `/api/academic/batch-import` | 批量导入学生和教师 | 是 | 4.5 |
 | GET | `/api/majors` | 查询全部专业 | 是 | 4.7 |
 | POST | `/api/majors` | 新增专业 | 是 | 4.7 |
 | PUT | `/api/majors/{id}` | 修改专业 | 是 | 4.7 |
@@ -598,7 +598,7 @@ img.src = URL.createObjectURL(blob);
 仅教务管理员可操作。一次性批量导入学生和教师用户，自动将编号、班级、院系等字段写入对应的子类型表。
 
 ```
-POST /api/aAdmin/batch-import
+POST /api/academic/batch-import
 Authorization: Bearer <accessToken>
 Content-Type: application/json
 ```
