@@ -9,6 +9,9 @@ import java.lang.annotation.Target;
 /**
  * 任意已登录用户可访问，不限用户类型。等价于 {@code @RequireAuth()}。
  * <p>
+ * <b>本注解是「任意已登录」的唯一书写形式</b>：业务代码禁止直接写空参 {@code @RequireAuth()}（或裸 {@code @RequireAuth}），
+ * 空参仅作为本注解的元注解存在（见 {@code docs/注解化鉴权改造计划.md} 决策 6）。
+ * <p>
  * 组合注解：{@code AuthInterceptor} 经元注解查找 {@link RequireAuth}，行为与直接标注 {@link RequireAuth} 一致。
  * 可标在 Controller 方法或类上（方法级覆盖类级，两者皆无默认拒绝 403）。
  */
