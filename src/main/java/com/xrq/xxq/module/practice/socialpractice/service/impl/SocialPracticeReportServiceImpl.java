@@ -7,7 +7,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -18,7 +17,7 @@ import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.common.PageQuery;
 import com.xrq.xxq.common.PageResult;
-import com.xrq.xxq.common.event.PracticeNoticeEvent;
+import com.xrq.xxq.module.notification.notice.PracticeNoticeScenes;
 import com.xrq.xxq.module.practice.common.PracticeFileService;
 import com.xrq.xxq.module.practice.common.entity.AuditStatusEnum;
 import com.xrq.xxq.module.practice.common.entity.ReportStatusEnum;
@@ -48,7 +47,7 @@ public class SocialPracticeReportServiceImpl
     private final SocialPracticeApplicationMapper applicationMapper;
     private final UserMapper userMapper;
     private final PracticeFileService fileService;
-    private final ApplicationEventPublisher eventPublisher;
+    private final PracticeNoticeScenes practiceNoticeScenes;
 
     @Override
     @Transactional
@@ -117,9 +116,7 @@ public class SocialPracticeReportServiceImpl
         report.setReviewTime(LocalDateTime.now());
         report.setStatus(ReportStatusEnum.REVIEWED);
         updateById(report);
-        String title = "社会实践报告评审结果";
-        String content = "您的实践《" + practice.getTitle() + "》报告已评审完成。";
-        eventPublisher.publishEvent(new PracticeNoticeEvent(report.getStudentId(), title, content));
+        practiceNoticeScenes.socialPracticeReportReviewed(report.getStudentId(), practice.getTitle());
         return toResponse(report, practice.getTitle(), nameOf(report.getStudentId()));
     }
 

@@ -7,7 +7,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,7 +17,7 @@ import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.common.PageQuery;
 import com.xrq.xxq.common.PageResult;
-import com.xrq.xxq.common.event.PracticeNoticeEvent;
+import com.xrq.xxq.module.notification.notice.PracticeNoticeScenes;
 import com.xrq.xxq.module.practice.common.entity.AuditStatusEnum;
 import com.xrq.xxq.module.practice.socialpractice.dto.SocialPracticeApplicationResponse;
 import com.xrq.xxq.module.practice.socialpractice.dto.SocialPracticeApplyRequest;
@@ -47,7 +46,7 @@ public class SocialPracticeServiceImpl
     private final SocialPracticeApplicationMapper applicationMapper;
     private final UserMapper userMapper;
     private final SemesterService semesterService;
-    private final ApplicationEventPublisher eventPublisher;
+    private final PracticeNoticeScenes practiceNoticeScenes;
 
     @Override
     @Transactional
@@ -218,10 +217,7 @@ public class SocialPracticeServiceImpl
                     .eq(SocialPractice::getId, practice.getId())
                     .setSql("selected_count = GREATEST(selected_count - 1, 0)"));
         }
-        String title = "社会实践申报审核结果";
-        String content = "您的实践《" + practice.getTitle() + "》申报"
-                + (request.getApproved() ? "已通过" : "已被驳回") + "。";
-        eventPublisher.publishEvent(new PracticeNoticeEvent(app.getStudentId(), title, content));
+        practiceNoticeScenes.socialPracticeReviewed(app.getStudentId(), practice.getTitle(), request.getApproved());
         return toAppResponse(app, practice.getTitle(), nameOf(app.getStudentId()));
     }
 

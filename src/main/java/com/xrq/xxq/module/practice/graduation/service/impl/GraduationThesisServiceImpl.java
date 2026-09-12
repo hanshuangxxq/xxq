@@ -22,7 +22,6 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -30,7 +29,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
-import com.xrq.xxq.common.event.PracticeNoticeEvent;
+import com.xrq.xxq.module.notification.notice.PracticeNoticeScenes;
 import com.xrq.xxq.module.practice.common.PracticeFileService;
 import com.xrq.xxq.module.practice.graduation.dto.DuplicateCheckRegisterRequest;
 import com.xrq.xxq.module.practice.graduation.dto.DuplicateCheckResponse;
@@ -81,7 +80,7 @@ public class GraduationThesisServiceImpl
     private final StudentScopeResolver scopeResolver;
     private final PracticeFileService fileService;
     private final GraduationLogService logService;
-    private final ApplicationEventPublisher eventPublisher;
+    private final PracticeNoticeScenes practiceNoticeScenes;
 
     @Override
     @Transactional
@@ -181,10 +180,8 @@ public class GraduationThesisServiceImpl
         thesis.setReviewComment(request.getComment());
         thesis.setReviewTime(LocalDateTime.now());
         baseMapper.updateById(thesis);
-        eventPublisher.publishEvent(new PracticeNoticeEvent(thesis.getStudentId(),
-                "毕业论文形式审查结果",
-                "你的论文《" + thesis.getTitle() + "》"
-                        + (request.getApprove() ? "已通过形式审查，进入查重环节。" : "被退回修改：" + request.getComment())));
+        practiceNoticeScenes.thesisFormReviewed(thesis.getStudentId(), thesis.getTitle(),
+                request.getApprove(), request.getComment());
         logService.record(thesis.getCampaignId(), teacherUserId, "teacher", "论文形式审查",
                 "graduation_thesis", thesisId, "结果: " + (request.getApprove() ? "通过" : "退回"));
         return toResponse(thesis);
@@ -226,12 +223,9 @@ public class GraduationThesisServiceImpl
         thesis.setStatus(request.getResult() == com.xrq.xxq.module.practice.graduation.entity.DuplicateResultEnum.PASS
                 ? ThesisStatusEnum.DUPLICATE_PASSED : ThesisStatusEnum.DUPLICATE_FAILED);
         baseMapper.updateById(thesis);
-        eventPublisher.publishEvent(new PracticeNoticeEvent(thesis.getStudentId(),
-                "论文查重结果",
-                "你的论文《" + thesis.getTitle() + "》查重"
-                        + (request.getResult() == com.xrq.xxq.module.practice.graduation.entity.DuplicateResultEnum.PASS
-                                ? "通过（重复率 " + request.getDuplicateRate() + "%），可进入答辩环节。"
-                                : "不通过（重复率 " + request.getDuplicateRate() + "%），请在规定时间内修改后重新提交。")));
+        practiceNoticeScenes.thesisDuplicateChecked(thesis.getStudentId(), thesis.getTitle(),
+                request.getResult() == com.xrq.xxq.module.practice.graduation.entity.DuplicateResultEnum.PASS,
+                request.getDuplicateRate());
         logService.record(thesis.getCampaignId(), academicUserId, "academic_admin", "登记查重结果",
                 "graduation_duplicate_check", check.getId(),
                 "论文: " + thesis.getId() + ", 重复率: " + request.getDuplicateRate() + "%"

@@ -6,14 +6,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
-import com.xrq.xxq.common.event.PracticeNoticeEvent;
+import com.xrq.xxq.module.notification.notice.PracticeNoticeScenes;
 import com.xrq.xxq.module.practice.graduation.dto.ProposalDeclareRequest;
 import com.xrq.xxq.module.practice.graduation.dto.ProposalResponse;
 import com.xrq.xxq.module.practice.graduation.dto.ProposalReviewRequest;
@@ -51,7 +50,7 @@ public class GraduationProposalServiceImpl
     private final StudentScopeResolver scopeResolver;
     private final DistributedLock distributedLock;
     private final GraduationLogService logService;
-    private final ApplicationEventPublisher eventPublisher;
+    private final PracticeNoticeScenes practiceNoticeScenes;
 
     @Override
     @Transactional
@@ -176,11 +175,8 @@ public class GraduationProposalServiceImpl
                 "graduation_proposal", proposal.getId(),
                 "结果: " + (approve ? "通过" : "驳回") + ", 题目: " + proposal.getTitle());
 
-        String content = "您的选题《" + proposal.getTitle() + "》"
-                + (stage == ProposalReviewStageEnum.DEPT ? "院系初审" : "教务终审")
-                + (approve ? "已通过。" : "被驳回：" + request.getComment());
-        eventPublisher.publishEvent(new PracticeNoticeEvent(proposal.getStudentId(),
-                "毕业选题审批结果", content));
+        practiceNoticeScenes.proposalReviewed(proposal.getStudentId(), proposal.getTitle(),
+                stage == ProposalReviewStageEnum.DEPT ? "院系初审" : "教务终审", approve, request.getComment());
         return toResponse(proposal, studentName(proposal.getStudentId()), studentNo(proposal.getStudentId()));
     }
 

@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -14,7 +13,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
-import com.xrq.xxq.common.event.PracticeNoticeEvent;
+import com.xrq.xxq.module.notification.notice.PracticeNoticeScenes;
 import com.xrq.xxq.module.practice.common.PracticeFileService;
 import com.xrq.xxq.module.practice.graduation.dto.GuidanceLogCreateRequest;
 import com.xrq.xxq.module.practice.graduation.dto.GuidanceLogResponse;
@@ -61,7 +60,7 @@ public class GraduationProcessServiceImpl
     private final StudentScopeResolver scopeResolver;
     private final PracticeFileService fileService;
     private final GraduationLogService logService;
-    private final ApplicationEventPublisher eventPublisher;
+    private final PracticeNoticeScenes practiceNoticeScenes;
 
     // ==================== 开题报告 ====================
 
@@ -137,10 +136,8 @@ public class GraduationProcessServiceImpl
         report.setReviewComment(request.getComment());
         report.setReviewTime(LocalDateTime.now());
         baseMapper.updateById(report);
-        eventPublisher.publishEvent(new PracticeNoticeEvent(report.getStudentId(),
-                "开题报告审核结果",
-                "你的开题报告《" + report.getTitle() + "》"
-                        + (request.getApprove() ? "已通过。" : "被退回修改：" + request.getComment())));
+        practiceNoticeScenes.openingReportReviewed(report.getStudentId(), report.getTitle(),
+                request.getApprove(), request.getComment());
         logService.record(report.getCampaignId(), teacherUserId, "teacher", "审核开题报告",
                 "graduation_opening_report", reportId,
                 "结果: " + (request.getApprove() ? "通过" : "退回"));
@@ -249,10 +246,8 @@ public class GraduationProcessServiceImpl
         midterm.setReviewComment(request.getComment());
         midterm.setReviewTime(LocalDateTime.now());
         midtermMapper.updateById(midterm);
-        eventPublisher.publishEvent(new PracticeNoticeEvent(midterm.getStudentId(),
-                "中期检查评审结果",
-                "你的中期检查结论：" + request.getConclusion().getDescription()
-                        + (request.getComment() != null ? "，" + request.getComment() : "") + "。"));
+        practiceNoticeScenes.midtermReviewed(midterm.getStudentId(), request.getConclusion().getDescription(),
+                request.getComment());
         logService.record(midterm.getCampaignId(), teacherUserId, "teacher", "评审中期检查",
                 "graduation_midterm", midtermId, "结论: " + request.getConclusion().getDescription());
         return toMidtermResponse(midterm);

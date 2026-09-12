@@ -11,14 +11,13 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
-import com.xrq.xxq.common.event.PracticeNoticeEvent;
+import com.xrq.xxq.module.notification.notice.PracticeNoticeScenes;
 import com.xrq.xxq.module.practice.graduation.dto.DefenseArrangeRequest;
 import com.xrq.xxq.module.practice.graduation.dto.DefenseResponse;
 import com.xrq.xxq.module.practice.graduation.dto.ScoreConfirmRequest;
@@ -63,7 +62,7 @@ public class GraduationDefenseServiceImpl
     private final CollegeMapper collegeMapper;
     private final StudentScopeResolver scopeResolver;
     private final GraduationLogService logService;
-    private final ApplicationEventPublisher eventPublisher;
+    private final PracticeNoticeScenes practiceNoticeScenes;
 
     @Override
     @Transactional
@@ -206,10 +205,8 @@ public class GraduationDefenseServiceImpl
         score.setPublishTime(LocalDateTime.now());
         scoreMapper.updateById(score);
         GraduationCampaign campaign = campaignMapper.selectById(request.getCampaignId());
-        eventPublisher.publishEvent(new PracticeNoticeEvent(request.getStudentId(),
-                "毕设成绩发布",
-                "你的毕业设计总评成绩已发布：" + score.getTotalScore()
-                        + "分" + (campaign != null ? "（" + campaign.getName() + "）" : "") + "。"));
+        practiceNoticeScenes.defenseScorePublished(request.getStudentId(), score.getTotalScore(),
+                campaign != null ? campaign.getName() : null);
         logService.record(request.getCampaignId(), deptUserId, "department", "发布成绩",
                 "graduation_score", score.getId(),
                 "学生: " + request.getStudentId() + ", 总评: " + score.getTotalScore());

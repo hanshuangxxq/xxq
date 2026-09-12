@@ -9,14 +9,13 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
-import com.xrq.xxq.common.event.PracticeNoticeEvent;
+import com.xrq.xxq.module.notification.notice.PracticeNoticeScenes;
 import com.xrq.xxq.module.practice.graduation.dto.AllocationRequest;
 import com.xrq.xxq.module.practice.graduation.dto.AssignmentOverviewRow;
 import com.xrq.xxq.module.practice.graduation.dto.AssignmentResponse;
@@ -57,7 +56,7 @@ public class GraduationAssignmentServiceImpl
     private final StudentScopeResolver scopeResolver;
     private final DistributedLock distributedLock;
     private final GraduationLogService logService;
-    private final ApplicationEventPublisher eventPublisher;
+    private final PracticeNoticeScenes practiceNoticeScenes;
 
     @Override
     @Transactional
@@ -91,9 +90,7 @@ public class GraduationAssignmentServiceImpl
             assignment.setSource(AssignmentSourceEnum.TEACHER_PICK);
             assignment.setAssignTime(LocalDateTime.now());
             baseMapper.insert(assignment);
-            String title = "毕业选题匹配结果";
-            String content = "教师已选择你作为指导对象，指导教师：" + nameOf(teacherUserId) + "。";
-            eventPublisher.publishEvent(new PracticeNoticeEvent(request.getStudentId(), title, content));
+            practiceNoticeScenes.teacherPicked(request.getStudentId(), nameOf(teacherUserId));
             logService.record(campaign.getId(), teacherUserId, "teacher", "教师自选学生",
                     "graduation_assignment", assignment.getId(), "学生: " + request.getStudentId());
             return toResponse(assignment);
@@ -163,9 +160,7 @@ public class GraduationAssignmentServiceImpl
             assignment.setSource(AssignmentSourceEnum.DEPT_ALLOCATE);
             assignment.setAssignTime(LocalDateTime.now());
             baseMapper.insert(assignment);
-            String title = "毕业选题匹配结果";
-            String content = "院系已为你指定指导教师：" + nameOf(request.getTeacherId()) + "。";
-            eventPublisher.publishEvent(new PracticeNoticeEvent(request.getStudentId(), title, content));
+            practiceNoticeScenes.deptAllocated(request.getStudentId(), nameOf(request.getTeacherId()));
             logService.record(campaign.getId(), deptUserId, "department", "院系指定分配",
                     "graduation_assignment", assignment.getId(),
                     "学生: " + request.getStudentId() + ", 教师: " + request.getTeacherId());
@@ -218,10 +213,8 @@ public class GraduationAssignmentServiceImpl
             assignment.setReassignBy(deptUserId);
             assignment.setReassignTime(LocalDateTime.now());
             baseMapper.updateById(assignment);
-            String title = "毕业选题改派通知";
-            String content = "你的指导教师已调整为：" + nameOf(request.getNewTeacherId())
-                    + "，原因：" + request.getReason();
-            eventPublisher.publishEvent(new PracticeNoticeEvent(request.getStudentId(), title, content));
+            practiceNoticeScenes.reassigned(request.getStudentId(), nameOf(request.getNewTeacherId()),
+                    request.getReason());
             logService.record(campaign.getId(), deptUserId, "department", "改派学生",
                     "graduation_assignment", assignment.getId(),
                     "学生: " + request.getStudentId() + ", 原教师: " + assignment.getPrevTeacherId()

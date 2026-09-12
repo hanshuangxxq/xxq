@@ -7,7 +7,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,7 +16,7 @@ import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.common.PageQuery;
 import com.xrq.xxq.common.PageResult;
-import com.xrq.xxq.common.event.PracticeNoticeEvent;
+import com.xrq.xxq.module.notification.notice.PracticeNoticeScenes;
 import com.xrq.xxq.module.practice.common.entity.AuditStatusEnum;
 import com.xrq.xxq.module.practice.competition.dto.CompetitionCreateRequest;
 import com.xrq.xxq.module.practice.competition.dto.CompetitionResponse;
@@ -51,7 +50,7 @@ public class CompetitionServiceImpl
     private final CompetitionResultMapper resultMapper;
     private final UserMapper userMapper;
     private final SemesterService semesterService;
-    private final ApplicationEventPublisher eventPublisher;
+    private final PracticeNoticeScenes practiceNoticeScenes;
 
     @Override
     @Transactional
@@ -210,10 +209,7 @@ public class CompetitionServiceImpl
         reg.setReviewComment(request.getReviewComment());
         reg.setReviewTime(LocalDateTime.now());
         registrationMapper.updateById(reg);
-        String title = "竞赛报名审核结果";
-        String content = "您的竞赛《" + competition.getName() + "》报名"
-                + (request.getApproved() ? "已通过" : "已被驳回") + "。";
-        eventPublisher.publishEvent(new PracticeNoticeEvent(reg.getStudentId(), title, content));
+        practiceNoticeScenes.competitionReviewed(reg.getStudentId(), competition.getName(), request.getApproved());
         return toRegResponse(reg, competition.getName(), nameOf(reg.getStudentId()));
     }
 
@@ -286,9 +282,8 @@ public class CompetitionServiceImpl
         } else {
             resultMapper.updateById(result);
         }
-        String title = "竞赛结果通知";
-        String content = "您在竞赛《" + competition.getName() + "》中获奖：" + request.getAward().getDescription() + "。";
-        eventPublisher.publishEvent(new PracticeNoticeEvent(reg.getStudentId(), title, content));
+        practiceNoticeScenes.competitionAwarded(reg.getStudentId(), competition.getName(),
+                request.getAward().getDescription());
         return toResultResponse(result, competition.getName(), nameOf(reg.getStudentId()));
     }
 

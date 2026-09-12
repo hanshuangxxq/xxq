@@ -7,7 +7,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,7 +17,7 @@ import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.common.PageQuery;
 import com.xrq.xxq.common.PageResult;
-import com.xrq.xxq.common.event.PracticeNoticeEvent;
+import com.xrq.xxq.module.notification.notice.PracticeNoticeScenes;
 import com.xrq.xxq.module.practice.common.entity.AuditStatusEnum;
 import com.xrq.xxq.module.practice.internship.cache.InternshipPendingStore;
 import com.xrq.xxq.module.practice.internship.dto.InternshipApplicationResponse;
@@ -49,7 +48,7 @@ public class InternshipServiceImpl
     private final InternshipApplicationMapper applicationMapper;
     private final UserMapper userMapper;
     private final SemesterService semesterService;
-    private final ApplicationEventPublisher eventPublisher;
+    private final PracticeNoticeScenes practiceNoticeScenes;
     private final InternshipPendingStore pendingStore;
 
     @Override
@@ -244,10 +243,7 @@ public class InternshipServiceImpl
         app.setReviewTime(LocalDateTime.now());
         applicationMapper.updateById(app);
         pendingStore.unmarkPending(app.getInternshipId(), app.getStudentId());
-        String title = "实习报名审核结果";
-        String content = "您的实习《" + internship.getTitle() + "》报名"
-                + (request.getApproved() ? "已通过" : "已被驳回") + "。";
-        eventPublisher.publishEvent(new PracticeNoticeEvent(app.getStudentId(), title, content));
+        practiceNoticeScenes.internshipReviewed(app.getStudentId(), internship.getTitle(), request.getApproved());
         return toAppResponse(app, internship.getTitle(), nameOf(app.getStudentId()));
     }
 
