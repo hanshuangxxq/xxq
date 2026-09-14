@@ -51,7 +51,7 @@ public abstract class AbstractLoginService implements LoginService {
         }
 
         String newAccessToken = jwtUtils.generateAccessToken(
-                session.getUserId(), session.getUserType(), session.getRole(), refreshToken);
+                session.getUserId(), session.getUserType(), refreshToken);
         session.setAccessToken(newAccessToken);
 
         sessionStore.put(refreshToken, session);
@@ -113,7 +113,7 @@ public abstract class AbstractLoginService implements LoginService {
     protected UserSession buildSession(User user, String account) {
         String tokenId = UUID.randomUUID().toString().replace("-", "");
         String accessToken = jwtUtils.generateAccessToken(
-                user.getId(), user.getUserType(), user.getRole(), tokenId);
+                user.getId(), user.getUserType(), tokenId);
 
         UserSession session = new UserSession();
         session.setUserId(user.getId());
@@ -121,7 +121,6 @@ public abstract class AbstractLoginService implements LoginService {
         session.setName(user.getName());
         session.setAccount(account);
         session.setAvatar(user.getAvatar());
-        session.setRole(user.getRole());
         session.setTokenId(tokenId);
         session.setAccessToken(accessToken);
         session.setRefreshToken(tokenId);

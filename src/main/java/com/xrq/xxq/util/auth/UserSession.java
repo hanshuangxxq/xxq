@@ -15,7 +15,6 @@ public class UserSession {
     private String name;
     private String account;
     private String avatar;
-    private String role;
     private String accessToken;
     private String refreshToken;
     @JsonIgnore

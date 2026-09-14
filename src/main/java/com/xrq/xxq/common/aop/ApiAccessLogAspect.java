@@ -27,7 +27,7 @@ import java.util.regex.Pattern;
 
 /**
  * Controller 访问日志切面：拦截所有 {@code @RestController} 方法，记录
- * 「谁（userId/userType/role + 客户端 IP）、访问了哪个接口（HTTP 方法 + URI + 控制器方法）、
+ * 「谁（userId/userType + 客户端 IP）、访问了哪个接口（HTTP 方法 + URI + 控制器方法）、
  * 干了什么（请求参数）、耗时多久」。
  * <p>
  * 用户上下文由 {@link com.xrq.xxq.config.AuthInterceptor} 解析 JWT 后注入 request attribute，
@@ -110,8 +110,8 @@ public class ApiAccessLogAspect {
             // /api/login、/api/login/refresh 等放行接口，attribute 尚未注入
             return "用户[匿名]";
         }
-        return "用户[userId=%d, userType=%s, role=%s]".formatted(
-                userId, authFacade.currentUserType(request), authFacade.currentRole(request));
+        return "用户[userId=%d, userType=%s]".formatted(
+                userId, authFacade.currentUserType(request));
     }
 
     /**

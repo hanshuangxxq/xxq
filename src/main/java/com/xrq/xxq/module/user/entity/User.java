@@ -20,7 +20,6 @@ public class User {
     private GenderEnum gender;
     private String avatar;
     private String description;
-    private String role;
     private LocalDateTime lastLoginTime;
     private LocalDateTime createTime;
     private Integer status;

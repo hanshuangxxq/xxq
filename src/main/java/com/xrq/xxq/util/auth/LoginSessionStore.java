@@ -58,7 +58,7 @@ public class LoginSessionStore {
      * <p>
      * 安全权衡：登出删除会话后，在 token 有效期内（默认 30m）仍可被重建访问。
      */
-    public UserSession rebuildIfNeeded(String tokenId, Long userId, String userType, String role) {
+    public UserSession rebuildIfNeeded(String tokenId, Long userId, String userType) {
         UserSession existing = get(tokenId);
         if (existing != null) {
             return existing;
@@ -66,7 +66,6 @@ public class LoginSessionStore {
         UserSession session = new UserSession();
         session.setUserId(userId);
         session.setUserType(userType);
-        session.setRole(role);
         session.setTokenId(tokenId);
         session.setLoginTime(LocalDateTime.now());
         login(userId, tokenId, session);

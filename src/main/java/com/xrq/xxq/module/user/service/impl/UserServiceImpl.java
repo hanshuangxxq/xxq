@@ -57,7 +57,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         profile.setGender(user.getGender());
         profile.setAvatar(user.getAvatar());
         profile.setDescription(user.getDescription());
-        profile.setRole(user.getRole());
         profile.setUserType(user.getUserType());
         profile.setCreateTime(user.getCreateTime());
         profile.setStatus(user.getStatus());

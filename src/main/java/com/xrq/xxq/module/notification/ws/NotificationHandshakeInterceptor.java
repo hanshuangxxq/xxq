@@ -55,8 +55,7 @@ public class NotificationHandshakeInterceptor implements HandshakeInterceptor {
                 // token 仍有效但 Redis 无会话（如后端/Redis 重启）：重建最小会话，免重连重登
                 sessionStore.rebuildIfNeeded(tokenId,
                         Long.valueOf(claims.getSubject()),
-                        claims.get("userType", String.class),
-                        claims.get("role", String.class));
+                        claims.get("userType", String.class));
             }
             Long userId = Long.valueOf(claims.getSubject());
             attributes.put(ATTR_USER_ID, userId);

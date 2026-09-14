@@ -23,7 +23,7 @@ import java.io.IOException;
 /**
  * 登录门禁 + 类型鉴权拦截器。
  * <p>
- * 1. 解析 Bearer JWT 并校验 Redis 会话，将 userId/userType/role/tokenId 注入 request attribute；
+ * 1. 解析 Bearer JWT 并校验 Redis 会话，将 userId/userType/tokenId 注入 request attribute；
  * 2. 执行 {@link RequireAuth} 注解鉴权：方法级优先、类级兜底，两者皆无默认拒绝（403），
  *    {@code value()} 为空数组表示任意已登录用户。无 token/过期/无效一律 401，先于 403。
  */
@@ -52,7 +52,6 @@ public class AuthInterceptor implements HandlerInterceptor {
             Claims claims = jwtUtils.parseToken(token);
             request.setAttribute("userId", Long.valueOf(claims.getSubject()));
             request.setAttribute("userType", claims.get("userType", String.class));
-            request.setAttribute("role", claims.get("role", String.class));
             request.setAttribute("tokenId", claims.get("tokenId", String.class));
 
             String tokenId = claims.get("tokenId", String.class);
@@ -63,8 +62,7 @@ public class AuthInterceptor implements HandlerInterceptor {
                 // 安全权衡：登出后在此 token 有效期内（默认 30m）仍可被重建访问。
                 session = sessionStore.rebuildIfNeeded(tokenId,
                         Long.valueOf(claims.getSubject()),
-                        claims.get("userType", String.class),
-                        claims.get("role", String.class));
+                        claims.get("userType", String.class));
             }
             // 登录成功时登记的内网 IP 带入请求上下文，供访问日志按「公网IP|内网IP」显示；
             // 无登记（内网 IP 获取失败/重建会话/存量旧会话）则不注入，日志回退实时解析的 IP。

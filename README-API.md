@@ -70,7 +70,6 @@ accessToken 由登录接口返回，默认有效期 30 分钟。过期后调用�
 |-----------|------|
 | userId | JWT subject |
 | userType | JWT claim |
-| role | JWT claim |
 | tokenId | JWT claim（指向 Redis 中的 session） |
 
 ---
@@ -262,7 +261,6 @@ Content-Type: application/json
     "name": "zhangsan",
     "account": "zhangsan",
     "avatar": null,
-    "role": null,
     "accessToken": "eyJhbGciOi...",
     "refreshToken": "a1b2c3d4e5f6...",
     "loginTime": "2026-06-26T10:30:00",
@@ -280,7 +278,6 @@ Content-Type: application/json
 | name | String | 用户名 |
 | account | String | 登录时使用的账号 |
 | avatar | String | 头像文件名 |
-| role | String | 角色 |
 | accessToken | String | JWT 访问令牌（30 分钟有效，后续请求放入 Authorization 头） |
 | refreshToken | String | 刷新令牌（7 天有效，值等于 tokenId） |
 | loginTime | LocalDateTime | 本次登录时间 |
@@ -434,7 +431,6 @@ Authorization: Bearer <accessToken>
     "gender": null,
     "avatar": null,
     "description": null,
-    "role": null,
     "userType": "student",
     "lastLoginTime": "2026-06-25T15:20:00",
     "createTime": "2026-06-20T08:00:00",
@@ -466,7 +462,6 @@ Authorization: Bearer <accessToken>
 | gender | GenderEnum | 性别 |
 | avatar | String | 头像文件名（通过 `/api/avatar/{filename}` 获取图片） |
 | description | String | 个人简介 |
-| role | String | 角色 |
 | userType | String | `teacher` / `student` / `dean` |
 | lastLoginTime | LocalDateTime | 上次登录时间 |
 | createTime | LocalDateTime | 注册时间 |
@@ -531,7 +526,7 @@ Content-Type: application/json
 }
 ```
 
-> 不可修改字段：`name`、`password`、`userType`、`role`、`status`。
+> 不可修改字段：`name`、`password`、`userType`、`status`。
 
 ### 4.3 头像上传
 
@@ -786,7 +781,7 @@ Authorization: Bearer <accessToken>
 }
 ```
 
-> 出于隐私保护，以下字段不返回：`gender`（性别）、`avatar`（头像）、`description`（描述）、`role`（权限）、`lastLoginTime`（上次登录时间）、`status`（状态）、`password`（密码）。
+> 出于隐私保护，以下字段不返回：`gender`（性别）、`avatar`（头像）、`description`（描述）、`lastLoginTime`（上次登录时间）、`status`（状态）、`password`（密码）。
 
 **StudentDto 字段说明**
 

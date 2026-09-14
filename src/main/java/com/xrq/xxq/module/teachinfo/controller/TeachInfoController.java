@@ -161,7 +161,7 @@ public class TeachInfoController {
     @GetMapping("/draft/classes")
     @RequireLogin
     public Result<java.util.Map<String, Object>> getDraftClasses(HttpServletRequest request) {
-        List<DraftItem> drafts = resolveDraftsByRole(request);
+        List<DraftItem> drafts = resolveDraftsByUserType(request);
         var result = new java.util.LinkedHashMap<String, Object>();
 
         // 学期信息：从草稿中提取学期ID并查询学期名称
@@ -283,7 +283,7 @@ public class TeachInfoController {
 
     // ──────────────────────── 权限校验 ────────────────────────
 
-    private List<DraftItem> resolveDraftsByRole(HttpServletRequest request) {
+    private List<DraftItem> resolveDraftsByUserType(HttpServletRequest request) {
         String userType = authFacade.currentUserType(request);
 
         if (AuthFacade.USER_TYPE_ACADEMIC_ADMIN.equals(userType)) {

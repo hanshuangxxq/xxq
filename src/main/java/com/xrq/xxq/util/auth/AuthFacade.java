@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
  * 新代码禁止再调用本类的 {@code requireXxx} 方法（已标记 {@link Deprecated}，稳定后删除）。
  * <p>
  * 上下文读取仍走本类（{@code currentUserId}/{@code currentUserType} 等），
- * 禁止直接 {@code request.getAttribute("userId"/"userType"/"role"/"tokenId")}。
+ * 禁止直接 {@code request.getAttribute("userId"/"userType"/"tokenId")}。
  * 比较 {@code userType} 字符串时使用 {@code USER_TYPE_*} 常量（引用 {@link UserType} 枚举 code），
  * 不要硬编码 "student"/"academic_admin" 等字面量。
  * <p>
@@ -25,7 +25,6 @@ public class AuthFacade {
 
     public static final String ATTR_USER_ID = "userId";
     public static final String ATTR_USER_TYPE = "userType";
-    public static final String ATTR_ROLE = "role";
     public static final String ATTR_TOKEN_ID = "tokenId";
     /** 登录成功时登记的客户端 IP 显示串（公网IP|内网IP），由 AuthInterceptor 从会话注入 */
     public static final String ATTR_LOGIN_IP = "loginIp";
@@ -47,10 +46,6 @@ public class AuthFacade {
 
     public String currentUserType(HttpServletRequest request) {
         return (String) request.getAttribute(ATTR_USER_TYPE);
-    }
-
-    public String currentRole(HttpServletRequest request) {
-        return (String) request.getAttribute(ATTR_ROLE);
     }
 
     public String currentTokenId(HttpServletRequest request) {

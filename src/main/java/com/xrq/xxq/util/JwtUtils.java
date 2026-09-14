@@ -23,14 +23,13 @@ public class JwtUtils {
         this.key = Keys.hmacShaKeyFor(keyBytes);
     }
 
-    public String generateAccessToken(Long userId, String userType, String role, String tokenId) {
+    public String generateAccessToken(Long userId, String userType, String tokenId) {
         Instant now = Instant.now();
         Instant expiration = now.plus(config.getAccessTokenExpiration());
 
         return Jwts.builder()
                 .subject(userId.toString())
                 .claim("userType", userType)
-                .claim("role", role)
                 .claim("tokenId", tokenId)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(expiration))

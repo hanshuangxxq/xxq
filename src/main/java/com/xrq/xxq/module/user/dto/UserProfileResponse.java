@@ -18,7 +18,6 @@ public class UserProfileResponse {
     private GenderEnum gender;
     private String avatar;
     private String description;
-    private String role;
     private String userType;
     private LocalDateTime lastLoginTime;
     private LocalDateTime createTime;

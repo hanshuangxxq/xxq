@@ -157,7 +157,6 @@ public class BatchImportService {
         user.setName(item.getUsername().strip());
         user.setPassword(EncryptUtils.hashWithPbkdf2(item.getPassword()));
         user.setGender(parseGender(item.getGender()));
-        user.setRole(userType);
         user.setUserType(userType);
         user.setCreateTime(LocalDateTime.now());
         user.setStatus(1);
