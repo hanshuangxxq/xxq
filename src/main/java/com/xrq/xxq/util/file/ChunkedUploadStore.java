@@ -59,6 +59,9 @@ public class ChunkedUploadStore {
     private static final int BUFFER_SIZE = 64 * 1024;
     private static final String META_FILE = "meta.json";
     private static final String MERGING_SUFFIX = ".merging";
+    /** 合并半成品的精确形状：{md5}{ext}.{UUID}.merging —— 清扫过滤锚定 UUID 段，避免误删扩展名恰为 .merging 的成品。 */
+    private static final Pattern MERGING_LEFTOVER_PATTERN = Pattern.compile(
+            ".+\\.[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\.merging");
 
     @Value("${file.storage-path:uploads/files}")
     private String storagePath;
@@ -490,7 +493,7 @@ public class ChunkedUploadStore {
         }
         List<Path> mergingFiles;
         try (Stream<Path> stream = Files.walk(objectsRoot)) {
-            mergingFiles = stream.filter(p -> p.getFileName().toString().endsWith(MERGING_SUFFIX)).toList();
+            mergingFiles = stream.filter(p -> MERGING_LEFTOVER_PATTERN.matcher(p.getFileName().toString()).matches()).toList();
         } catch (IOException e) {
             log.warn("合并半成品清理扫描失败: {}", e.getMessage());
             return 0;
