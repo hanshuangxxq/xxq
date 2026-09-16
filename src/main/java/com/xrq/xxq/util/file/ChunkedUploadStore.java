@@ -52,6 +52,7 @@ public class ChunkedUploadStore {
     private static final Pattern BIZ_PATTERN = Pattern.compile("[A-Za-z0-9][A-Za-z0-9/_-]*");
     private static final Pattern MD5_PATTERN = Pattern.compile("[a-fA-F0-9]{32}");
     private static final Pattern PART_PATTERN = Pattern.compile("part-(\\d+)");
+    private static final Pattern EXT_PATTERN = Pattern.compile("\\.[a-z0-9]{1,9}");
     private static final int BUFFER_SIZE = 64 * 1024;
     private static final String META_FILE = "meta.json";
 
@@ -110,6 +111,9 @@ public class ChunkedUploadStore {
         if (totalChunks > totalSize) {
             throw new BusinessException(400, "分片数量不能超过文件字节数");
         }
+        if (totalSize - derivedChunkSize(totalSize, totalChunks) * (totalChunks - 1L) < 1) {
+            throw new BusinessException(400, "分片数量不合理：末片不足 1 字节");
+        }
 
         String ext = extensionOf(originalName);
         Path objectFile = objectFile(biz, md5Lower, ext);
@@ -145,6 +149,45 @@ public class ChunkedUploadStore {
         SessionMeta meta = readMeta(dir.resolve(META_FILE));
         return new UploadSession(meta.md5(), meta.originalName(), meta.totalSize(), meta.chunkSize(),
                 meta.totalChunks(), receivedChunks(dir, meta), null);
+    }
+
+    /**
+     * 保存一个分片：写 part-N.tmp → 校验大小 → 可选分片 MD5 验损 → 原子 rename 为 part-N（提交点）。
+     * 校验失败删 tmp 不留痕；同 index 重传幂等覆盖。返回当前已收分片数。
+     */
+    public int saveChunk(String biz, String md5, int index, InputStream data, String chunkMd5) {
+        validateBiz(biz);
+        String md5Lower = normalizeMd5(md5);
+        if (data == null) {
+            throw new BusinessException(400, "分片数据为空");
+        }
+        Path dir = chunkDir(biz, md5Lower);
+        SessionMeta meta = readMeta(dir.resolve(META_FILE));
+        if (index < 0 || index >= meta.totalChunks()) {
+            throw new BusinessException(400, "分片序号超出范围: " + index);
+        }
+        long expected = expectedChunkSize(meta, index);
+        Path tmp = dir.resolve("part-" + index + ".tmp");
+        Path part = dir.resolve("part-" + index);
+        long written;
+        try {
+            written = Files.copy(data, tmp, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            throw new BusinessException(500, "文件保存失败");
+        }
+        if (written != expected) {
+            deleteQuietly(tmp);
+            throw new BusinessException(400, "分片大小不符：期望 " + expected + " 字节，实际 " + written + " 字节");
+        }
+        if (chunkMd5 != null && !chunkMd5.isBlank()) {
+            String actual = md5OfFile(tmp);
+            if (!actual.equalsIgnoreCase(chunkMd5.trim())) {
+                deleteQuietly(tmp);
+                throw new BusinessException(400, "分片校验失败，请重传该分片");
+            }
+        }
+        moveAtomically(tmp, part);
+        return receivedChunks(dir, meta).size();
     }
 
     // ---- 内部实现 ----
@@ -186,6 +229,20 @@ public class ChunkedUploadStore {
             return objectMapper.readValue(Files.readString(metaFile), SessionMeta.class);
         } catch (IOException | RuntimeException e) {
             throw new BusinessException(500, "上传会话信息损坏");
+        }
+    }
+
+    private String md5OfFile(Path file) {
+        try (InputStream in = Files.newInputStream(file)) {
+            MessageDigest digest = MessageDigest.getInstance("MD5");
+            byte[] buffer = new byte[BUFFER_SIZE];
+            int n;
+            while ((n = in.read(buffer)) != -1) {
+                digest.update(buffer, 0, n);
+            }
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (IOException | NoSuchAlgorithmException e) {
+            throw new BusinessException(500, "文件校验计算失败");
         }
     }
 
@@ -238,14 +295,14 @@ public class ChunkedUploadStore {
         return "objects/" + biz + "/" + md5Lower + ext;
     }
 
-    /** 提取小写扩展名（含点）；无扩展名或超长（>10 字符，防异常文件名撑爆路径）按无扩展名处理。 */
+    /** 提取小写扩展名（含点）；无扩展名、含路径分隔符等非法字符或超长（>10 字符）按无扩展名处理。 */
     private static String extensionOf(String originalName) {
         int i = originalName.lastIndexOf('.');
         if (i < 0) {
             return "";
         }
         String ext = originalName.substring(i).toLowerCase();
-        return ext.length() <= 10 ? ext : "";
+        return EXT_PATTERN.matcher(ext).matches() ? ext : "";
     }
 
     private void validateBiz(String biz) {
