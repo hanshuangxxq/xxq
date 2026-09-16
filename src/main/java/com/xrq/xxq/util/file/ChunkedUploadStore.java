@@ -13,6 +13,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -221,7 +222,9 @@ public class ChunkedUploadStore {
         }
 
         createDirectories(objectsDir(biz));
-        Path merging = objectsDir(biz).resolve(md5Lower + ext + ".merging");
+        // 每次调用唯一名：并发 complete 各自合出完整正确的半成品，
+        // rename（REPLACE_EXISTING、同内容）退化为无害的 last-writer-wins
+        Path merging = objectsDir(biz).resolve(md5Lower + ext + "." + UUID.randomUUID() + ".merging");
         long actualSize;
         String actualMd5;
         try {
