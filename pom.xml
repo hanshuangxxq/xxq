@@ -168,6 +168,8 @@
     </dependencies>
 
     <build>
+        <!-- 打包产物固定命名：target/xxq.jar（不含版本号，便于部署脚本引用） -->
+        <finalName>xxq</finalName>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
