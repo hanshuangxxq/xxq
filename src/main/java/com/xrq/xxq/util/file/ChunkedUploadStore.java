@@ -2,6 +2,7 @@ package com.xrq.xxq.util.file;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -173,6 +174,7 @@ public class ChunkedUploadStore {
         try {
             written = Files.copy(data, tmp, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
+            deleteQuietly(tmp);
             throw new BusinessException(500, "文件保存失败");
         }
         if (written != expected) {
@@ -180,6 +182,10 @@ public class ChunkedUploadStore {
             throw new BusinessException(400, "分片大小不符：期望 " + expected + " 字节，实际 " + written + " 字节");
         }
         if (chunkMd5 != null && !chunkMd5.isBlank()) {
+            if (!MD5_PATTERN.matcher(chunkMd5.trim()).matches()) {
+                deleteQuietly(tmp);
+                throw new BusinessException(400, "分片 MD5 格式不正确");
+            }
             String actual = md5OfFile(tmp);
             if (!actual.equalsIgnoreCase(chunkMd5.trim())) {
                 deleteQuietly(tmp);
@@ -188,6 +194,73 @@ public class ChunkedUploadStore {
         }
         moveAtomically(tmp, part);
         return receivedChunks(dir, meta).size();
+    }
+
+    /**
+     * 合并分片为成品：分片齐全校验 → 流式合并（全程不载内存）→ 总大小与整文件 MD5 校验 →
+     * 原子 rename 至 objects/ → 删除分片目录。合并前成品已存在（并发/秒传竞态）则幂等返回。
+     * 校验失败删半成品、保留分片，可重传坏片后重试；已成功合并的会话再次 complete 按 404 处理。
+     */
+    public StoredFileInfo complete(String biz, String md5) {
+        validateBiz(biz);
+        String md5Lower = normalizeMd5(md5);
+        Path dir = chunkDir(biz, md5Lower);
+        SessionMeta meta = readMeta(dir.resolve(META_FILE));
+
+        String ext = extensionOf(meta.originalName());
+        Path objectFile = objectFile(biz, md5Lower, ext);
+        String storedPath = storedPathOf(biz, md5Lower, ext);
+        if (Files.isRegularFile(objectFile)) {
+            deleteRecursivelyQuietly(dir);
+            return new StoredFileInfo(storedPath, meta.originalName(), sizeOfQuietly(objectFile), md5Lower);
+        }
+
+        List<Integer> received = receivedChunks(dir, meta);
+        if (received.size() != meta.totalChunks()) {
+            throw new BusinessException(400, "分片未传齐：" + received.size() + "/" + meta.totalChunks());
+        }
+
+        createDirectories(objectsDir(biz));
+        Path merging = objectsDir(biz).resolve(md5Lower + ext + ".merging");
+        long actualSize;
+        String actualMd5;
+        try {
+            MessageDigest digest = MessageDigest.getInstance("MD5");
+            byte[] buffer = new byte[BUFFER_SIZE];
+            long total = 0L;
+            try (OutputStream out = Files.newOutputStream(merging,
+                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)) {
+                for (int i = 0; i < meta.totalChunks(); i++) {
+                    try (InputStream in = Files.newInputStream(dir.resolve("part-" + i))) {
+                        int n;
+                        while ((n = in.read(buffer)) != -1) {
+                            digest.update(buffer, 0, n);
+                            out.write(buffer, 0, n);
+                            total += n;
+                        }
+                    }
+                }
+            }
+            actualSize = total;
+            actualMd5 = HexFormat.of().formatHex(digest.digest());
+        } catch (IOException | NoSuchAlgorithmException e) {
+            deleteQuietly(merging);
+            throw new BusinessException(500, "文件合并失败");
+        }
+        if (actualSize != meta.totalSize() || !actualMd5.equalsIgnoreCase(meta.md5())) {
+            deleteQuietly(merging);
+            throw new BusinessException(400, "文件校验失败，请重传损坏分片后重试（或取消后重新上传）");
+        }
+        moveAtomically(merging, objectFile);
+        deleteRecursivelyQuietly(dir);
+        return new StoredFileInfo(storedPath, meta.originalName(), actualSize, md5Lower);
+    }
+
+    /** 取消上传：尽力删除分片目录（不存在的会话视为已成功）。 */
+    public void abort(String biz, String md5) {
+        validateBiz(biz);
+        String md5Lower = normalizeMd5(md5);
+        deleteRecursivelyQuietly(chunkDir(biz, md5Lower));
     }
 
     // ---- 内部实现 ----
