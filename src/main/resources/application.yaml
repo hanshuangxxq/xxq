@@ -31,3 +31,11 @@ rate-limit:
   login-ip-per-minute: 20     # 登录限流：同一客户端（公网 IP + 前端上报 X-Client-Private-IP 内网 IP 复合维度，缺失时纯公网 IP）每分钟登录尝试上限
   login-max-failures: 5       # 登录连续失败次数上限（仅 account 渠道）
   login-lock-minutes: 5       # 触发锁定后的锁定时长（分钟）
+
+# 分片文件传输工具（util/file/ChunkedUploadStore：断点续传/续下，磁盘即状态）
+file:
+  storage-path: uploads/files      # 存储根目录（chunks/ 分片中转 + objects/ 成品）
+  max-file-size: 2147483648        # 单文件上限（2GB）
+  chunk-size: 5242880              # 参考分片大小（5MB），供调用方建议前端分片粒度
+  chunk-expire-hours: 168          # 过期分片目录清理阈值（7 天）
+  cleanup-interval-ms: 3600000     # 过期清理任务执行间隔（1 小时）
