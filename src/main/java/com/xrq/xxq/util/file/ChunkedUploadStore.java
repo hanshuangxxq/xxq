@@ -19,6 +19,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import com.xrq.xxq.common.BusinessException;
@@ -57,6 +58,7 @@ public class ChunkedUploadStore {
     private static final Pattern EXT_PATTERN = Pattern.compile("\\.[a-z0-9]{1,9}");
     private static final int BUFFER_SIZE = 64 * 1024;
     private static final String META_FILE = "meta.json";
+    private static final String MERGING_SUFFIX = ".merging";
 
     @Value("${file.storage-path:uploads/files}")
     private String storagePath;
@@ -224,7 +226,7 @@ public class ChunkedUploadStore {
         createDirectories(objectsDir(biz));
         // 每次调用唯一名：并发 complete 各自合出完整正确的半成品，
         // rename（REPLACE_EXISTING、同内容）退化为无害的 last-writer-wins
-        Path merging = objectsDir(biz).resolve(md5Lower + ext + "." + UUID.randomUUID() + ".merging");
+        Path merging = objectsDir(biz).resolve(md5Lower + ext + "." + UUID.randomUUID() + MERGING_SUFFIX);
         long actualSize;
         String actualMd5;
         try {
@@ -264,6 +266,40 @@ public class ChunkedUploadStore {
         validateBiz(biz);
         String md5Lower = normalizeMd5(md5);
         deleteRecursivelyQuietly(chunkDir(biz, md5Lower));
+    }
+
+    /**
+     * 定时清理：删除超过 {@code file.chunk-expire-hours} 的未完成分片会话目录，
+     * 以及 objects/ 下崩溃遗留的合并半成品（UUID 唯一名，重试不复用，不扫会永久泄漏磁盘）。
+     * 会话目录判据 meta.createTime（meta 损坏回退目录修改时间），半成品按文件修改时间；
+     * 两者均与 JVM 同机文件系统时间同源可比。单目录失败仅 warn 不阻断，全部尽力而为。
+     */
+    @Scheduled(initialDelayString = "${file.cleanup-interval-ms:3600000}",
+            fixedDelayString = "${file.cleanup-interval-ms:3600000}")
+    public void cleanupExpired() {
+        long cutoff = System.currentTimeMillis() - chunkExpireHours * 3600_000L;
+        int removed = cleanupChunkSessions(cutoff) + cleanupMergingLeftovers(cutoff);
+        if (removed > 0) {
+            log.info("分片清理完成，删除过期上传会话/合并半成品 {} 个", removed);
+        }
+    }
+
+    /**
+     * 按存储相对路径（{@code objects/...}）解析磁盘文件，含路径穿越防护（下载场景用）。
+     */
+    public Path resolve(String storedPath) {
+        if (storedPath == null || storedPath.isBlank()) {
+            throw new BusinessException(400, "文件路径为空");
+        }
+        Path base = Path.of(storagePath).normalize();
+        Path filePath = base.resolve(storedPath).normalize();
+        if (!filePath.startsWith(base)) {
+            throw new BusinessException(400, "非法的文件路径");
+        }
+        if (!Files.exists(filePath) || !Files.isRegularFile(filePath)) {
+            throw new BusinessException(404, "文件不存在");
+        }
+        return filePath;
     }
 
     // ---- 内部实现 ----
@@ -409,6 +445,68 @@ public class ChunkedUploadStore {
         } catch (IOException ignored) {
             // 尽力删除
         }
+    }
+
+    /** 清理 chunks/ 下过期会话目录，返回删除数。 */
+    private int cleanupChunkSessions(long cutoff) {
+        Path chunksRoot = Path.of(storagePath, "chunks");
+        if (!Files.isDirectory(chunksRoot)) {
+            return 0;
+        }
+        List<Path> metaFiles;
+        try (Stream<Path> stream = Files.walk(chunksRoot)) {
+            metaFiles = stream.filter(p -> META_FILE.equals(p.getFileName().toString())).toList();
+        } catch (IOException e) {
+            log.warn("分片清理扫描失败: {}", e.getMessage());
+            return 0;
+        }
+        int removed = 0;
+        for (Path metaFile : metaFiles) {
+            Path dir = metaFile.getParent();
+            try {
+                long timestamp;
+                try {
+                    timestamp = readMeta(metaFile).createTime();
+                } catch (BusinessException e) {
+                    // meta 损坏（含目录已被并发删除）：回退目录修改时间
+                    timestamp = Files.getLastModifiedTime(dir).toMillis();
+                }
+                if (timestamp < cutoff) {
+                    deleteRecursivelyQuietly(dir);
+                    removed++;
+                }
+            } catch (IOException e) {
+                log.warn("分片清理失败，目录 {}: {}", dir, e.getMessage());
+            }
+        }
+        return removed;
+    }
+
+    /** 清理 objects/ 下崩溃遗留的合并半成品（按修改时间过期删除），返回删除数。 */
+    private int cleanupMergingLeftovers(long cutoff) {
+        Path objectsRoot = Path.of(storagePath, "objects");
+        if (!Files.isDirectory(objectsRoot)) {
+            return 0;
+        }
+        List<Path> mergingFiles;
+        try (Stream<Path> stream = Files.walk(objectsRoot)) {
+            mergingFiles = stream.filter(p -> p.getFileName().toString().endsWith(MERGING_SUFFIX)).toList();
+        } catch (IOException e) {
+            log.warn("合并半成品清理扫描失败: {}", e.getMessage());
+            return 0;
+        }
+        int removed = 0;
+        for (Path merging : mergingFiles) {
+            try {
+                if (Files.getLastModifiedTime(merging).toMillis() < cutoff) {
+                    deleteQuietly(merging);
+                    removed++;
+                }
+            } catch (IOException e) {
+                log.warn("合并半成品清理失败 {}: {}", merging, e.getMessage());
+            }
+        }
+        return removed;
     }
 
     private void deleteRecursivelyQuietly(Path dir) {
