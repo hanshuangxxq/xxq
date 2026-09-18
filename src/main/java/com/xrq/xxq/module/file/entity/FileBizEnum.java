@@ -22,27 +22,49 @@ import lombok.Getter;
 public enum FileBizEnum {
 
     /** 毕业论文（graduation_thesis.file_name / file_original）。 */
-    GRADUATION_THESIS("graduation-thesis", 20L * 1024 * 1024),
+    GRADUATION_THESIS("graduation-thesis", 20L * 1024 * 1024, Ext.DOC),
 
     /** 开题报告（graduation_opening_report.file_name）。 */
-    GRADUATION_OPENING("graduation-opening-report", 20L * 1024 * 1024),
+    GRADUATION_OPENING("graduation-opening-report", 20L * 1024 * 1024, Ext.DOC),
 
     /** 中期检查材料（graduation_midterm.file_name）。 */
-    GRADUATION_MIDTERM("graduation-midterm", 20L * 1024 * 1024),
+    GRADUATION_MIDTERM("graduation-midterm", 20L * 1024 * 1024, Ext.DOC),
 
     /** 实习成果报告（internship_report.file_name）。 */
-    INTERNSHIP_REPORT("internship-report", 20L * 1024 * 1024),
+    INTERNSHIP_REPORT("internship-report", 20L * 1024 * 1024, Ext.DOC),
 
     /** 社会实践报告（social_practice_report.file_name）。 */
-    SOCIAL_PRACTICE_REPORT("social-practice-report", 20L * 1024 * 1024);
+    SOCIAL_PRACTICE_REPORT("social-practice-report", 20L * 1024 * 1024, Ext.DOC),
+
+    /** 查重报告附件（graduation_duplicate_check.file_name）。 */
+    GRADUATION_DUPLICATE_REPORT("graduation-duplicate-report", 20L * 1024 * 1024, Ext.DOC),
+
+    /** 毕设活动资料（graduation_campaign_material.file_name）。 */
+    GRADUATION_CAMPAIGN_MATERIAL("graduation-campaign-material", 20L * 1024 * 1024, Ext.DOC),
+
+    /** 答辩材料附件（graduation_defense.file_name）。 */
+    GRADUATION_DEFENSE_MATERIAL("graduation-defense-material", 20L * 1024 * 1024, Ext.DOC),
+
+    /** 竞赛获奖证书（competition_result.file_name），证书是扫描件/照片，放行图片格式。 */
+    COMPETITION_CERTIFICATE("competition-certificate", 20L * 1024 * 1024, Ext.CERT);
 
     /**
-     * 文档类允许扩展名（含点、小写），与 {@code PracticeFileService} 既有白名单一致。
+     * 扩展名集合持有者。
+     * <p><b>为什么不能是枚举自身的静态字段</b>：枚举常量初始化先于枚举类的静态字段，
+     * 常量参数里引用本类 {@code static final} 是编译错误（illegal forward reference）；
+     * 嵌套类在首次访问时才初始化，常量参数引用它是合法的。
      * <p>
      * 扩展名一律走白名单，不是「任意 1-9 位 alnum」——后者会放行 {@code .jsp}/{@code .html}/
      * {@code .svg}/{@code .sh} 等可执行或可内联脚本的类型，一旦存储目录被误配为静态资源根即成漏洞。
      */
-    private static final Set<String> DOC_EXTENSIONS = Set.of(".doc", ".docx", ".pdf", ".zip", ".rar");
+    private static final class Ext {
+
+        /** 文档类允许扩展名（含点、小写），与 {@code PracticeFileService} 既有白名单一致。 */
+        private static final Set<String> DOC = Set.of(".doc", ".docx", ".pdf", ".zip", ".rar");
+
+        /** 证书类允许扩展名：扫描件/照片 + PDF。 */
+        private static final Set<String> CERT = Set.of(".jpg", ".jpeg", ".png", ".pdf");
+    }
 
     /** 业务目录名（同时是 HTTP 入参/出参取值），落盘为 {@code chunks|objects/{code}/}。 */
     @JsonValue
@@ -54,14 +76,18 @@ public enum FileBizEnum {
      */
     private final long maxWholeSize;
 
-    FileBizEnum(String code, long maxWholeSize) {
+    /** 本业务允许的扩展名集（含点、小写）。 */
+    private final Set<String> extensions;
+
+    FileBizEnum(String code, long maxWholeSize, Set<String> extensions) {
         this.code = code;
         this.maxWholeSize = maxWholeSize;
+        this.extensions = extensions;
     }
 
     /** 本业务允许的扩展名（含点、小写）。 */
     public Set<String> allowedExtensions() {
-        return DOC_EXTENSIONS;
+        return extensions;
     }
 
     /**
