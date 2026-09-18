@@ -37,6 +37,23 @@ import com.xrq.xxq.module.file.entity.FileBizEnum;
  */
 public interface FileStorageService {
 
+    // ---- 存储布局常量：清扫任务与存储层共用，避免两处字面量各自漂移 ----
+
+    /** 成品目录名（内容寻址产物）。 */
+    String OBJECTS_DIR = "objects";
+
+    /** 存储相对路径里成品的前缀，业务表存的就是带此前缀的路径。 */
+    String OBJECTS_PREFIX = OBJECTS_DIR + "/";
+
+    /** 合并半成品后缀（{@code {sha256}{ext}.{UUID}.merging}）。 */
+    String MERGING_SUFFIX = ".merging";
+
+    /** 写入中临时文件后缀。 */
+    String TMP_SUFFIX = ".tmp";
+
+    /** 整传中转目录名（位于 {@code objects/{biz}/} 下）。 */
+    String STAGING_DIR = ".staging";
+
     /**
      * 初始化或恢复上传会话（幂等）。
      * <p>产物已存在 → 秒传，返回 {@code completedFile} 非空且 {@code uploadId} 为 null；

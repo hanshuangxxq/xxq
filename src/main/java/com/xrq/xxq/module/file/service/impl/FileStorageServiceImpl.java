@@ -75,12 +75,14 @@ public class FileStorageServiceImpl implements FileStorageService {
     private static final String ALGORITHM = "SHA-256";
 
     private static final String META_FILE = "meta.json";
-    private static final String TMP_SUFFIX = ".tmp";
-    private static final String MERGING_SUFFIX = ".merging";
     private static final String CHUNKS_DIR = "chunks";
-    private static final String OBJECTS_DIR = "objects";
-    private static final String STAGING_DIR = ".staging";
-    private static final String OBJECTS_PREFIX = OBJECTS_DIR + "/";
+
+    // 布局常量统一取自接口，避免清扫任务与存储层两处字面量各自漂移
+    private static final String TMP_SUFFIX = FileStorageService.TMP_SUFFIX;
+    private static final String MERGING_SUFFIX = FileStorageService.MERGING_SUFFIX;
+    private static final String STAGING_DIR = FileStorageService.STAGING_DIR;
+    private static final String OBJECTS_DIR = FileStorageService.OBJECTS_DIR;
+    private static final String OBJECTS_PREFIX = FileStorageService.OBJECTS_PREFIX;
 
     /** 分片数上限：直接封顶 Redis 分片集合的规模（2GB/5MB = 410 片，留足余量）。 */
     private static final int MAX_CHUNKS = 10_000;
