@@ -144,7 +144,7 @@ public class GraduationProposalServiceImpl
                 throw new BusinessException(409, "该申请不在待院系初审状态");
             }
             // R-5.5：院系初审仅限本学院学生
-            if (scopeResolver.departmentOwnsStudent(reviewerUserId, proposal.getStudentId())) {
+            if (scopeResolver.isOutsideDept(reviewerUserId, proposal.getStudentId())) {
                 throw new BusinessException(403, "权限不足");
             }
         } else {
@@ -195,7 +195,7 @@ public class GraduationProposalServiceImpl
                 .eq(GraduationProposal::getCampaignId, campaignId)
                 .eq(GraduationProposal::getStatus, ProposalStatusEnum.PENDING_DEPT)
                 .orderByAsc(GraduationProposal::getSubmitTime));
-        // 仅本学院学生（R-10.1 数据可见性）：批量解析学生院系后内存过滤（替代逐条 departmentOwnsStudent 查库）
+        // 仅本学院学生（R-10.1 数据可见性）：批量解析学生院系后内存过滤（替代逐条 isOutsideDept 查库）
         Long deptCollegeId = scopeResolver.deptCollegeId(deptUserId);
         Map<Long, Long> collegeByStudent = scopeResolver.studentCollegeIdMap(
                 all.stream().map(GraduationProposal::getStudentId).toList());

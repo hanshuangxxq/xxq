@@ -318,7 +318,7 @@ public class GraduationProcessServiceImpl
         if ("teacher".equals(userType)) {
             logs = logs.stream().filter(l -> l.getTeacherId().equals(operatorUserId)).toList();
         } else if ("department".equals(userType)) {
-            // R-10.1 院系可见性：批量解析学生院系后内存过滤（替代逐条 departmentOwnsStudent 查库）
+            // R-10.1 院系可见性：批量解析学生院系后内存过滤（替代逐条 isOutsideDept 查库）
             Long deptCollegeId = scopeResolver.deptCollegeId(operatorUserId);
             Map<Long, Long> collegeByStudent = scopeResolver.studentCollegeIdMap(
                     logs.stream().map(GraduationGuidanceLog::getStudentId).toList());
@@ -408,7 +408,7 @@ public class GraduationProcessServiceImpl
             return;
         }
         if ("department".equals(userType)) {
-            if (scopeResolver.departmentOwnsStudent(userId, studentId)) {
+            if (scopeResolver.isOutsideDept(userId, studentId)) {
                 throw new BusinessException(403, "权限不足");
             }
             return;

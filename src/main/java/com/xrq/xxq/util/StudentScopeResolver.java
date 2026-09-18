@@ -83,11 +83,19 @@ public class StudentScopeResolver {
     }
 
     /**
-     * 院系校验某学生是否不在本院。
-     * <p>返回 true 表示该学生不在该院系（或归属无法判定），调用方应拒绝访问；
-     * 返回 false 表示属于本院，允许访问。（契约与历史调用方一致：{@code if (departmentOwnsStudent) throw 403}）
+     * 院系管理员可见性判定：该学生是否<b>不在</b>该院系管辖范围内。
+     * <p>
+     * <b>返回 true = 不在本院（或归属无法判定）→ 调用方必须拒绝访问；返回 false = 属于本院 → 放行。</b>
+     * fail-closed：院系未分配 collegeId、学生不存在、学生无班级、班级无院系，一律返回 true。
+     * <p>
+     * 调用方统一写 {@code if (scopeResolver.isOutsideDept(deptUserId, studentUserId)) throw new BusinessException(403, "权限不足");}
+     * <p>
+     * <b>⚠ 不要对这个返回值取反。</b> 旧方法名 {@code departmentOwnsStudent} 与语义相反
+     * （名字像「拥有」、实际返回「不拥有」），照名字读会以为该写 {@code if (!...) throw}，
+     * 那样会把「外院学生放行、本院学生拒绝」——一个真实的越权漏洞。故 2026-09 重命名为
+     * {@code isOutsideDept} 以消除歧义（纯重命名，零行为变更）。
      */
-    public Boolean departmentOwnsStudent(Long deptUserId, Long studentUserId) {
+    public Boolean isOutsideDept(Long deptUserId, Long studentUserId) {
         Department dept = departmentMapper.findByUserId(deptUserId);
         if (dept == null || dept.getCollegeId() == null) {
             return true;
@@ -127,7 +135,7 @@ public class StudentScopeResolver {
     /**
      * 批量解析 studentUserId -> college_id（student + class_name 各一次批查）。
      * <p>
-     * 供列表接口的院系可见性过滤使用，替代在循环中逐条调用 {@link #departmentOwnsStudent}
+     * 供列表接口的院系可见性过滤使用，替代在循环中逐条调用 {@link #isOutsideDept}
      * 或 {@link #studentCollegeId}（每条的 2~3 次单表查询）。学生不存在/无班级/班级无院系时
      * 该学生不出现在返回 Map 中（视为归属无法判定，过滤方应按不可见处理）。
      */

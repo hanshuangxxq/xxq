@@ -71,7 +71,7 @@ public class GraduationDefenseServiceImpl
         ParamValidator.requireNonNull(request.getStudentId(), "学生");
         GraduationCampaign campaign = requireCampaign(request.getCampaignId());
         // R-10.1：院系管理者仅限本院系学生
-        if (scopeResolver.departmentOwnsStudent(deptUserId, request.getStudentId())) {
+        if (scopeResolver.isOutsideDept(deptUserId, request.getStudentId())) {
             throw new BusinessException(403, "权限不足");
         }
         // R-3.3：查重通过（DUPLICATE_PASSED）才能进入答辩环节
@@ -120,7 +120,7 @@ public class GraduationDefenseServiceImpl
         if ("student".equals(userType)) {
             list = list.stream().filter(d -> d.getStudentId().equals(userId)).toList();
         } else if ("department".equals(userType)) {
-            // R-10.1 院系可见性：批量解析学生院系后内存过滤（替代逐条 departmentOwnsStudent 查库）
+            // R-10.1 院系可见性：批量解析学生院系后内存过滤（替代逐条 isOutsideDept 查库）
             Long deptCollegeId = scopeResolver.deptCollegeId(userId);
             Map<Long, Long> collegeByStudent = scopeResolver.studentCollegeIdMap(
                     list.stream().map(GraduationDefense::getStudentId).toList());
@@ -180,7 +180,7 @@ public class GraduationDefenseServiceImpl
     @Transactional
     public ScoreResponse submitDefenseScore(Long userId, String userType, ScoreSubmitRequest request) {
         if ("department".equals(userType)
-                && scopeResolver.departmentOwnsStudent(userId, request.getStudentId())) {
+                && scopeResolver.isOutsideDept(userId, request.getStudentId())) {
             throw new BusinessException(403, "权限不足");
         }
         return submitScorePart(request, "DEFENSE", userId, userType);
@@ -191,7 +191,7 @@ public class GraduationDefenseServiceImpl
     public ScoreResponse confirmScore(Long deptUserId, ScoreConfirmRequest request) {
         ParamValidator.requireNonNull(request.getCampaignId(), "活动");
         ParamValidator.requireNonNull(request.getStudentId(), "学生");
-        if (scopeResolver.departmentOwnsStudent(deptUserId, request.getStudentId())) {
+        if (scopeResolver.isOutsideDept(deptUserId, request.getStudentId())) {
             throw new BusinessException(403, "权限不足");
         }
         GraduationScore score = requireScore(request.getCampaignId(), request.getStudentId());
@@ -228,7 +228,7 @@ public class GraduationDefenseServiceImpl
                     .stream().map(GraduationAssignment::getStudentId).toList();
             list = list.stream().filter(s -> studentIds.contains(s.getStudentId())).toList();
         } else if ("department".equals(userType)) {
-            // R-10.1 院系可见性：批量解析学生院系后内存过滤（替代逐条 departmentOwnsStudent 查库）
+            // R-10.1 院系可见性：批量解析学生院系后内存过滤（替代逐条 isOutsideDept 查库）
             Long deptCollegeId = scopeResolver.deptCollegeId(userId);
             Map<Long, Long> collegeByStudent = scopeResolver.studentCollegeIdMap(
                     list.stream().map(GraduationScore::getStudentId).toList());

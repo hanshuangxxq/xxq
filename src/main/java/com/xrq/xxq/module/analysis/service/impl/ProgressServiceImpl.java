@@ -148,7 +148,7 @@ public class ProgressServiceImpl implements ProgressService {
             return;
         }
         if (AuthFacade.USER_TYPE_DEPARTMENT.equals(callerUserType)) {
-            if (scopeResolver.departmentOwnsStudent(callerUserId, studentUserId)) {
+            if (scopeResolver.isOutsideDept(callerUserId, studentUserId)) {
                 throw new BusinessException(403, "权限不足");
             }
             return;

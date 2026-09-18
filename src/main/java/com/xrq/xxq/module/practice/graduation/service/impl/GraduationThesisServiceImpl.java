@@ -349,9 +349,10 @@ public class GraduationThesisServiceImpl
             return;
         }
         if ("department".equals(userType)) {
-            if (scopeResolver.departmentOwnsStudent(userId, studentId)) {
+            if (scopeResolver.isOutsideDept(userId, studentId)) {
                 throw new BusinessException(403, "权限不足");
             }
+            return;
         }
         // academic_admin：全量可见
     }

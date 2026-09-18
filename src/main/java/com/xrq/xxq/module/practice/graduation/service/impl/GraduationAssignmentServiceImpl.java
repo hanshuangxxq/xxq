@@ -139,7 +139,7 @@ public class GraduationAssignmentServiceImpl
             throw new BusinessException(403, "权限不足");
         }
         // 学生与教师都必须属于本院系
-        if (scopeResolver.departmentOwnsStudent(deptUserId, request.getStudentId())) {
+        if (scopeResolver.isOutsideDept(deptUserId, request.getStudentId())) {
             throw new BusinessException(403, "只能分配本院系学生");
         }
         Long teacherCollegeId = scopeResolver.teacherCollegeId(request.getTeacherId());
@@ -184,7 +184,7 @@ public class GraduationAssignmentServiceImpl
         if (deptCollegeId == null) {
             throw new BusinessException(403, "权限不足");
         }
-        if (scopeResolver.departmentOwnsStudent(deptUserId, request.getStudentId())) {
+        if (scopeResolver.isOutsideDept(deptUserId, request.getStudentId())) {
             throw new BusinessException(403, "只能改派本院系学生");
         }
         Long newTeacherCollegeId = scopeResolver.teacherCollegeId(request.getNewTeacherId());
