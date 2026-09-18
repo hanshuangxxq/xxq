@@ -53,6 +53,9 @@ public interface FileStorageService {
     /** 整传中转目录名（位于 {@code objects/{biz}/} 下）。 */
     String STAGING_DIR = ".staging";
 
+    /** 导出暂存目录名（流式导出产物，非内容寻址，按龄期清扫）。 */
+    String EXPORTS_DIR = "exports";
+
     /**
      * 初始化或恢复上传会话（幂等）。
      * <p>产物已存在 → 秒传，返回 {@code completedFile} 非空且 {@code uploadId} 为 null；

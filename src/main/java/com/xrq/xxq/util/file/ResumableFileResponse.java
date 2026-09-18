@@ -5,8 +5,12 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.Locale;
 
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
@@ -16,7 +20,7 @@ import org.springframework.http.ResponseEntity;
 /**
  * 可续传下载响应构建工具（静态，对齐 EncryptUtils 先例）。
  * <p>
- * 返回 {@link ResponseEntity} 包装的 {@link FileSystemResource} 后，Spring 的
+ * 返回 {@link ResponseEntity} 包装的 {@link Resource} 后，Spring 的
  * {@code ResourceHttpRequestConverter} 原生处理 {@code Range} 请求头并返回 206 部分内容，
  * 浏览器/下载器（wget -c、IDM）自动从中断位置续下；显式声明 {@code Accept-Ranges: bytes}
  * 让客户端得知可断点续传。调用方在自身接口层完成鉴权后，用业务表中的存储路径经
@@ -61,6 +65,23 @@ public final class ResumableFileResponse {
     }
 
     /**
+     * 构建 byte[] 内容的可续传下载响应（小文件导出场景：xlsx/csv/pdf 报表）。
+     * <p>{@link ByteArrayResource} 与 {@link FileSystemResource} 一样走
+     * {@code ResourceHttpRequestConverter} 的 Range 处理 → 命中即 206；
+     * ETag 取内容 sha256（小文件计算开销可忽略），内容与响应头一一对应。
+     */
+    public static ResponseEntity<Resource> buildDownload(byte[] data, String fileName) {
+        String name = (fileName == null || fileName.isBlank()) ? "download" : fileName;
+        String encoded = URLEncoder.encode(name, StandardCharsets.UTF_8).replace("+", "%20");
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + encoded)
+                .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+                .contentType(MediaType.parseMediaType(contentTypeFromName(name)))
+                .eTag("\"" + sha256Hex(data) + "\"")
+                .body(new ByteArrayResource(data));
+    }
+
+    /**
      * 从存储相对路径（{@code objects/{biz}/{sha256}{ext}}）提取内容摘要，用作下载响应的强 ETag。
      *
      * @return 64 位十六进制摘要；路径非内容寻址形态（如 legacy 的 UUID 文件名）返回 {@code null}
@@ -92,12 +113,33 @@ public final class ResumableFileResponse {
      * 未收录的扩展名再走 {@link Files#probeContentType}，最终兜底 application/octet-stream。
      */
     public static String contentType(Path file) {
-        String name = file.getFileName().toString().toLowerCase(Locale.ROOT);
+        String mapped = contentTypeFromName(file.getFileName().toString());
+        if (!"application/octet-stream".equals(mapped)) {
+            return mapped;
+        }
+        try {
+            String probed = Files.probeContentType(file);
+            if (probed != null) {
+                return probed;
+            }
+        } catch (IOException ignored) {
+            // 兜底 octet-stream
+        }
+        return "application/octet-stream";
+    }
+
+    /**
+     * 按文件名扩展名映射常见 Content-Type（跨环境确定，不依赖服务器注册表）；
+     * 未收录的扩展名返回 application/octet-stream。
+     */
+    public static String contentTypeFromName(String fileName) {
+        String name = fileName == null ? "" : fileName.toLowerCase(Locale.ROOT);
         if (name.endsWith(".pdf")) return "application/pdf";
         if (name.endsWith(".doc")) return "application/msword";
         if (name.endsWith(".docx")) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
         if (name.endsWith(".xls")) return "application/vnd.ms-excel";
         if (name.endsWith(".xlsx")) return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+        if (name.endsWith(".csv")) return "text/csv";
         if (name.endsWith(".zip")) return "application/zip";
         if (name.endsWith(".rar")) return "application/vnd.rar";
         if (name.endsWith(".7z")) return "application/x-7z-compressed";
@@ -108,14 +150,16 @@ public final class ResumableFileResponse {
         if (name.endsWith(".mp3")) return "audio/mpeg";
         if (name.endsWith(".txt")) return "text/plain";
         if (name.endsWith(".md")) return "text/markdown";
-        try {
-            String probed = Files.probeContentType(file);
-            if (probed != null) {
-                return probed;
-            }
-        } catch (IOException ignored) {
-            // 兜底 octet-stream
-        }
         return "application/octet-stream";
+    }
+
+    /** 内容 sha256 的十六进制串，用作 byte[] 响应的强 ETag。 */
+    private static String sha256Hex(byte[] data) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(data));
+        } catch (NoSuchAlgorithmException e) {
+            // SHA-256 是 JCA 必备算法，不可能缺失
+            throw new IllegalStateException(e);
+        }
     }
 }
