@@ -44,7 +44,6 @@ rate-limit:
 file:
   storage-path: uploads/files      # 存储根目录（chunks/ 分片中转 + objects/ 内容寻址成品）
   max-file-size: 2147483648        # 单文件上限（2GB，分片路径生效；整传受 multipart 25MB 约束）
-  chunk-size: 5242880              # 参考分片大小（5MB），供调用方向前端建议分片粒度
   chunk-expire-hours: 168          # 过期分片目录清理阈值（7 天；须「Redis 无会话 且 目录超期」才删）
   upload-expire-hours: 24          # 上传会话 TTL（小时），活跃自动续期；到期后 Redis 会话消失、分片目录另行回收
   orphan-grace-hours: 48           # 无引用成品回收宽限期（小时）：complete 到业务落库之间的窗口

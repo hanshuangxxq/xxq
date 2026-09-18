@@ -96,10 +96,8 @@ public class FileStorageServiceImpl implements FileStorageService {
     @Value("${file.max-file-size:2147483648}")
     private long maxFileSize;
 
-    @Value("${file.chunk-size:5242880}")
-    private long referenceChunkSize;
-
     private final UploadProgressIndex progressIndex;
+
     private final ObjectMapper objectMapper;
 
     /** meta.json 内部结构（会话不可变参数的磁盘持久镜像）。 */
@@ -109,11 +107,6 @@ public class FileStorageServiceImpl implements FileStorageService {
 
     /** 有界流式写入结果。{@code overflow} 为真时 {@code bytes}/{@code sha256} 无意义。 */
     private record CopyResult(long bytes, String sha256, boolean overflow) {
-    }
-
-    @Override
-    public long referenceChunkSize() {
-        return referenceChunkSize;
     }
 
     // ---- 会话 ----

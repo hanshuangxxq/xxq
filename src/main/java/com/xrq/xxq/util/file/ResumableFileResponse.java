@@ -28,15 +28,6 @@ public final class ResumableFileResponse {
     }
 
     /**
-     * 构建文件下载响应：Content-Disposition（RFC 5987 UTF-8 文件名）+ Content-Type 推断
-     * + Accept-Ranges: bytes。originalName 为空时回退磁盘文件名。
-     * <p>不带 ETag —— 仅用于 legacy 文件（旧扁平目录里的 UUID 命名文件，无内容摘要可作标识）。
-     */
-    public static ResponseEntity<Resource> buildDownload(Path file, String originalName) {
-        return buildDownload(file, originalName, null);
-    }
-
-    /**
      * 构建支持 HTTP Range 断点续传的下载响应（带强 ETag）。
      * <p>
      * <b>为什么这里不需要服务端对 {@code If-Range} 求值</b>：本模块产物按内容寻址

@@ -2,7 +2,6 @@ package com.xrq.xxq.module.file.entity;
 
 import java.util.Set;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 import com.xrq.xxq.common.BusinessException;
 
@@ -15,26 +14,27 @@ import lombok.Getter;
  * 挡不住「客户端自造业务目录」与「把任意扩展名写进存储根」；白名单把目录名收敛为编译期常量，
  * {@code chunks/} 与 {@code objects/} 的一级子目录只能来自 {@link #getCode()}。
  * <p>
- * 注意：本枚举<b>不落库</b>，故不加 {@code @EnumValue}；{@code @JsonValue} 标在 {@code code}
- * 而非中文描述上（取值是目录名/线上标识，不是展示文案）。
+ * 注意：本枚举<b>不落库</b>，故不加 {@code @EnumValue}；{@code @JsonValue} 标在 {@code code} 上
+ * （取值是目录名/线上标识，不是展示文案）。请求方向不用 Jackson 绑定本枚举 ——
+ * DTO 一律用 String 收 {@code biz}，服务端走 {@link #requireCode} 显式解析以给出可读的 400 文案。
  */
 @Getter
 public enum FileBizEnum {
 
     /** 毕业论文（graduation_thesis.file_name / file_original）。 */
-    GRADUATION_THESIS("graduation-thesis", "毕业论文", 20L * 1024 * 1024),
+    GRADUATION_THESIS("graduation-thesis", 20L * 1024 * 1024),
 
     /** 开题报告（graduation_opening_report.file_name）。 */
-    GRADUATION_OPENING("graduation-opening-report", "开题报告", 20L * 1024 * 1024),
+    GRADUATION_OPENING("graduation-opening-report", 20L * 1024 * 1024),
 
     /** 中期检查材料（graduation_midterm.file_name）。 */
-    GRADUATION_MIDTERM("graduation-midterm", "中期检查材料", 20L * 1024 * 1024),
+    GRADUATION_MIDTERM("graduation-midterm", 20L * 1024 * 1024),
 
     /** 实习成果报告（internship_report.file_name）。 */
-    INTERNSHIP_REPORT("internship-report", "实习成果报告", 20L * 1024 * 1024),
+    INTERNSHIP_REPORT("internship-report", 20L * 1024 * 1024),
 
     /** 社会实践报告（social_practice_report.file_name）。 */
-    SOCIAL_PRACTICE_REPORT("social-practice-report", "社会实践报告", 20L * 1024 * 1024);
+    SOCIAL_PRACTICE_REPORT("social-practice-report", 20L * 1024 * 1024);
 
     /**
      * 文档类允许扩展名（含点、小写），与 {@code PracticeFileService} 既有白名单一致。
@@ -48,18 +48,14 @@ public enum FileBizEnum {
     @JsonValue
     private final String code;
 
-    /** 中文说明，仅供文档与日志。 */
-    private final String description;
-
     /**
      * 整传（multipart 一次性上传）大小上限，字节。
      * <p>分片路径不适用本上限，统一取 {@code file.max-file-size}（2GB）——这正是「大文件走分片」的入口。
      */
     private final long maxWholeSize;
 
-    FileBizEnum(String code, String description, long maxWholeSize) {
+    FileBizEnum(String code, long maxWholeSize) {
         this.code = code;
-        this.description = description;
         this.maxWholeSize = maxWholeSize;
     }
 
@@ -92,19 +88,6 @@ public enum FileBizEnum {
         FileBizEnum biz = fromCode(code);
         if (biz == null) {
             throw new BusinessException(400, "非法的业务目录: " + code);
-        }
-        return biz;
-    }
-
-    /**
-     * Jackson 反序列化入口（当前请求 DTO 用 String 收 biz，此处为将来直接绑枚举预留）。
-     * 未命中抛 {@link IllegalArgumentException}，由全局异常处理转 400。
-     */
-    @JsonCreator
-    public static FileBizEnum fromValue(String value) {
-        FileBizEnum biz = fromCode(value);
-        if (biz == null) {
-            throw new IllegalArgumentException("非法的业务目录: " + value);
         }
         return biz;
     }

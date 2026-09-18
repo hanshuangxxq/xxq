@@ -101,7 +101,4 @@ public interface FileStorageService {
 
     /** 解析存储相对路径为磁盘路径（normalize + startsWith 路径穿越防护），不存在 → 404。 */
     Path resolve(String storedPath);
-
-    /** 参考分片大小（字节），供调用方向前端建议分片粒度。 */
-    long referenceChunkSize();
 }
