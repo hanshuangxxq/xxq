@@ -30,16 +30,43 @@ public final class ResumableFileResponse {
     /**
      * 构建文件下载响应：Content-Disposition（RFC 5987 UTF-8 文件名）+ Content-Type 推断
      * + Accept-Ranges: bytes。originalName 为空时回退磁盘文件名。
+     * <p>不带 ETag —— 仅用于 legacy 文件（旧扁平目录里的 UUID 命名文件，无内容摘要可作标识）。
      */
     public static ResponseEntity<Resource> buildDownload(Path file, String originalName) {
+        return buildDownload(file, originalName, null);
+    }
+
+    /**
+     * 构建支持 HTTP Range 断点续传的下载响应（带强 ETag）。
+     * <p>
+     * <b>为什么这里不需要服务端对 {@code If-Range} 求值</b>：本模块产物按内容寻址
+     * （{@code objects/{biz}/{sha256}{ext}}），路径由内容摘要决定 ⇒ <b>同一路径的字节永不改变</b>。
+     * 因此任何已下载的分片序列永远与新内容兼容，「续传期间文件被替换导致拼接损坏」这一风险
+     * 在内容寻址下天然不存在。ETag 的价值退化为让客户端/下载器识别同一对象、命中缓存。
+     * <p>legacy 文件无摘要，传 {@code null} 则不输出 ETag（此时客户端不应使用 {@code If-Range}）。
+     *
+     * @param file         已解析的磁盘文件（经 {@code FileStorageService#resolve} 或同等防护）
+     * @param originalName 展示文件名（Content-Disposition），空白则回退磁盘文件名
+     * @param etagOrNull   内容摘要（sha256）；非空时输出为强 ETag
+     */
+    public static ResponseEntity<Resource> buildDownload(Path file, String originalName,
+                                                         String etagOrNull) {
         String filename = (originalName == null || originalName.isBlank())
                 ? file.getFileName().toString() : originalName;
         String encoded = URLEncoder.encode(filename, StandardCharsets.UTF_8).replace("+", "%20");
-        return ResponseEntity.ok()
+        ResponseEntity.BodyBuilder builder = ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + encoded)
                 .header(HttpHeaders.ACCEPT_RANGES, "bytes")
-                .contentType(MediaType.parseMediaType(contentType(file)))
-                .body(new FileSystemResource(file));
+                .contentType(MediaType.parseMediaType(contentType(file)));
+        if (etagOrNull != null && !etagOrNull.isBlank()) {
+            builder.eTag("\"" + etagOrNull + "\"");
+        }
+        try {
+            builder.lastModified(Files.getLastModifiedTime(file).toMillis());
+        } catch (IOException ignored) {
+            // 取不到修改时间就不输出 Last-Modified，不影响下载
+        }
+        return builder.body(new FileSystemResource(file));
     }
 
     /**
