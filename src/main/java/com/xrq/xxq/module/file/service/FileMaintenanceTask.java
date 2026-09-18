@@ -51,15 +51,19 @@ public class FileMaintenanceTask {
     @Value("${file.orphan-grace-hours:48}")
     private long orphanGraceHours;
 
+    @Value("${file.export-expire-hours:24}")
+    private long exportExpireHours;
+
     private final UploadProgressIndex progressIndex;
     private final List<FileUsageContributor> contributors;
 
     @Scheduled(initialDelayString = "${file.cleanup-interval-ms:3600000}",
             fixedDelayString = "${file.cleanup-interval-ms:3600000}")
     public void cleanup() {
-        int removed = sweepChunkSessions() + sweepMergingLeftovers() + sweepOrphanObjects();
+        int removed = sweepChunkSessions() + sweepMergingLeftovers() + sweepOrphanObjects()
+                + sweepExportLeftovers();
         if (removed > 0) {
-            log.info("文件清理完成，删除过期分片会话/半成品/无引用成品共 {} 项", removed);
+            log.info("文件清理完成，删除过期分片会话/半成品/无引用成品/导出暂存共 {} 项", removed);
         }
     }
 
@@ -132,6 +136,37 @@ public class FileMaintenanceTask {
             }
         } catch (IOException e) {
             log.warn("半成品扫描失败: {}", e.getMessage());
+        }
+        return removed;
+    }
+
+    /**
+     * 导出暂存清扫：删除 {@code exports/} 下超过 {@code file.export-expire-hours} 的文件。
+     * <p>导出产物（查重数据包等）是一次性生成的临时 zip，非内容寻址、不参与引用对账，
+     * 单纯按龄期清扫。24h 窗口覆盖「导出后下载中断续传」的场景；Response 写出发生在
+     * Controller 返回之后，文件必须活到响应完成，龄期下限远大于一次下载耗时而不会误删。
+     */
+    private int sweepExportLeftovers() {
+        Path exportsRoot = Path.of(storagePath, FileStorageService.EXPORTS_DIR);
+        if (!Files.isDirectory(exportsRoot)) {
+            return 0;
+        }
+        long cutoff = System.currentTimeMillis() - exportExpireHours * 3600_000L;
+        int removed = 0;
+        try (Stream<Path> stream = Files.list(exportsRoot)) {
+            for (Path p : stream.filter(Files::isRegularFile).toList()) {
+                try {
+                    if (Files.getLastModifiedTime(p).toMillis() < cutoff) {
+                        Files.deleteIfExists(p);
+                        removed++;
+                        log.info("清理过期导出暂存 {}", p.getFileName());
+                    }
+                } catch (IOException e) {
+                    log.warn("导出暂存清理失败 {}: {}", p, e.getMessage());
+                }
+            }
+        } catch (IOException e) {
+            log.warn("导出暂存扫描失败: {}", e.getMessage());
         }
         return removed;
     }
