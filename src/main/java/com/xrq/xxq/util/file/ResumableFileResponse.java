@@ -20,7 +20,7 @@ import org.springframework.http.ResponseEntity;
  * {@code ResourceHttpRequestConverter} 原生处理 {@code Range} 请求头并返回 206 部分内容，
  * 浏览器/下载器（wget -c、IDM）自动从中断位置续下；显式声明 {@code Accept-Ranges: bytes}
  * 让客户端得知可断点续传。调用方在自身接口层完成鉴权后，用业务表中的存储路径经
- * {@link ChunkedUploadStore#resolve} 拿到磁盘路径，再用本类构建响应直接返回。
+ * {@code FileStorageService#resolve} 拿到磁盘路径，再用本类构建响应直接返回。
  */
 public final class ResumableFileResponse {
 

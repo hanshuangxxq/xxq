@@ -21,6 +21,13 @@ import com.xrq.xxq.module.file.entity.FileBizEnum;
  *       用 {@code SCARD} 一行即可消灭。</li>
  * </ul>
  * 磁盘上的 {@code meta.json} 仍是权威持久镜像：Redis 丢失时由它重建本索引。
+ * <p>
+ * <b>{@code uploadId} 由 {@code (biz, ownerId, 整文件 sha256)} 确定性派生</b>（见存储层的
+ * {@code deriveUploadId}），因此本接口<b>不需要</b>「索引 key」来支持「刷新页面后同参数重新 init
+ * 恢复同一会话」—— 重新 init 时算出的 id 必然相同，直接 {@link #load} 即可。
+ * 这消除了一整类问题：并发 init 的 set-if-absent 竞态、abort 后的陈旧索引、索引与磁盘目录不一致。
+ * 会话仍按 {@code ownerId} 隔离（两个学生传同一份模板互不干扰），且每次操作都比对
+ * {@code ownerId}，故 id 可推导不构成越权风险。
  */
 public interface UploadProgressIndex {
 
@@ -34,14 +41,6 @@ public interface UploadProgressIndex {
     record SessionState(String uploadId, FileBizEnum biz, String originalName, long totalSize,
                         long chunkSize, int totalChunks, String sha256, Long ownerId, String ownerType,
                         long createTime, Status status, String storedPath) {
-    }
-
-    /**
-     * 「刷新页面后同参数重新 init 应恢复同一会话」的查找键。
-     * <p>含 {@code totalSize}/{@code totalChunks} 是刻意的：分片粒度变了，旧分片本就全部失效，
-     * 必须开新会话而非复用。
-     */
-    record IndexKey(Long ownerId, FileBizEnum biz, String sha256, long totalSize, int totalChunks) {
     }
 
     /** 全量写入会话与已收分片（创建与「Redis 丢失后从磁盘重建」共用），并置 TTL。 */
@@ -74,15 +73,4 @@ public interface UploadProgressIndex {
 
     /** 删除会话及其分片、摘要（abort 用）。 */
     void remove(String uploadId);
-
-    /**
-     * 建立「同 owner + 同 biz + 同内容 + 同分片参数 → uploadId」索引（set-if-absent 语义）。
-     *
-     * @return {@code true} 表示本次写入生效；{@code false} 表示已存在他人先建的索引
-     *         （并发 init 同一文件时，后到者应放弃自己的会话并复用已有 uploadId）
-     */
-    boolean bind(IndexKey key, String uploadId);
-
-    /** 查索引；未命中返回 {@code null}。 */
-    String lookup(IndexKey key);
 }

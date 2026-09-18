@@ -20,13 +20,11 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * {@link UploadProgressIndex} 的 Redis 实现。
  * <p>
- * Key 布局（{@code uploadId} 为服务端 UUID）：
+ * Key 布局（{@code uploadId} 由存储层按 {@code (biz, ownerId, sha256)} 确定性派生）：
  * <pre>
  * file:upload:{uploadId}          Hash   会话参数与状态（含 status / storedPath）
  * file:upload:{uploadId}:parts    Set    已提交分片序号
  * file:upload:{uploadId}:hashes   Hash   分片序号 -&gt; 分片 SHA-256
- * file:upload-idx:{ownerId}:{biz}:{sha256}:{totalSize}:{totalChunks}
- *                                 String -&gt; uploadId（刷新页面后同参数恢复）
  * </pre>
  * 会话 TTL 取 {@code file.upload-expire-hours}（默认 24h），每次活跃读写续期；
  * 合并成功后缩短为 {@link #MERGED_TTL}（残影窗口，供 complete 幂等返回）。
@@ -39,7 +37,6 @@ public class RedisUploadProgressIndex implements UploadProgressIndex {
     private static final String SESSION_PREFIX = "file:upload:";
     private static final String PARTS_SUFFIX = ":parts";
     private static final String HASHES_SUFFIX = ":hashes";
-    private static final String INDEX_PREFIX = "file:upload-idx:";
 
     /** 已合并会话的残影 TTL：足够客户端重试拿回同一结果，又不会长期占用内存。 */
     private static final Duration MERGED_TTL = Duration.ofHours(1);
@@ -94,10 +91,18 @@ public class RedisUploadProgressIndex implements UploadProgressIndex {
             redisTemplate.opsForSet().add(partsKey, members);
             redisTemplate.expire(partsKey, ttl);
 
+            // 摘要未知的分片（Redis 丢失后由磁盘重建的会话）不写占位值：
+            // :hashes 整体缺失即代表「无摘要基线」，校验降级为仅比尺寸
             Map<String, String> hashes = new HashMap<>();
-            partHashes.forEach((i, sha) -> hashes.put(String.valueOf(i), sha == null ? "" : sha));
-            redisTemplate.opsForHash().putAll(hashesKey, hashes);
-            redisTemplate.expire(hashesKey, ttl);
+            partHashes.forEach((i, sha) -> {
+                if (sha != null) {
+                    hashes.put(String.valueOf(i), sha);
+                }
+            });
+            if (!hashes.isEmpty()) {
+                redisTemplate.opsForHash().putAll(hashesKey, hashes);
+                redisTemplate.expire(hashesKey, ttl);
+            }
         }
     }
 
@@ -222,23 +227,6 @@ public class RedisUploadProgressIndex implements UploadProgressIndex {
     public void remove(String uploadId) {
         String key = SESSION_PREFIX + uploadId;
         redisTemplate.delete(List.of(key, key + PARTS_SUFFIX, key + HASHES_SUFFIX));
-    }
-
-    @Override
-    public boolean bind(IndexKey key, String uploadId) {
-        Boolean ok = redisTemplate.opsForValue()
-                .setIfAbsent(indexKey(key), uploadId, sessionTtl());
-        return Boolean.TRUE.equals(ok);
-    }
-
-    @Override
-    public String lookup(IndexKey key) {
-        return redisTemplate.opsForValue().get(indexKey(key));
-    }
-
-    private static String indexKey(IndexKey k) {
-        return INDEX_PREFIX + k.ownerId() + ":" + k.biz().getCode() + ":" + k.sha256()
-                + ":" + k.totalSize() + ":" + k.totalChunks();
     }
 
     private static String str(Map<Object, Object> raw, String field) {

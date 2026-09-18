@@ -10,7 +10,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * @类名 XxqApplication
  * @Date 2026/6/5
  */
-@EnableScheduling // util/file/ChunkedUploadStore.cleanupExpired 定时清理过期分片目录
+@EnableScheduling // module/file 的 FileMaintenanceTask 定时清理过期分片与无引用成品
 @SpringBootApplication
 public class XxqApplication {
 
