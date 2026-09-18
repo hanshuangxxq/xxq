@@ -109,13 +109,14 @@ public class GraduationThesisController {
                 .body(file.data());
     }
 
-    /** 教务登记查重结果（R-8.5/R-8.6） */
+    /** 教务登记查重结果（R-8.5/R-8.6；可选附查重报告：file 整传 与 data.filePath 分片产物 二选一） */
     @RequireAcademicAdmin
-    @PostMapping("/duplicate-checks")
+    @PostMapping(value = "/duplicate-checks", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Result<DuplicateCheckResponse> registerDuplicateCheck(HttpServletRequest request,
-                                                                 @RequestBody DuplicateCheckRegisterRequest body) {
+                                                                 @RequestPart("data") DuplicateCheckRegisterRequest body,
+                                                                 @RequestPart(value = "file", required = false) MultipartFile file) {
         Long academicUserId = authFacade.currentUserId(request);
-        return Result.ok(thesisService.registerDuplicateCheck(academicUserId, body));
+        return Result.ok(thesisService.registerDuplicateCheck(academicUserId, body, file));
     }
 
     /** 论文的查重记录 */
@@ -123,6 +124,18 @@ public class GraduationThesisController {
     @GetMapping("/{id:\\d+}/duplicate-checks")
     public Result<List<DuplicateCheckResponse>> duplicateChecks(HttpServletRequest request, @PathVariable Long id) {
         return Result.ok(thesisService.listDuplicateChecks(id));
+    }
+
+    /** 查重报告下载（学生本人/指导教师/院系/教务） */
+    @RequireAuth({UserType.STUDENT, UserType.TEACHER, UserType.DEPARTMENT, UserType.ACADEMIC_ADMIN})
+    @GetMapping("/duplicate-checks/{checkId:\\d+}/download")
+    public ResponseEntity<Resource> downloadDuplicateCheck(HttpServletRequest request,
+                                                           @PathVariable Long checkId) {
+        Long userId = authFacade.currentUserId(request);
+        String userType = authFacade.currentUserType(request);
+        FileView view = thesisService.resolveDuplicateCheckFile(userType, userId, checkId);
+        return ResumableFileResponse.buildDownload(view.path(), view.originalName(),
+                ResumableFileResponse.sha256FromFileName(view.path().getFileName().toString()));
     }
 
     /** 论文文件下载（学生本人/指导教师/院系/教务） */

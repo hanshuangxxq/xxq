@@ -194,7 +194,8 @@ public class GraduationThesisServiceImpl
 
     @Override
     @Transactional
-    public DuplicateCheckResponse registerDuplicateCheck(Long academicUserId, DuplicateCheckRegisterRequest request) {
+    public DuplicateCheckResponse registerDuplicateCheck(Long academicUserId, DuplicateCheckRegisterRequest request,
+                                                         MultipartFile file) {
         ParamValidator.requireNonNull(request.getThesisId(), "论文");
         ParamValidator.requireNonNull(request.getDuplicateRate(), "重复率");
         if (request.getDuplicateRate() < 0 || request.getDuplicateRate() > 100) {
@@ -223,6 +224,13 @@ public class GraduationThesisServiceImpl
         check.setResult(request.getResult());
         check.setComment(request.getComment());
         check.setOperatorId(academicUserId);
+        // 可选查重报告附件：multipart 整传 与 data.filePath 分片产物 二选一
+        StoredFileRef fileRef = fileSupport.resolveSubmit(request.getFilePath(), request.getFileOriginal(),
+                file, FileBizEnum.GRADUATION_DUPLICATE_REPORT, false);
+        if (fileRef != null) {
+            check.setFileName(fileRef.storedPath());
+            check.setFileOriginal(fileRef.originalName());
+        }
         duplicateCheckMapper.insert(check);
         // 门禁 R-3.3：查重通过进入答辩环节；不通过退回修改
         thesis.setStatus(request.getResult() == com.xrq.xxq.module.practice.graduation.entity.DuplicateResultEnum.PASS
@@ -311,6 +319,20 @@ public class GraduationThesisServiceImpl
     @Override
     public List<DuplicateCheckResponse> listDuplicateChecks(Long thesisId) {
         return batchDuplicateChecks(List.of(thesisId)).getOrDefault(thesisId, List.of());
+    }
+
+    @Override
+    public FileView resolveDuplicateCheckFile(String userType, Long userId, Long checkId) {
+        GraduationDuplicateCheck check = duplicateCheckMapper.selectById(checkId);
+        if (check == null) {
+            throw new BusinessException(404, "查重记录不存在");
+        }
+        // 与论文文件同一判权链：学生本人/指导教师/院系/教务
+        checkFileAccess(userType, userId, check.getCampaignId(), check.getStudentId());
+        if (check.getFileName() == null || check.getFileName().isBlank()) {
+            throw new BusinessException(404, "该次检测未上传查重报告");
+        }
+        return new FileView(fileSupport.resolveForDownload(check.getFileName()), check.getFileOriginal());
     }
 
     // ---- helpers ----
@@ -442,6 +464,8 @@ public class GraduationThesisServiceImpl
         resp.setCheckTime(c.getCheckTime());
         resp.setResult(c.getResult());
         resp.setComment(c.getComment());
+        resp.setFileName(c.getFileName());
+        resp.setFileOriginal(c.getFileOriginal());
         resp.setOperatorId(c.getOperatorId());
         resp.setOperatorName(c.getOperatorId() == null ? null : operatorNames.get(c.getOperatorId()));
         resp.setCreateTime(c.getCreateTime());

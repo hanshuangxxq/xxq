@@ -34,4 +34,10 @@ public class DuplicateCheckRegisterRequest {
 
     /** 备注 */
     private String comment;
+
+    /** 查重报告分片产物路径（objects/...），与 multipart file 二选一，均可空 */
+    private String filePath;
+
+    /** 查重报告展示文件名，配合 filePath 使用 */
+    private String fileOriginal;
 }

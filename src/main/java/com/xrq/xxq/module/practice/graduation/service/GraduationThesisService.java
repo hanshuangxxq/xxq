@@ -23,8 +23,12 @@ public interface GraduationThesisService {
     /** 指导教师形式审查（R-8.3：通过进入待查重 / 退回修改） */
     ThesisResponse reviewThesis(Long teacherUserId, Long thesisId, ThesisReviewRequest request);
 
-    /** 教务登记查重结果（R-8.5/R-8.6，历史保留） */
-    DuplicateCheckResponse registerDuplicateCheck(Long academicUserId, DuplicateCheckRegisterRequest request);
+    /** 教务登记查重结果（R-8.5/R-8.6，历史保留；file 与 request.filePath 二选一，均可空） */
+    DuplicateCheckResponse registerDuplicateCheck(Long academicUserId, DuplicateCheckRegisterRequest request,
+                                                  MultipartFile file);
+
+    /** 查重报告下载（权限：学生本人/指导教师/院系/教务；未上传报告 404） */
+    FileView resolveDuplicateCheckFile(String userType, Long userId, Long checkId);
 
     /** 学生查看我的论文（含版本列表与查重记录） */
     List<ThesisResponse> listMyThesis(Long studentUserId, Long campaignId);

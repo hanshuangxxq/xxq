@@ -26,6 +26,12 @@ public class DuplicateCheckResponse {
 
     private String comment;
 
+    /** 查重报告存储路径（有值即表示可下载） */
+    private String fileName;
+
+    /** 查重报告展示文件名 */
+    private String fileOriginal;
+
     private Long operatorId;
 
     private String operatorName;
