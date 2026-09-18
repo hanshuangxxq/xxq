@@ -3,6 +3,13 @@ spring:
     name: xxq
   profiles:
     active: dev
+  servlet:
+    multipart:
+      # 默认 1MB/10MB：超限在 DispatcherServlet 解析阶段就被拒绝，practice(20MB)/avatar(5MB)
+      # 的业务层大小校验永远走不到，且只能抛出无意义的 500。放宽到业务上限之上，
+      # 让业务层/GlobalExceptionHandler 返回可读文案（见 GlobalExceptionHandler#handleMaxUploadSize）。
+      max-file-size: 25MB
+      max-request-size: 30MB
 
 avatar:
   storage-path: uploads/avatars
@@ -28,14 +35,20 @@ timefold:
 rate-limit:
   global-per-minute: 120      # 全局限流：同一账号（未登录按 IP）每分钟请求上限
   selection-per-minute: 300   # 选课宽容档：/api/selection/** 独立桶，选课高峰更宽容
+  file-per-minute: 600        # 文件传输档：/api/file/** 独立桶，2GB÷5MB=410 个分片请求，默认档必误伤
   login-ip-per-minute: 20     # 登录限流：同一客户端（公网 IP + 前端上报 X-Client-Private-IP 内网 IP 复合维度，缺失时纯公网 IP）每分钟登录尝试上限
   login-max-failures: 5       # 登录连续失败次数上限（仅 account 渠道）
   login-lock-minutes: 5       # 触发锁定后的锁定时长（分钟）
 
-# 分片文件传输工具（util/file/ChunkedUploadStore：断点续传/续下，磁盘即状态）
+# 通用文件模块（module/file：分片上传/断点续传/秒传 + 整传 + 通用下载）
 file:
-  storage-path: uploads/files      # 存储根目录（chunks/ 分片中转 + objects/ 成品）
-  max-file-size: 2147483648        # 单文件上限（2GB）
-  chunk-size: 5242880              # 参考分片大小（5MB），供调用方建议前端分片粒度
-  chunk-expire-hours: 168          # 过期分片目录清理阈值（7 天）
-  cleanup-interval-ms: 3600000     # 过期清理任务执行间隔（1 小时）
+  storage-path: uploads/files      # 存储根目录（chunks/ 分片中转 + objects/ 内容寻址成品）
+  max-file-size: 2147483648        # 单文件上限（2GB，分片路径生效；整传受 multipart 25MB 约束）
+  chunk-size: 5242880              # 参考分片大小（5MB），供调用方向前端建议分片粒度
+  chunk-expire-hours: 168          # 过期分片目录清理阈值（7 天；须「Redis 无会话 且 目录超期」才删）
+  upload-expire-hours: 24          # 上传会话 TTL（小时），活跃自动续期；到期后 Redis 会话消失、分片目录另行回收
+  orphan-grace-hours: 48           # 无引用成品回收宽限期（小时）：complete 到业务落库之间的窗口
+  cleanup-interval-ms: 3600000     # 清理任务执行间隔（1 小时）
+  migration:
+    enabled: false                 # 存量 practice 文件迁移开关（一次性脚本，运行后应删除该类）
+    apply: false                   # false = 仅演练（dry-run），只写日志不动 DB 与磁盘
