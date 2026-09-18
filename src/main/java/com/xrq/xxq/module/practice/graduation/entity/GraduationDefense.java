@@ -42,6 +42,12 @@ public class GraduationDefense {
     /** 答辩教师 user.id 逗号分隔 */
     private String defenseTeacherIds;
 
+    /** 答辩材料存储相对路径（objects/graduation-defense-material/...），可空 */
+    private String fileName;
+
+    /** 答辩材料展示文件名 */
+    private String fileOriginal;
+
     private LocalDateTime createTime;
 
     private LocalDateTime updateTime;

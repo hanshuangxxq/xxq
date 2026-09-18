@@ -43,6 +43,12 @@ public class GraduationDuplicateCheck {
 
     private String comment;
 
+    /** 查重报告存储相对路径（objects/graduation-duplicate-report/...），可空 */
+    private String fileName;
+
+    /** 查重报告展示文件名 */
+    private String fileOriginal;
+
     /** 登记人 user.id */
     private Long operatorId;
 

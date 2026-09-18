@@ -26,6 +26,13 @@ public class CompetitionResult {
     private AwardEnum award;
     private Integer score;
     private String comment;
+
+    /** 获奖证书存储相对路径（objects/competition-certificate/...），可空 */
+    private String fileName;
+
+    /** 获奖证书展示文件名 */
+    private String fileOriginal;
+
     private LocalDateTime awardTime;
 
     @TableLogic
