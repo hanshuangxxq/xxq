@@ -1,21 +1,19 @@
 package com.xrq.xxq.module.practice.graduation.service.impl;
 
-import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.module.notification.notice.PracticeNoticeScenes;
 import com.xrq.xxq.module.file.dto.StoredFileRef;
 import com.xrq.xxq.module.file.entity.FileBizEnum;
+import com.xrq.xxq.module.practice.common.FileView;
 import com.xrq.xxq.module.practice.common.PracticeFileSupport;
 import com.xrq.xxq.module.practice.graduation.dto.GuidanceLogCreateRequest;
 import com.xrq.xxq.module.practice.graduation.dto.GuidanceLogResponse;
@@ -44,7 +42,6 @@ import com.xrq.xxq.module.practice.graduation.service.GraduationProcessService;
 import com.xrq.xxq.module.user.mapper.UserMapper;
 import com.xrq.xxq.util.ParamValidator;
 import com.xrq.xxq.util.StudentScopeResolver;
-
 import lombok.RequiredArgsConstructor;
 
 @Service

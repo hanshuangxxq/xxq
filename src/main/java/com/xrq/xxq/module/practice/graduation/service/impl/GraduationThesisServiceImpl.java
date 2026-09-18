@@ -32,6 +32,7 @@ import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.module.notification.notice.PracticeNoticeScenes;
 import com.xrq.xxq.module.file.dto.StoredFileRef;
 import com.xrq.xxq.module.file.entity.FileBizEnum;
+import com.xrq.xxq.module.practice.common.FileView;
 import com.xrq.xxq.module.practice.common.PracticeFileSupport;
 import com.xrq.xxq.module.practice.graduation.dto.DuplicateCheckRegisterRequest;
 import com.xrq.xxq.module.practice.graduation.dto.DuplicateCheckResponse;
@@ -89,9 +90,9 @@ public class GraduationThesisServiceImpl
     public ThesisResponse submitThesis(Long studentUserId, ThesisSubmitRequest request, MultipartFile file) {
         ParamValidator.requireNonNull(request.getCampaignId(), "活动");
         ParamValidator.requireNonBlank(request.getTitle(), "论文题目");
-        if (file == null || file.isEmpty()) {
-            throw new BusinessException(400, "论文文件不能为空");
-        }
+        // 注意：不要在这里校验 file 非空 —— 大文件走分片时客户端只传 data.filePath、
+        // 根本没有 file 部分，提前拦截会把分片提交这条路整个堵死。
+        // 文件存在性由下面的 fileSupport.resolveSubmit(..., required=true) 统一负责。
         GraduationCampaign campaign = requireCampaign(request.getCampaignId());
         // 门禁 R-3.2：开题通过后才能提交论文（中期为软门禁，开题硬门禁）
         GraduationOpeningReport opening = openingReportMapper.selectOne(

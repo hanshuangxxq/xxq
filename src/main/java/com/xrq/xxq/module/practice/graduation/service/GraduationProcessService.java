@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.web.multipart.MultipartFile;
 
+import com.xrq.xxq.module.practice.common.FileView;
 import com.xrq.xxq.module.practice.graduation.dto.GuidanceLogCreateRequest;
 import com.xrq.xxq.module.practice.graduation.dto.GuidanceLogResponse;
 import com.xrq.xxq.module.practice.graduation.dto.MidtermResponse;
@@ -56,10 +57,4 @@ public interface GraduationProcessService {
 
     /** 下载中期检查附件（权限同上） */
     FileView resolveMidtermFile(String userType, Long userId, Long midtermId);
-
-    /**
-     * 附件下载视图：磁盘文件 + 原始文件名。
-     */
-    record FileView(java.nio.file.Path path, String originalName) {
-    }
 }

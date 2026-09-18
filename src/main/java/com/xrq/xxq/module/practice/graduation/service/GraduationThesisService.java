@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.web.multipart.MultipartFile;
 
+import com.xrq.xxq.module.practice.common.FileView;
 import com.xrq.xxq.module.practice.graduation.dto.DuplicateCheckRegisterRequest;
 import com.xrq.xxq.module.practice.graduation.dto.DuplicateCheckResponse;
 import com.xrq.xxq.module.practice.graduation.dto.ThesisResponse;
@@ -50,11 +51,5 @@ public interface GraduationThesisService {
      * 查重数据包：zip 字节 + 文件名。
      */
     record ExportPackage(byte[] data, String fileName) {
-    }
-
-    /**
-     * 论文下载视图：磁盘文件 + 原始文件名。
-     */
-    record FileView(java.nio.file.Path path, String originalName) {
     }
 }

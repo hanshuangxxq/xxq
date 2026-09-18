@@ -3,10 +3,7 @@ package com.xrq.xxq.module.practice.graduation.controller;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-
 import jakarta.servlet.http.HttpServletRequest;
-
-import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -21,8 +18,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-
 import com.xrq.xxq.common.Result;
+import com.xrq.xxq.module.practice.common.FileView;
 import com.xrq.xxq.module.practice.common.PracticeFileSupport;
 import com.xrq.xxq.util.file.ResumableFileResponse;
 import com.xrq.xxq.module.practice.graduation.dto.DuplicateCheckRegisterRequest;
@@ -32,14 +29,12 @@ import com.xrq.xxq.module.practice.graduation.dto.ThesisReviewRequest;
 import com.xrq.xxq.module.practice.graduation.dto.ThesisSubmitRequest;
 import com.xrq.xxq.module.practice.graduation.entity.ThesisStatusEnum;
 import com.xrq.xxq.module.practice.graduation.service.GraduationThesisService;
-import com.xrq.xxq.module.practice.graduation.service.GraduationThesisService.FileView;
 import com.xrq.xxq.util.auth.AuthFacade;
 import com.xrq.xxq.util.auth.RequireAcademicAdmin;
 import com.xrq.xxq.util.auth.RequireAuth;
 import com.xrq.xxq.util.auth.RequireStudent;
 import com.xrq.xxq.util.auth.RequireTeacher;
 import com.xrq.xxq.util.auth.UserType;
-
 import lombok.RequiredArgsConstructor;
 
 /**

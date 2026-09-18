@@ -1,15 +1,9 @@
 package com.xrq.xxq.module.practice.socialpractice.controller;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
-
 import jakarta.servlet.http.HttpServletRequest;
-
-import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -22,7 +16,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-
 import com.xrq.xxq.common.PageQuery;
 import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.common.Result;
@@ -39,7 +32,6 @@ import com.xrq.xxq.util.auth.RequireAcademicAdmin;
 import com.xrq.xxq.util.auth.RequireAuth;
 import com.xrq.xxq.util.auth.RequireStudent;
 import com.xrq.xxq.util.auth.UserType;
-
 import lombok.RequiredArgsConstructor;
 
 /**
