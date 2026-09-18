@@ -158,6 +158,19 @@ accessToken 由登录接口返回，默认有效期 30 分钟。过期后调用�
 | POST | `/api/selection/student/records` | 选课 | 是 | 10.5.3 |
 | DELETE | `/api/selection/student/records/{recordId}` | 退选 | 是 | 10.5.4 |
 | GET | `/api/selection/student/records` | 查询我的选课记录 | 是 | 10.5.5 |
+| POST | `/api/file/uploads` | 初始化 / 恢复分片上传会话（幂等，可秒传） | 是 | 11.1 |
+| PUT | `/api/file/uploads/{uploadId}/parts/{index}` | 上传一个分片（裸二进制 + X-Chunk-SHA256 头） | 是 | 11.1 |
+| POST | `/api/file/uploads/{uploadId}/complete` | 合并分片为成品（幂等） | 是 | 11.1 |
+| GET | `/api/file/uploads/{uploadId}` | 查询上传进度 | 是 | 11.1 |
+| POST | `/api/file/uploads/{uploadId}/verify` | 校验已收分片，返回缺失 / 损坏清单 | 是 | 11.1 |
+| DELETE | `/api/file/uploads/{uploadId}` | 取消上传 | 是 | 11.1 |
+| POST | `/api/file/whole` | 小文件整传（multipart：biz + file） | 是 | 11.1 |
+| POST | `/api/file/download` | 通用下载（POST 传路径，支持 Range → 206） | 是 | 11.1 |
+
+> **文件上传 / 下载**：通用端点 8 个见第 11 节；另有 6 个业务上传端点与 5 个业务下载端点
+> （`POST /api/user/avatar/upload`、`POST /api/practice/graduation/theses` 等，其中 practice 系的 `file` 部分
+> 现为**选填** —— 大文件可先走第 11 节分片上传、再以 `data.filePath` 提交）。
+> 大小上限、错误码、断点续传下载（Range/206）与完整分片契约详见根目录 **《文件上传下载接口文档.md》**。
 
 ---
 
@@ -2867,9 +2880,105 @@ Authorization: Bearer <accessToken>
 
 ---
 
-## 11. 附录
+## 11. 文件模块
 
-### 11.1 完整调用流程示例
+通用文件传输：分片上传（断点续传 / 秒传 / SHA-256 完整性校验）、小文件整传、可续传下载。
+
+**鉴权**：所有端点只要求「已登录」，**不做归属判权** —— 文件归属由各业务表自行记录，
+敏感文件一律走业务自己的下载端点。
+
+**限流**：整组走 `/api/file/**` 独立桶 **600 次/分钟**（2GB ÷ 5MB = 410 个分片请求，
+落在全站默认的 120/分钟上必然中途被限流）。
+
+**大小**：整传受 multipart 25MB 约束；分片路径的请求体是**裸二进制**（不经 multipart 解析），
+上限由 `file.max-file-size` 决定，当前 **2GB**。
+
+> 字段含义、前端上传器必须遵守的约定、完整错误码，见根目录 **《文件上传下载接口文档.md》**。
+
+### 11.1 端点总览
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/file/uploads` | 初始化 / 恢复上传会话（幂等） |
+| PUT | `/api/file/uploads/{uploadId}/parts/{index}` | 上传一个分片 |
+| POST | `/api/file/uploads/{uploadId}/complete` | 合并分片为成品（幂等） |
+| GET | `/api/file/uploads/{uploadId}` | 查询上传进度 |
+| POST | `/api/file/uploads/{uploadId}/verify` | 校验已收分片 |
+| DELETE | `/api/file/uploads/{uploadId}` | 取消上传 |
+| POST | `/api/file/whole` | 小文件整传 |
+| POST | `/api/file/download` | 通用下载 |
+
+### 11.2 完整分片上传流程
+
+**① 初始化**
+
+```bash
+curl -X POST "http://localhost:8080/api/file/uploads"   -H "Authorization: Bearer <accessToken>"   -H "Content-Type: application/json"   -d '{"biz":"graduation-thesis","originalName":"论文.pdf",
+       "totalSize":104857600,"totalChunks":21,"sha256":"<整文件 SHA-256>"}'
+```
+
+```json
+{ "code": 200, "data": {
+    "uploadId": "a1b2c3…", "chunkSize": 5242880, "totalChunks": 21,
+    "receivedChunks": [], "receivedCount": 0, "completedFile": null } }
+```
+
+- `biz` 取值：`graduation-thesis` / `graduation-opening-report` / `graduation-midterm` /
+  `internship-report` / `social-practice-report`（服务端白名单，其它值 400）。
+- **`completedFile` 非 null = 秒传命中**，跳过 ②③，直接进业务提交。
+- `uploadId` 是**确定性**的：同一用户 + 同一 biz + 同一文件内容，反复 `init` 都得到同一个值。
+  刷新页面后**用相同参数重新 `init`** 即可恢复进度，无需本地持久化。
+
+**② 逐片上传**（`index` 从 0 起，请求体是裸二进制，**不是 multipart**）
+
+```bash
+curl -X PUT "http://localhost:8080/api/file/uploads/{uploadId}/parts/0"   -H "Authorization: Bearer <accessToken>"   -H "Content-Type: application/octet-stream"   -H "X-Chunk-SHA256: <该片的 SHA-256>"   --data-binary @part0.bin
+# → { "code": 200, "data": { "index": 0, "receivedCount": 1 } }
+```
+
+片大小必须是 `init` 返回的 `chunkSize`（最后一片为余数）；`X-Chunk-SHA256` **必传**，
+否则坏片无法定位、只能全量重传。同序号重传幂等。
+
+**③ 合并**
+
+```bash
+curl -X POST "http://localhost:8080/api/file/uploads/{uploadId}/complete"   -H "Authorization: Bearer <accessToken>"
+# → { "code": 200, "data": { "storedPath": "objects/graduation-thesis/<sha256>.pdf",
+#                            "originalName": "论文.pdf", "size": 104857600,
+#                            "sha256": "<sha256>", "biz": "graduation-thesis" } }
+```
+
+把 `storedPath` 填进业务请求的 `data.filePath`（建议同时带 `data.fileOriginal`）。
+合并是**幂等**的，超时重试安全。
+
+**④ 出错时**：先 `POST /api/file/uploads/{uploadId}/verify` 拿缺失 / 损坏清单，**精准重传**这几片，
+再重新 `complete` —— 不必整个文件重来。用户主动放弃时 `DELETE /api/file/uploads/{uploadId}`。
+
+### 11.3 通用下载
+
+```bash
+curl -X POST "http://localhost:8080/api/file/download"   -H "Authorization: Bearer <accessToken>"   -H "Content-Type: application/json"   -H "Range: bytes=0-1023"   -d '{"filePath":"objects/graduation-thesis/<sha256>.pdf","originalName":"论文.pdf"}'
+```
+
+用 POST 承载路径是为了让**路径不进 URL、浏览器历史与网关日志**（服务端日志也只记展示名）。
+
+> ⚠️ **`Range` 在 POST 下依然返回 206**，但浏览器 / `wget -c` / IDM 的**自动**断点续传只对 GET 发起。
+> 用 POST 下载要续传必须前端自研分块循环。需要下载器自动续传时请用业务下载端点。
+
+### 11.4 与业务端点的衔接
+
+practice 的 5 个提交端点（论文 / 开题 / 中期 / 实习报告 / 社会实践报告）支持**二选一**：
+
+- 小文件：照旧传 multipart 的 `file` 部分（≤20MB）
+- 大文件：不传 `file`，改在 `data` 里带 `filePath` + `fileOriginal`
+
+两者同时给会返回 400；`filePath` 必须属于该端点对应的业务目录，否则 403。
+
+---
+
+## 12. 附录
+
+### 12.1 完整调用流程示例
 
 ```bash
 # 1. 注册
@@ -2963,7 +3072,7 @@ curl -X POST http://localhost:8080/api/login/logout \
   -H "Authorization: Bearer <accessToken>"
 ```
 
-### 11.2 token 有效期配置
+### 12.2 token 有效期配置
 
 ```yaml
 jwt:
@@ -2972,7 +3081,7 @@ jwt:
   refresh-token-expiration: 7d    # refreshToken / session 有效期
 ```
 
-### 11.3 密码安全
+### 12.3 密码安全
 
 - 算法：**PBKDF2WithHmacSHA256**
 - 迭代次数：**100,000**
