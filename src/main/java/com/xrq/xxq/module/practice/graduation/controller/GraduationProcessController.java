@@ -23,7 +23,8 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.xrq.xxq.common.Result;
-import com.xrq.xxq.module.practice.common.PracticeFileService;
+import com.xrq.xxq.module.practice.common.PracticeFileSupport;
+import com.xrq.xxq.util.file.ResumableFileResponse;
 import com.xrq.xxq.module.practice.graduation.dto.GuidanceLogCreateRequest;
 import com.xrq.xxq.module.practice.graduation.dto.GuidanceLogResponse;
 import com.xrq.xxq.module.practice.graduation.dto.MidtermResponse;
@@ -51,7 +52,7 @@ import lombok.RequiredArgsConstructor;
 public class GraduationProcessController {
 
     private final GraduationProcessService processService;
-    private final PracticeFileService fileService;
+    private final PracticeFileSupport fileSupport;
     private final AuthFacade authFacade;
 
     // ==================== 开题报告 ====================
@@ -99,12 +100,10 @@ public class GraduationProcessController {
         Long userId = authFacade.currentUserId(request);
         String userType = authFacade.currentUserType(request);
         FileView view = processService.resolveOpeningReportFile(userType, userId, id);
-        String filename = view.originalName() != null ? view.originalName() : view.path().getFileName().toString();
-        String encoded = URLEncoder.encode(filename, StandardCharsets.UTF_8).replace("+", "%20");
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + encoded)
-                .contentType(MediaType.parseMediaType(fileService.contentType(view.path().getFileName().toString())))
-                .body(new FileSystemResource(view.path()));
+        // 统一响应构建：Content-Disposition(RFC 5987) + Content-Type 推断 + Accept-Ranges + 强 ETag，
+        // Range 头由 Spring 原生处理返回 206（旧代码 5 处逐字重复且都没有 Accept-Ranges/ETag）
+        return ResumableFileResponse.buildDownload(view.path(), view.originalName(),
+                ResumableFileResponse.sha256FromFileName(view.path().getFileName().toString()));
     }
 
     // ==================== 中期检查 ====================
@@ -151,12 +150,10 @@ public class GraduationProcessController {
         Long userId = authFacade.currentUserId(request);
         String userType = authFacade.currentUserType(request);
         FileView view = processService.resolveMidtermFile(userType, userId, id);
-        String filename = view.originalName() != null ? view.originalName() : view.path().getFileName().toString();
-        String encoded = URLEncoder.encode(filename, StandardCharsets.UTF_8).replace("+", "%20");
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + encoded)
-                .contentType(MediaType.parseMediaType(fileService.contentType(view.path().getFileName().toString())))
-                .body(new FileSystemResource(view.path()));
+        // 统一响应构建：Content-Disposition(RFC 5987) + Content-Type 推断 + Accept-Ranges + 强 ETag，
+        // Range 头由 Spring 原生处理返回 206（旧代码 5 处逐字重复且都没有 Accept-Ranges/ETag）
+        return ResumableFileResponse.buildDownload(view.path(), view.originalName(),
+                ResumableFileResponse.sha256FromFileName(view.path().getFileName().toString()));
     }
 
     // ==================== 过程指导记录 ====================

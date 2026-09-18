@@ -2,7 +2,6 @@ package com.xrq.xxq.module.file.service;
 
 import java.io.InputStream;
 import java.nio.file.Path;
-import java.util.Locale;
 
 import org.springframework.web.multipart.MultipartFile;
 
@@ -105,23 +104,4 @@ public interface FileStorageService {
 
     /** 参考分片大小（字节），供调用方向前端建议分片粒度。 */
     long referenceChunkSize();
-
-    /**
-     * 从 {@code objects/{biz}/{sha256}{ext}} 形状的存储路径提取 sha256，用作下载响应的强 ETag。
-     * <p>legacy 路径（旧扁平目录的 UUID 文件名）不含摘要，返回 {@code null}。
-     */
-    static String sha256FromStoredPath(String storedPath) {
-        if (storedPath == null || !storedPath.startsWith("objects/")) {
-            return null;
-        }
-        String[] segments = storedPath.split("/");
-        if (segments.length != 3) {
-            return null;
-        }
-        String fileName = segments[2];
-        int dot = fileName.indexOf('.');
-        String sha = dot < 0 ? fileName : fileName.substring(0, dot);
-        return sha.length() == 64 && sha.chars().allMatch(c -> Character.digit(c, 16) >= 0)
-                ? sha.toLowerCase(Locale.ROOT) : null;
-    }
 }

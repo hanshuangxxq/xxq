@@ -30,7 +30,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.module.notification.notice.PracticeNoticeScenes;
-import com.xrq.xxq.module.practice.common.PracticeFileService;
+import com.xrq.xxq.module.file.dto.StoredFileRef;
+import com.xrq.xxq.module.file.entity.FileBizEnum;
+import com.xrq.xxq.module.practice.common.PracticeFileSupport;
 import com.xrq.xxq.module.practice.graduation.dto.DuplicateCheckRegisterRequest;
 import com.xrq.xxq.module.practice.graduation.dto.DuplicateCheckResponse;
 import com.xrq.xxq.module.practice.graduation.dto.ThesisResponse;
@@ -78,7 +80,7 @@ public class GraduationThesisServiceImpl
     private final ClassNameMapper classNameMapper;
     private final CollegeMapper collegeMapper;
     private final StudentScopeResolver scopeResolver;
-    private final PracticeFileService fileService;
+    private final PracticeFileSupport fileSupport;
     private final GraduationLogService logService;
     private final PracticeNoticeScenes practiceNoticeScenes;
 
@@ -127,14 +129,16 @@ public class GraduationThesisServiceImpl
             }
         }
 
-        PracticeFileService.StoredFile stored = fileService.store(file);
+        // 文件：整传（file）与分片产物（filePath）二选一，必填
+        StoredFileRef ref = fileSupport.resolveSubmit(request.getFilePath(), request.getFileOriginal(),
+                file, FileBizEnum.GRADUATION_THESIS, true);
         GraduationThesis thesis = new GraduationThesis();
         thesis.setCampaignId(campaign.getId());
         thesis.setAssignmentId(assignment.getId());
         thesis.setStudentId(studentUserId);
         thesis.setTitle(request.getTitle().trim());
-        thesis.setFileName(stored.storedName());
-        thesis.setFileOriginal(stored.originalName());
+        thesis.setFileName(ref.storedPath());
+        thesis.setFileOriginal(ref.originalName());
         thesis.setVersion(latest != null ? latest.getVersion() + 1 : 1);
         thesis.setIsLatest(1);
         thesis.setStatus(ThesisStatusEnum.SUBMITTED);
@@ -152,7 +156,7 @@ public class GraduationThesisServiceImpl
         while (allVersions.size() > MAX_VERSIONS) {
             GraduationThesis oldest = allVersions.removeFirst ();
             baseMapper.deleteById(oldest.getId());
-            fileService.delete(oldest.getFileName());
+            fileSupport.release(oldest.getFileName());
         }
         return toResponse(thesis);
     }
@@ -276,7 +280,7 @@ public class GraduationThesisServiceImpl
             throw new BusinessException(404, "论文不存在");
         }
         checkFileAccess(userType, userId, thesis.getCampaignId(), thesis.getStudentId());
-        return new FileView(fileService.resolve(thesis.getFileName()), thesis.getFileOriginal());
+        return new FileView(fileSupport.resolveForDownload(thesis.getFileName()), thesis.getFileOriginal());
     }
 
     @Override
@@ -530,7 +534,7 @@ public class GraduationThesisServiceImpl
             zip.write(xlsx);
             zip.closeEntry();
             for (GraduationThesis t : theses) {
-                Path path = fileService.resolve(t.getFileName());
+                Path path = fileSupport.resolveForDownload(t.getFileName());
                 String entryName = safeName(noMap.getOrDefault(t.getStudentId(), "")
                         + "-" + nameMap.getOrDefault(t.getStudentId(), "")
                         + "-" + t.getTitle()

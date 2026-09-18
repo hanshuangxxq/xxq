@@ -133,6 +133,6 @@ public class FileController {
     public ResponseEntity<Resource> download(@RequestBody DownloadRequest body) {
         Path file = fileStorage.resolve(body.getFilePath());
         return ResumableFileResponse.buildDownload(file, body.getOriginalName(),
-                FileStorageService.sha256FromStoredPath(body.getFilePath()));
+                ResumableFileResponse.sha256FromStoredPath(body.getFilePath()));
     }
 }

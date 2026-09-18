@@ -26,7 +26,8 @@ import org.springframework.web.multipart.MultipartFile;
 import com.xrq.xxq.common.PageQuery;
 import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.common.Result;
-import com.xrq.xxq.module.practice.common.PracticeFileService;
+import com.xrq.xxq.module.practice.common.PracticeFileSupport;
+import com.xrq.xxq.util.file.ResumableFileResponse;
 import com.xrq.xxq.module.practice.common.entity.ReportStatusEnum;
 import com.xrq.xxq.module.practice.internship.dto.InternshipReportResponse;
 import com.xrq.xxq.module.practice.internship.dto.InternshipReportReviewRequest;
@@ -52,14 +53,15 @@ import lombok.RequiredArgsConstructor;
 public class InternshipReportController {
 
     private final InternshipReportService reportService;
-    private final PracticeFileService fileService;
+    private final PracticeFileSupport fileSupport;
     private final AuthFacade authFacade;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @RequireStudent
     public Result<InternshipReportResponse> submit(HttpServletRequest request,
                                                    @RequestPart("data") InternshipReportSubmitRequest body,
-                                                   @RequestPart("file") MultipartFile file) {
+                                                   // 可选：与 body.filePath（分片产物）二选一
+                                                   @RequestPart(value = "file", required = false) MultipartFile file) {
         Long studentUserId = authFacade.currentUserId(request);
         return Result.ok(reportService.submit(studentUserId, body, file));
     }
@@ -107,12 +109,9 @@ public class InternshipReportController {
         Long userId = authFacade.currentUserId(request);
         String userType = authFacade.currentUserType(request);
         InternshipReport report = reportService.loadForDownload(id, userId, userType);
-        Path file = fileService.resolve(report.getFileName());
-        String filename = report.getFileOriginal() != null ? report.getFileOriginal() : report.getFileName();
-        String encoded = URLEncoder.encode(filename, StandardCharsets.UTF_8).replace("+", "%20");
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + encoded)
-                .contentType(MediaType.parseMediaType(fileService.contentType(report.getFileName())))
-                .body(new FileSystemResource(file));
+        Path file = fileSupport.resolveForDownload(report.getFileName());
+        return ResumableFileResponse.buildDownload(file,
+                report.getFileOriginal() != null ? report.getFileOriginal() : report.getFileName(),
+                ResumableFileResponse.sha256FromFileName(file.getFileName().toString()));
     }
 }

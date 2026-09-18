@@ -70,6 +70,33 @@ public final class ResumableFileResponse {
     }
 
     /**
+     * 从存储相对路径（{@code objects/{biz}/{sha256}{ext}}）提取内容摘要，用作下载响应的强 ETag。
+     *
+     * @return 64 位十六进制摘要；路径非内容寻址形态（如 legacy 的 UUID 文件名）返回 {@code null}
+     */
+    public static String sha256FromStoredPath(String storedPath) {
+        if (storedPath == null || !storedPath.startsWith("objects/")) {
+            return null;
+        }
+        String[] segments = storedPath.split("/");
+        return segments.length == 3 ? sha256FromFileName(segments[2]) : null;
+    }
+
+    /**
+     * 从磁盘文件名（{@code {sha256}{ext}}）提取内容摘要。
+     * <p>legacy 文件是 32 位 UUID 名，长度不符自然返回 {@code null} —— 不会误把 UUID 当摘要输出。
+     */
+    public static String sha256FromFileName(String fileName) {
+        if (fileName == null) {
+            return null;
+        }
+        int dot = fileName.indexOf('.');
+        String sha = dot < 0 ? fileName : fileName.substring(0, dot);
+        return sha.length() == 64 && sha.chars().allMatch(c -> Character.digit(c, 16) >= 0)
+                ? sha.toLowerCase(Locale.ROOT) : null;
+    }
+
+    /**
      * 推断 Content-Type：先按扩展名映射常见类型（行为跨环境确定，不依赖服务器注册表），
      * 未收录的扩展名再走 {@link Files#probeContentType}，最终兜底 application/octet-stream。
      */

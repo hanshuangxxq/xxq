@@ -14,7 +14,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.module.notification.notice.PracticeNoticeScenes;
-import com.xrq.xxq.module.practice.common.PracticeFileService;
+import com.xrq.xxq.module.file.dto.StoredFileRef;
+import com.xrq.xxq.module.file.entity.FileBizEnum;
+import com.xrq.xxq.module.practice.common.PracticeFileSupport;
 import com.xrq.xxq.module.practice.graduation.dto.GuidanceLogCreateRequest;
 import com.xrq.xxq.module.practice.graduation.dto.GuidanceLogResponse;
 import com.xrq.xxq.module.practice.graduation.dto.MidtermResponse;
@@ -58,7 +60,7 @@ public class GraduationProcessServiceImpl
     private final GraduationGuidanceLogMapper guidanceLogMapper;
     private final UserMapper userMapper;
     private final StudentScopeResolver scopeResolver;
-    private final PracticeFileService fileService;
+    private final PracticeFileSupport fileSupport;
     private final GraduationLogService logService;
     private final PracticeNoticeScenes practiceNoticeScenes;
 
@@ -90,14 +92,14 @@ public class GraduationProcessServiceImpl
             report.setCampaignId(campaign.getId());
             report.setStudentId(studentUserId);
         }
-        // 附件可选：重提时旧文件先删，新文件再存
-        if (file != null && !file.isEmpty()) {
-            if (report.getFileName() != null) {
-                fileService.delete(report.getFileName());
-            }
-            PracticeFileService.StoredFile stored = fileService.store(file);
-            report.setFileName(stored.storedName());
-            report.setFileOriginal(stored.originalName());
+        // 附件可选：整传（file）与分片产物（filePath）二选一
+        StoredFileRef ref = fileSupport.resolveSubmit(request.getFilePath(), request.getFileOriginal(),
+                file, FileBizEnum.GRADUATION_OPENING, false);
+        if (ref != null) {
+            // 重提：释放旧文件引用（内容寻址产物不即时删，legacy 文件即时删）
+            fileSupport.release(report.getFileName());
+            report.setFileName(ref.storedPath());
+            report.setFileOriginal(ref.originalName());
         }
         report.setTitle(request.getTitle().trim());
         report.setContent(request.getContent().trim());
@@ -207,13 +209,12 @@ public class GraduationProcessServiceImpl
             }
             midterm.setAssignmentId(assignment.getId());
         }
-        if (file != null && !file.isEmpty()) {
-            if (midterm.getFileName() != null) {
-                fileService.delete(midterm.getFileName());
-            }
-            PracticeFileService.StoredFile stored = fileService.store(file);
-            midterm.setFileName(stored.storedName());
-            midterm.setFileOriginal(stored.originalName());
+        StoredFileRef ref = fileSupport.resolveSubmit(request.getFilePath(), request.getFileOriginal(),
+                file, FileBizEnum.GRADUATION_MIDTERM, false);
+        if (ref != null) {
+            fileSupport.release(midterm.getFileName());
+            midterm.setFileName(ref.storedPath());
+            midterm.setFileOriginal(ref.originalName());
         }
         midterm.setContent(request.getContent().trim());
         midterm.setStatus("SUBMITTED");
@@ -339,7 +340,7 @@ public class GraduationProcessServiceImpl
             throw new BusinessException(404, "开题报告不存在");
         }
         checkFileAccess(userType, userId, report.getCampaignId(), report.getStudentId());
-        return new FileView(fileService.resolve(report.getFileName()), report.getFileOriginal());
+        return new FileView(fileSupport.resolveForDownload(report.getFileName()), report.getFileOriginal());
     }
 
     @Override
@@ -349,7 +350,7 @@ public class GraduationProcessServiceImpl
             throw new BusinessException(404, "中期检查不存在");
         }
         checkFileAccess(userType, userId, midterm.getCampaignId(), midterm.getStudentId());
-        return new FileView(fileService.resolve(midterm.getFileName()), midterm.getFileOriginal());
+        return new FileView(fileSupport.resolveForDownload(midterm.getFileName()), midterm.getFileOriginal());
     }
 
     // ---- helpers ----

@@ -23,7 +23,8 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.xrq.xxq.common.Result;
-import com.xrq.xxq.module.practice.common.PracticeFileService;
+import com.xrq.xxq.module.practice.common.PracticeFileSupport;
+import com.xrq.xxq.util.file.ResumableFileResponse;
 import com.xrq.xxq.module.practice.graduation.dto.DuplicateCheckRegisterRequest;
 import com.xrq.xxq.module.practice.graduation.dto.DuplicateCheckResponse;
 import com.xrq.xxq.module.practice.graduation.dto.ThesisResponse;
@@ -50,7 +51,7 @@ import lombok.RequiredArgsConstructor;
 public class GraduationThesisController {
 
     private final GraduationThesisService thesisService;
-    private final PracticeFileService fileService;
+    private final PracticeFileSupport fileSupport;
     private final AuthFacade authFacade;
 
     /** 学生提交/重提论文（R-8.1/R-8.2，版本管理） */
@@ -58,7 +59,8 @@ public class GraduationThesisController {
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Result<ThesisResponse> submit(HttpServletRequest request,
                                          @RequestPart("data") ThesisSubmitRequest body,
-                                         @RequestPart("file") MultipartFile file) {
+                                         // 可选：与 body.filePath（分片产物）二选一
+                                         @RequestPart(value = "file", required = false) MultipartFile file) {
         Long studentUserId = authFacade.currentUserId(request);
         return Result.ok(thesisService.submitThesis(studentUserId, body, file));
     }
@@ -135,11 +137,9 @@ public class GraduationThesisController {
         Long userId = authFacade.currentUserId(request);
         String userType = authFacade.currentUserType(request);
         FileView view = thesisService.resolveThesisFile(userType, userId, id);
-        String filename = view.originalName() != null ? view.originalName() : view.path().getFileName().toString();
-        String encoded = URLEncoder.encode(filename, StandardCharsets.UTF_8).replace("+", "%20");
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + encoded)
-                .contentType(MediaType.parseMediaType(fileService.contentType(view.path().getFileName().toString())))
-                .body(new FileSystemResource(view.path()));
+        // 统一响应构建：Content-Disposition(RFC 5987) + Content-Type 推断 + Accept-Ranges + 强 ETag，
+        // Range 头由 Spring 原生处理返回 206（旧代码 5 处逐字重复且都没有 Accept-Ranges/ETag）
+        return ResumableFileResponse.buildDownload(view.path(), view.originalName(),
+                ResumableFileResponse.sha256FromFileName(view.path().getFileName().toString()));
     }
 }

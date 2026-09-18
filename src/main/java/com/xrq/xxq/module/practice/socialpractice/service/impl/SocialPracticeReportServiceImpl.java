@@ -18,7 +18,9 @@ import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.common.PageQuery;
 import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.module.notification.notice.PracticeNoticeScenes;
-import com.xrq.xxq.module.practice.common.PracticeFileService;
+import com.xrq.xxq.module.file.dto.StoredFileRef;
+import com.xrq.xxq.module.file.entity.FileBizEnum;
+import com.xrq.xxq.module.practice.common.PracticeFileSupport;
 import com.xrq.xxq.module.practice.common.entity.AuditStatusEnum;
 import com.xrq.xxq.module.practice.common.entity.ReportStatusEnum;
 import com.xrq.xxq.module.practice.socialpractice.dto.SocialPracticeReportResponse;
@@ -46,7 +48,7 @@ public class SocialPracticeReportServiceImpl
     private final SocialPracticeMapper practiceMapper;
     private final SocialPracticeApplicationMapper applicationMapper;
     private final UserMapper userMapper;
-    private final PracticeFileService fileService;
+    private final PracticeFileSupport fileSupport;
     private final PracticeNoticeScenes practiceNoticeScenes;
 
     @Override
@@ -70,27 +72,30 @@ public class SocialPracticeReportServiceImpl
                 .eq(SocialPracticeReport::getPracticeId, request.getPracticeId())
                 .eq(SocialPracticeReport::getStudentId, studentUserId)
                 .last("LIMIT 1"));
+        // 文件：整传（file）与分片产物（filePath）二选一，必填
+        StoredFileRef ref = fileSupport.resolveSubmit(request.getFilePath(), request.getFileOriginal(),
+                file, FileBizEnum.SOCIAL_PRACTICE_REPORT, true);
         if (existing != null) {
             if (existing.getStatus() != ReportStatusEnum.SUBMITTED) {
                 throw new BusinessException(409, "报告已评审，不可修改");
             }
-            PracticeFileService.StoredFile stored = fileService.store(file);
+            // 重传：释放旧文件引用（内容寻址产物交由回收任务处理）
+            fileSupport.release(existing.getFileName());
             existing.setTitle(request.getTitle());
             existing.setSummary(request.getSummary());
-            existing.setFileName(stored.storedName());
-            existing.setFileOriginal(stored.originalName());
+            existing.setFileName(ref.storedPath());
+            existing.setFileOriginal(ref.originalName());
             existing.setSubmitTime(LocalDateTime.now());
             updateById(existing);
             return toResponse(existing, practice.getTitle(), nameOf(studentUserId));
         }
-        PracticeFileService.StoredFile stored = fileService.store(file);
         SocialPracticeReport report = new SocialPracticeReport();
         report.setPracticeId(request.getPracticeId());
         report.setStudentId(studentUserId);
         report.setTitle(request.getTitle());
         report.setSummary(request.getSummary());
-        report.setFileName(stored.storedName());
-        report.setFileOriginal(stored.originalName());
+        report.setFileName(ref.storedPath());
+        report.setFileOriginal(ref.originalName());
         report.setSubmitTime(LocalDateTime.now());
         report.setStatus(ReportStatusEnum.SUBMITTED);
         save(report);
@@ -168,7 +173,7 @@ public class SocialPracticeReportServiceImpl
         }
         String fileName = report.getFileName();
         removeById(reportId);
-        fileService.delete(fileName);
+        fileSupport.release(fileName);
     }
 
     // ---- helpers ----
