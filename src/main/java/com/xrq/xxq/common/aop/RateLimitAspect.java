@@ -43,6 +43,7 @@ import org.springframework.stereotype.Component;
 public class RateLimitAspect {
 
     private static final String SELECTION_API_PREFIX = "/api/selection";
+    private static final String FILE_API_PREFIX = "/api/file";
 
     private final RateLimitService rateLimitService;
     private final AuthFacade authFacade;
@@ -64,9 +65,22 @@ public class RateLimitAspect {
         String bucket = userId != null ? "u:" + userId : "ip:" + ip;
         String who = userId != null ? "用户[userId=" + userId + "]" : "匿名";
         String api = request.getMethod() + " " + request.getRequestURI();
-        rateLimitService.checkGlobalLimit(bucket, who, api, ip,
-                request.getRequestURI().startsWith(SELECTION_API_PREFIX));
+        rateLimitService.checkGlobalLimit(bucket, who, api, ip, tierOf(request.getRequestURI()));
         return joinPoint.proceed();
+    }
+
+    /**
+     * 按 URI 前缀选择限流档位。宽容档使用独立计数桶，不与全局桶互相挤占额度。
+     * <p>/api/file/** 必须独立：2GB ÷ 5MB = 410 个分片请求，落在 120/分钟的默认档上必然误伤。
+     */
+    private static RateLimitService.Tier tierOf(String uri) {
+        if (uri.startsWith(FILE_API_PREFIX)) {
+            return RateLimitService.Tier.FILE;
+        }
+        if (uri.startsWith(SELECTION_API_PREFIX)) {
+            return RateLimitService.Tier.SELECTION;
+        }
+        return RateLimitService.Tier.GLOBAL;
     }
 
     /** 登录防护：账号锁定检查 -> 登录限流（复合客户端 key） -> 全局桶（同 key） -> 按结果累计失败/清计数。 */
@@ -80,7 +94,8 @@ public class RateLimitAspect {
             rateLimitService.checkAccountLock(account);
         }
         rateLimitService.checkLoginClientLimit(clientKey);
-        rateLimitService.checkGlobalLimit("ip:" + clientKey, "匿名", "POST /api/login", ip, false);
+        rateLimitService.checkGlobalLimit("ip:" + clientKey, "匿名", "POST /api/login", ip,
+                RateLimitService.Tier.GLOBAL);
 
         try {
             Object result = joinPoint.proceed();

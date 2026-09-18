@@ -32,6 +32,7 @@ public class RateLimitService {
 
     private static final String GLOBAL_PREFIX = "ratelimit:global:";
     private static final String SELECTION_PREFIX = "ratelimit:selection:";
+    private static final String FILE_PREFIX = "ratelimit:file:";
     private static final String LOGIN_IP_PREFIX = "ratelimit:login:ip:";
     private static final String FAIL_PREFIX = "ratelimit:login:fail:";
     private static final String LOCK_PREFIX = "ratelimit:login:lock:";
@@ -61,6 +62,9 @@ public class RateLimitService {
     @Value("${rate-limit.selection-per-minute:300}")
     private long selectionPerMinute;
 
+    @Value("${rate-limit.file-per-minute:600}")
+    private long filePerMinute;
+
     @Value("${rate-limit.login-ip-per-minute:20}")
     private long loginIpPerMinute;
 
@@ -71,28 +75,57 @@ public class RateLimitService {
     private long loginLockMinutes;
 
     /**
+     * 限流档位：各自独立计数桶，互不累计（阈值见 application.yaml 的 rate-limit.*）。
+     */
+    public enum Tier {
+        /** 全局默认档：按账号 / 未登录按 IP。 */
+        GLOBAL,
+        /** 选课宽容档（/api/selection/**）：选课高峰学生频繁刷新属正常行为。 */
+        SELECTION,
+        /** 文件传输档（/api/file/**）：2GB ÷ 5MB = 410 个分片请求，默认档必然误伤。 */
+        FILE
+    }
+
+    /**
      * 全局限流：同一维度一分钟内超阈值抛 429。
-     * selectionScope=true（/api/selection/**）走选课宽容档独立桶，与全局桶互不累计。
      *
      * @param bucket 计数维度：已登录 "u:{userId}"，未登录 "ip:{ip}"
      * @param who    日志用身份描述，如 "用户[userId=12]" / "匿名"
      * @param api    日志用接口描述，如 "POST /api/scores"
      * @param ip     客户端 IP（日志用）
+     * @param tier   档位；非默认档使用独立计数桶，不与全局桶互相挤占
      */
-    public void checkGlobalLimit(String bucket, String who, String api, String ip, boolean selectionScope) {
-        long limit = selectionScope ? selectionPerMinute : globalPerMinute;
-        String prefix = selectionScope ? SELECTION_PREFIX : GLOBAL_PREFIX;
+    public void checkGlobalLimit(String bucket, String who, String api, String ip, Tier tier) {
+        long limit = switch (tier) {
+            case GLOBAL -> globalPerMinute;
+            case SELECTION -> selectionPerMinute;
+            case FILE -> filePerMinute;
+        };
+        String prefix = switch (tier) {
+            case GLOBAL -> GLOBAL_PREFIX;
+            case SELECTION -> SELECTION_PREFIX;
+            case FILE -> FILE_PREFIX;
+        };
         Long count = incrWithExpire(prefix + bucket + ":" + minuteBucket(), BUCKET_TTL_SECONDS);
         if (count == null) {
             return; // 脚本恒返回计数，防御性放行
         }
         if (count == limit + 1) {
             limitLog.warn("限流触发 | {} | IP:{} | {} | 阈值: {}/分钟{}",
-                    who, ip, api, limit, selectionScope ? "(选课宽容档)" : "");
+                    who, ip, api, limit, tierLabel(tier));
         }
         if (count > limit) {
             throw new RateLimitException("请求过于频繁，请稍后再试");
         }
+    }
+
+    /** 日志用档位说明；默认档不加后缀，保持既有日志格式不变。 */
+    private static String tierLabel(Tier tier) {
+        return switch (tier) {
+            case GLOBAL -> "";
+            case SELECTION -> "(选课宽容档)";
+            case FILE -> "(文件传输档)";
+        };
     }
 
     /**

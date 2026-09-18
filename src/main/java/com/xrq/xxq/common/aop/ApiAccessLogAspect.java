@@ -1,6 +1,7 @@
 package com.xrq.xxq.common.aop;
 
 import com.xrq.xxq.common.BusinessException;
+import com.xrq.xxq.module.file.dto.DownloadRequest;
 import com.xrq.xxq.util.auth.AuthFacade;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -178,6 +179,11 @@ public class ApiAccessLogAspect {
             }
             case MultipartFile[] files -> {
                 return "<文件x" + files.length + ">";
+            }
+            case DownloadRequest r -> {
+                // 通用下载刻意用 POST 承载路径（不进 URL/浏览器历史）；日志同样只留展示名，
+                // 否则 default 分支会把 filePath 整个序列化进「参数:」字段，白费这个设计
+                return "<下载请求:" + r.getOriginalName() + ">";
             }
             case CharSequence s -> {
                 return mask(s.toString());
