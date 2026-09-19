@@ -1,11 +1,6 @@
 package com.xrq.xxq.module.practice.graduation.controller;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.net.URLEncoder;
-
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
+import org.springframework.core.io.Resource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -24,6 +19,7 @@ import com.xrq.xxq.module.practice.graduation.service.GraduationLogService;
 import com.xrq.xxq.util.auth.AuthFacade;
 import com.xrq.xxq.util.auth.RequireAcademicAdmin;
 import com.xrq.xxq.util.auth.RequireManagement;
+import com.xrq.xxq.util.file.ResumableFileResponse;
 
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -57,23 +53,16 @@ public class GraduationDashboardController {
     /** 看板导出（R-5.10 xlsx/csv，导出动作记日志） */
     @RequireManagement
     @GetMapping("/{campaignId:\\d+}/export")
-    public ResponseEntity<byte[]> export(HttpServletRequest request, @PathVariable Long campaignId,
-                                         @RequestParam(defaultValue = "xlsx") String format,
-                                         @RequestParam(required = false) String status,
-                                         @RequestParam(required = false) String keyword,
-                                         @RequestParam(required = false) Long collegeId) throws IOException {
+    public ResponseEntity<Resource> export(HttpServletRequest request, @PathVariable Long campaignId,
+                                           @RequestParam(defaultValue = "xlsx") String format,
+                                           @RequestParam(required = false) String status,
+                                           @RequestParam(required = false) String keyword,
+                                           @RequestParam(required = false) Long collegeId) {
         Long userId = authFacade.currentUserId(request);
         String userType = authFacade.currentUserType(request);
         ExportFile file = dashboardService.exportDashboard(campaignId, format, status, keyword, collegeId,
                 userType, userId, userId, userType);
-        String encoded = URLEncoder.encode(file.fileName(), StandardCharsets.UTF_8).replace("+", "%20");
-        MediaType mediaType = "csv".equals(format)
-                ? new MediaType("text", "csv", StandardCharsets.UTF_8)
-                : new MediaType("application", "vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + encoded)
-                .contentType(mediaType)
-                .body(file.data());
+        return ResumableFileResponse.buildDownload(file.data(), file.fileName());
     }
 
     /** 操作日志（R-10.4，教务） */

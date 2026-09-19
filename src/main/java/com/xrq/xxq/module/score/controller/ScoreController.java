@@ -1,13 +1,11 @@
 package com.xrq.xxq.module.score.controller;
 
-import java.io.IOException;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 
+import org.springframework.core.io.Resource;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -34,6 +32,7 @@ import com.xrq.xxq.util.auth.RequireAuth;
 import com.xrq.xxq.util.auth.RequireManagement;
 import com.xrq.xxq.util.auth.RequireStudent;
 import com.xrq.xxq.util.auth.UserType;
+import com.xrq.xxq.util.file.ResumableFileResponse;
 
 import lombok.RequiredArgsConstructor;
 
@@ -169,10 +168,9 @@ public class ScoreController {
      */
     @RequireAuth({UserType.TEACHER, UserType.DEPARTMENT, UserType.ACADEMIC_ADMIN})
     @GetMapping("/export")
-    public void export(HttpServletRequest request,
-                       HttpServletResponse response,
-                       @RequestParam Long teachInfoId,
-                       @RequestParam(defaultValue = "excel") String format) throws IOException {
+    public ResponseEntity<Resource> export(HttpServletRequest request,
+                                           @RequestParam Long teachInfoId,
+                                           @RequestParam(defaultValue = "excel") String format) {
         Long userId = authFacade.currentUserId(request);
         String userType = authFacade.currentUserType(request);
         List<ScoreView> grades = scoreService.listByTeachInfo(teachInfoId, userId, userType);
@@ -180,22 +178,14 @@ public class ScoreController {
                 ? "成绩" : grades.getFirst().getCourseName();
 
         byte[] data;
-        String contentType;
         String fileName;
         if ("pdf".equalsIgnoreCase(format)) {
             data = scoreExportService.exportPdf(grades, courseName + " 成绩单");
-            contentType = "application/pdf";
             fileName = courseName + "-成绩单.pdf";
         } else {
             data = scoreExportService.exportExcel(grades, courseName + " 成绩单");
-            contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
             fileName = courseName + "-成绩单.xlsx";
         }
-        String encoded = URLEncoder.encode(fileName, StandardCharsets.UTF_8).replaceAll("\\+", "%20");
-        response.setContentType(contentType);
-        response.setCharacterEncoding("UTF-8");
-        response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + encoded);
-        response.setContentLength(data.length);
-        response.getOutputStream().write(data);
+        return ResumableFileResponse.buildDownload(data, fileName);
     }
 }

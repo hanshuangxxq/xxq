@@ -157,17 +157,9 @@ public class GraduationDefenseController {
     /** 教务导出成绩总表（R-9.4，复用导出能力） */
     @RequireAcademicAdmin
     @GetMapping("/scores/export")
-    public ResponseEntity<byte[]> exportScores(HttpServletRequest request, @RequestParam Long campaignId)
-            throws java.io.IOException {
+    public ResponseEntity<Resource> exportScores(HttpServletRequest request, @RequestParam Long campaignId) {
         Long academicUserId = authFacade.currentUserId(request);
         var file = defenseService.exportScores(academicUserId, campaignId);
-        String encoded = java.net.URLEncoder.encode(file.fileName(), java.nio.charset.StandardCharsets.UTF_8)
-                .replace("+", "%20");
-        return ResponseEntity.ok()
-                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename*=UTF-8''" + encoded)
-                .contentType(MediaType.parseMediaType(
-                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
-                .body(file.data());
+        return ResumableFileResponse.buildDownload(file.data(), file.fileName());
     }
 }
