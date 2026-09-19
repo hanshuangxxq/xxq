@@ -3,6 +3,7 @@ package com.xrq.xxq.module.practice.graduation.service.impl;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
@@ -22,6 +23,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -32,6 +34,7 @@ import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.module.notification.notice.PracticeNoticeScenes;
 import com.xrq.xxq.module.file.dto.StoredFileRef;
 import com.xrq.xxq.module.file.entity.FileBizEnum;
+import com.xrq.xxq.module.file.service.FileStorageService;
 import com.xrq.xxq.module.practice.common.FileView;
 import com.xrq.xxq.module.practice.common.PracticeFileSupport;
 import com.xrq.xxq.module.practice.graduation.dto.DuplicateCheckRegisterRequest;
@@ -71,6 +74,9 @@ public class GraduationThesisServiceImpl
 
     /** 版本管理：保留最近 N 版（R-8.2 默认 N=3） */
     private static final int MAX_VERSIONS = 3;
+
+    @Value("${file.storage-path:uploads/files}")
+    private String fileStoragePath;
 
     private final GraduationCampaignMapper campaignMapper;
     private final GraduationAssignmentMapper assignmentMapper;
@@ -306,8 +312,8 @@ public class GraduationThesisServiceImpl
                 theses.stream().map(GraduationThesis::getStudentId).distinct().toList());
         Map<Long, String> collegeMap = collegeNameMap(theses);
         byte[] xlsx = buildThesisXlsx(theses, studentNoMap, nameMap, collegeMap);
-        // zip 打包：名单 + 论文文件（R-8.4 默认假设 xlsx 名单 + zip 文件包）
-        byte[] zip = buildZip(theses, studentNoMap, nameMap, xlsx);
+        // zip 打包：名单 + 论文文件（R-8.4 默认假设 xlsx 名单 + zip 文件包），流式落盘 exports/
+        Path zip = buildZip(theses, studentNoMap, nameMap, xlsx);
         logService.record(campaignId, academicUserId, "academic_admin", "导出查重数据包",
                 "graduation_campaign", campaignId,
                 "论文条数: " + theses.size() + (status != null ? ", 状态筛选: " + status.getCode() : ""));
@@ -551,9 +557,21 @@ public class GraduationThesisServiceImpl
         }
     }
 
-    private byte[] buildZip(List<GraduationThesis> theses, Map<Long, String> noMap,
-                            Map<Long, String> nameMap, byte[] xlsx) {
-        try (ByteArrayOutputStream out = new ByteArrayOutputStream();
+    /**
+     * 流式打包到 exports/ 暂存：内存占用与论文总量解耦
+     * （旧实现整个 zip 在 ByteArrayOutputStream 里，文件量一大即 OOM）。
+     */
+    private Path buildZip(List<GraduationThesis> theses, Map<Long, String> noMap,
+                          Map<Long, String> nameMap, byte[] xlsx) {
+        Path tmp;
+        try {
+            Path exportsDir = Path.of(fileStoragePath, FileStorageService.EXPORTS_DIR);
+            Files.createDirectories(exportsDir);
+            tmp = Files.createTempFile(exportsDir, "export-", ".zip");
+        } catch (IOException e) {
+            throw new BusinessException(500, "查重数据包打包失败");
+        }
+        try (OutputStream out = Files.newOutputStream(tmp);
              ZipOutputStream zip = new ZipOutputStream(out, java.nio.charset.StandardCharsets.UTF_8)) {
             zip.putNextEntry(new ZipEntry("查重名单.xlsx"));
             zip.write(xlsx);
@@ -570,8 +588,13 @@ public class GraduationThesisServiceImpl
                 }
                 zip.closeEntry();
             }
-            return out.toByteArray();
+            return tmp;
         } catch (IOException e) {
+            try {
+                Files.deleteIfExists(tmp);
+            } catch (IOException ignored) {
+                // 删除失败由 FileMaintenanceTask 按龄期清扫兜底
+            }
             throw new BusinessException(500, "查重数据包打包失败");
         }
     }

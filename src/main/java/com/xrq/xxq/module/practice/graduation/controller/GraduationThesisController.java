@@ -1,11 +1,8 @@
 package com.xrq.xxq.module.practice.graduation.controller;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.core.io.Resource;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -94,19 +91,14 @@ public class GraduationThesisController {
         return Result.ok(thesisService.listCampaignThesis(campaignId, status));
     }
 
-    /** 教务导出查重数据包（R-8.4：zip 内含 xlsx 名单 + 论文文件） */
+    /** 教务导出查重数据包（R-8.4：zip 内含 xlsx 名单 + 论文文件；流式落盘，支持断点续传） */
     @RequireAcademicAdmin
     @GetMapping("/export-package")
-    public ResponseEntity<byte[]> exportPackage(HttpServletRequest request, @RequestParam Long campaignId,
-                                                @RequestParam(required = false) ThesisStatusEnum status)
-            throws java.io.IOException {
+    public ResponseEntity<Resource> exportPackage(HttpServletRequest request, @RequestParam Long campaignId,
+                                                  @RequestParam(required = false) ThesisStatusEnum status) {
         Long academicUserId = authFacade.currentUserId(request);
         var file = thesisService.exportPackage(academicUserId, campaignId, status);
-        String encoded = URLEncoder.encode(file.fileName(), StandardCharsets.UTF_8).replace("+", "%20");
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + encoded)
-                .contentType(MediaType.parseMediaType("application/zip"))
-                .body(file.data());
+        return ResumableFileResponse.buildDownload(file.path(), file.fileName(), null);
     }
 
     /** 教务登记查重结果（R-8.5/R-8.6；可选附查重报告：file 整传 与 data.filePath 分片产物 二选一） */

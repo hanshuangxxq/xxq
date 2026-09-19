@@ -1,5 +1,6 @@
 package com.xrq.xxq.module.practice.graduation.service;
 
+import java.nio.file.Path;
 import java.util.List;
 
 import org.springframework.web.multipart.MultipartFile;
@@ -52,8 +53,8 @@ public interface GraduationThesisService {
     ExportPackage exportPackage(Long academicUserId, Long campaignId, ThesisStatusEnum status);
 
     /**
-     * 查重数据包：zip 字节 + 文件名。
+     * 查重数据包：zip 磁盘路径（exports/ 暂存，FileMaintenanceTask 按龄期清扫）+ 展示文件名。
      */
-    record ExportPackage(byte[] data, String fileName) {
+    record ExportPackage(Path path, String fileName) {
     }
 }
