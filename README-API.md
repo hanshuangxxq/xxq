@@ -125,6 +125,8 @@ accessToken 由登录接口返回，默认有效期 30 分钟。过期后调用�
 | PUT | `/api/time-restrictions/{id}` | 修改时段限制 | 是 | 7.5 |
 | DELETE | `/api/time-restrictions/{id}` | 删除时段限制 | 是 | 7.6 |
 | POST | `/api/academic/batch-import` | 批量导入学生和教师 | 是 | 4.5 |
+| POST | `/api/academic/batch-import/file` | Excel 批量导入（.xlsx，列序见模板） | 是 | 4.5 |
+| GET | `/api/academic/batch-import/template` | 下载导入模板 | 是 | 4.5 |
 | GET | `/api/majors` | 查询全部专业 | 是 | 4.7 |
 | POST | `/api/majors` | 新增专业 | 是 | 4.7 |
 | PUT | `/api/majors/{id}` | 修改专业 | 是 | 4.7 |
@@ -166,10 +168,21 @@ accessToken 由登录接口返回，默认有效期 30 分钟。过期后调用�
 | DELETE | `/api/file/uploads/{uploadId}` | 取消上传 | 是 | 11.1 |
 | POST | `/api/file/whole` | 小文件整传（multipart：biz + file） | 是 | 11.1 |
 | POST | `/api/file/download` | 通用下载（POST 传路径，支持 Range → 206） | 是 | 11.1 |
+| POST | `/api/practice/graduation/theses/duplicate-checks` | 登记查重结果（multipart，可附查重报告） | 是 | 11.5 |
+| GET | `/api/practice/graduation/theses/duplicate-checks/{checkId}/download` | 查重报告下载 | 是 | 11.5 |
+| POST | `/api/practice/graduation/campaigns/{id}/materials` | 上传活动资料 | 是 | 11.5 |
+| GET | `/api/practice/graduation/campaigns/{id}/materials` | 活动资料列表 | 是 | 11.5 |
+| GET | `/api/practice/graduation/campaigns/{id}/materials/{mid}/download` | 活动资料下载 | 是 | 11.5 |
+| DELETE | `/api/practice/graduation/campaigns/{id}/materials/{mid}` | 删除活动资料 | 是 | 11.5 |
+| POST | `/api/practice/graduation/defense/{id}/material` | 上传 / 替换答辩材料 | 是 | 11.5 |
+| GET | `/api/practice/graduation/defense/{id}/material/download` | 答辩材料下载 | 是 | 11.5 |
+| POST | `/api/practice/competitions/results/{id}/certificate` | 上传 / 替换获奖证书 | 是 | 11.5 |
+| GET | `/api/practice/competitions/results/{id}/certificate/download` | 获奖证书下载 | 是 | 11.5 |
 
-> **文件上传 / 下载**：通用端点 8 个见第 11 节；另有 6 个业务上传端点与 5 个业务下载端点
-> （`POST /api/user/avatar/upload`、`POST /api/practice/graduation/theses` 等，其中 practice 系的 `file` 部分
-> 现为**选填** —— 大文件可先走第 11 节分片上传、再以 `data.filePath` 提交）。
+> **文件上传 / 下载**：通用端点 8 个见第 11 节；业务上传端点（头像 / practice 提交系 5 个 /
+> 查重登记 / 活动资料 / 答辩材料 / 获奖证书 / Excel 导入）与业务下载端点（practice 系 5 个 +
+> 查重报告 / 活动资料 / 答辩材料 / 获奖证书，均支持断点续传）见各对应章节。
+> practice 系的 `file` 部分为**选填** —— 大文件可先走第 11 节分片上传、再以 `data.filePath` 提交。
 > 大小上限、错误码、断点续传下载（Range/206）与完整分片契约详见根目录 **《文件上传下载接口文档.md》**。
 
 ---
@@ -726,6 +739,60 @@ Content-Type: application/json
   }
 }
 ```
+
+#### 4.5.1 Excel 文件导入
+
+与 JSON 导入等价的文件形式：上传 `.xlsx`，服务端解析后**原样复用**同一套逐行独立事务导入逻辑，
+响应结构与错误口径完全一致（`BatchImportResponse`）。文件只用于瞬态解析，不落盘。
+
+```
+POST /api/academic/batch-import/file
+Authorization: Bearer <accessToken>
+Content-Type: multipart/form-data
+```
+
+**权限要求**：仅 `academic_admin`（教务管理员）。
+
+**请求参数**（multipart）
+
+| 部分 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| file | File | 是 | `.xlsx` 文件（其它扩展名 400），列序固定见下表 |
+
+**Excel 列序**（首行表头必须保留，首列必须是「用户名」，否则 400「表头不符合模板」；
+从第 2 行起为数据行，全空行自动跳过；数值单元格自动去 `.0` 尾巴，学号工号可放心填数字）
+
+| 列 | 表头 | 对应字段 | 说明 |
+|----|------|----------|------|
+| 1 | 用户名 | username | 必填，全库唯一 |
+| 2 | 密码 | password | 必填，PBKDF2 加密存储 |
+| 3 | 用户类型 | userType | `student` / `teacher` |
+| 4 | 学号/工号 | identifier | 可空 |
+| 5 | 年级 | className | 学生用，填已存在的年级名称 |
+| 6 | 性别 | gender | `男` / `女`，留空默认男 |
+| 7 | 专业/院系 | department | 学生填专业名、教师填院系名，须已存在 |
+
+**错误场景**
+
+| HTTP 状态码 | message |
+|-------------|---------|
+| 400 | 导入文件不能为空 |
+| 400 | 仅支持 .xlsx 格式，请下载导入模板 |
+| 400 | 表头不符合模板（首列应为「用户名」），请下载导入模板 |
+| 400 | 文件中没有数据行 |
+
+#### 4.5.2 导入模板下载
+
+生成并下载导入模板：Sheet1「导入数据」仅表头（防止示例行被误导入），Sheet2「填写说明」
+含每列含义与取值规则。
+
+```
+GET /api/academic/batch-import/template
+Authorization: Bearer <accessToken>
+```
+
+**权限要求**：仅 `academic_admin`。响应为 `用户批量导入模板.xlsx`
+（`Accept-Ranges: bytes` + 内容 SHA-256 强 ETag）。
 
 ### 4.6 学生管理（教务管理员）
 
@@ -2924,7 +2991,10 @@ curl -X POST "http://localhost:8080/api/file/uploads"   -H "Authorization: Beare
 ```
 
 - `biz` 取值：`graduation-thesis` / `graduation-opening-report` / `graduation-midterm` /
-  `internship-report` / `social-practice-report`（服务端白名单，其它值 400）。
+  `internship-report` / `social-practice-report` / `graduation-duplicate-report` /
+  `graduation-campaign-material` / `graduation-defense-material` / `competition-certificate`
+  （服务端白名单，其它值 400）。扩展名白名单按业务分组：前 8 个为文档类
+  （`.doc/.docx/.pdf/.zip/.rar`），`competition-certificate` 为证书类（`.jpg/.jpeg/.png/.pdf`）。
 - **`completedFile` 非 null = 秒传命中**，跳过 ②③，直接进业务提交。
 - `uploadId` 是**确定性**的：同一用户 + 同一 biz + 同一文件内容，反复 `init` 都得到同一个值。
   刷新页面后**用相同参数重新 `init`** 即可恢复进度，无需本地持久化。
@@ -2973,6 +3043,59 @@ practice 的 5 个提交端点（论文 / 开题 / 中期 / 实习报告 / 社�
 - 大文件：不传 `file`，改在 `data` 里带 `filePath` + `fileOriginal`
 
 两者同时给会返回 400；`filePath` 必须属于该端点对应的业务目录，否则 403。
+
+### 11.5 业务附件端点（毕业设计 / 竞赛）
+
+以下附件点全部复用第 11 节的传输能力：小文件走各自端点的 multipart `file` 部分整传（≤20MB），
+大文件先走分片上传、再以 `filePath` + `fileOriginal`（表单字段或 `data` 内字段）提交产物路径，
+两者同时给 400。下载端点均为 GET 且支持 **Range 断点续传（206）+ 强 ETag**。
+
+#### 11.5.1 查重报告附件
+
+| 方法 | 路径 | 权限 | 说明 |
+|------|------|------|------|
+| POST | `/api/practice/graduation/theses/duplicate-checks` | 教务 | 登记查重结果，可附报告（`data` + 可选 `file`） |
+| GET | `/api/practice/graduation/theses/duplicate-checks/{checkId}/download` | 学生本人/指导教师/院系/教务 | 报告下载（无附件 404） |
+
+> ⚠️ **Breaking change**：登记接口由 `application/json` 改为 `multipart/form-data`
+> （`@RequestPart("data")` 承载原 JSON，字段不变并新增可选 `filePath`/`fileOriginal`；
+> `@RequestPart("file")` 可选承载整传文件）。前端需同步改为 multipart 表单提交。
+
+#### 11.5.2 毕设活动资料（一个活动多份）
+
+| 方法 | 路径 | 权限 | 说明 |
+|------|------|------|------|
+| POST | `/api/practice/graduation/campaigns/{id}/materials` | 教务 | 上传资料（`file` 或 `filePath`+`fileOriginal` 二选一，必填其一） |
+| GET | `/api/practice/graduation/campaigns/{id}/materials` | 四种角色 | 资料列表（可见性与活动详情一致） |
+| GET | `/api/practice/graduation/campaigns/{id}/materials/{mid}/download` | 四种角色 | 资料下载 |
+| DELETE | `/api/practice/graduation/campaigns/{id}/materials/{mid}` | 教务 | 删除（逻辑删，文件由回收任务对账清理） |
+
+上传/删除动作均记入活动操作日志（JSONL）。
+
+#### 11.5.3 答辩材料附件
+
+| 方法 | 路径 | 权限 | 说明 |
+|------|------|------|------|
+| POST | `/api/practice/graduation/defense/{id}/material` | 院系（本院）/教务 | 上传材料，重复上传为**替换** |
+| GET | `/api/practice/graduation/defense/{id}/material/download` | 学生本人/院系/教务 | 材料下载（未上传 404） |
+
+#### 11.5.4 竞赛获奖证书附件
+
+| 方法 | 路径 | 权限 | 说明 |
+|------|------|------|------|
+| POST | `/api/practice/competitions/results/{id}/certificate` | 教务 | 上传/替换证书（`.jpg/.jpeg/.png/.pdf`） |
+| GET | `/api/practice/competitions/results/{id}/certificate/download` | 教务/获奖学生本人 | 证书下载（未上传 404） |
+
+删除竞赛结果时证书引用一并释放。
+
+#### 11.5.5 导出类端点的传输层变化
+
+- `GET /api/practice/graduation/theses/export-package`（查重数据包）：改为**流式生成 zip 落盘**
+  （不再整个包驻留内存），响应支持 Range 断点续传；暂存文件由服务端按
+  `file.export-expire-hours`（默认 24h）自动清理。
+- `GET /api/scores/export`、`GET /api/practice/graduation/dashboard/{campaignId}/export`、
+  `GET /api/practice/graduation/defense/scores/export`：响应头统一为
+  RFC5987 文件名 + `Accept-Ranges: bytes` + 内容 SHA-256 强 ETag（支持 206）。
 
 ---
 
