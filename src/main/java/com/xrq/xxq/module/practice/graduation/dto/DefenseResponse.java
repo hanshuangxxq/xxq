@@ -34,4 +34,10 @@ public class DefenseResponse {
     private List<Long> defenseTeacherIds;
 
     private List<String> defenseTeacherNames;
+
+    /** 答辩材料存储路径（有值即表示可下载） */
+    private String fileName;
+
+    /** 答辩材料展示文件名 */
+    private String fileOriginal;
 }

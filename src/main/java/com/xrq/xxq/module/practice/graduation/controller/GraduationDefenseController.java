@@ -4,16 +4,21 @@ import java.util.List;
 
 import jakarta.servlet.http.HttpServletRequest;
 
+import org.springframework.core.io.Resource;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.xrq.xxq.common.Result;
+import com.xrq.xxq.module.practice.common.FileView;
 import com.xrq.xxq.module.practice.graduation.dto.DefenseArrangeRequest;
 import com.xrq.xxq.module.practice.graduation.dto.DefenseResponse;
 import com.xrq.xxq.module.practice.graduation.dto.ScoreConfirmRequest;
@@ -28,6 +33,7 @@ import com.xrq.xxq.util.auth.RequireManagement;
 import com.xrq.xxq.util.auth.RequireStudent;
 import com.xrq.xxq.util.auth.RequireTeacher;
 import com.xrq.xxq.util.auth.UserType;
+import com.xrq.xxq.util.file.ResumableFileResponse;
 
 import lombok.RequiredArgsConstructor;
 
@@ -57,6 +63,29 @@ public class GraduationDefenseController {
         Long userId = authFacade.currentUserId(request);
         String userType = authFacade.currentUserType(request);
         return Result.ok(defenseService.listDefenses(campaignId, userType, userId));
+    }
+
+    /** 院系/教务上传答辩材料（重复上传为替换；file 整传 与 filePath 分片产物 二选一，必填其一） */
+    @RequireManagement
+    @PostMapping(value = "/{id:\\d+}/material", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Result<DefenseResponse> uploadMaterial(HttpServletRequest request, @PathVariable Long id,
+                                                  @RequestParam(required = false) String filePath,
+                                                  @RequestParam(required = false) String fileOriginal,
+                                                  @RequestPart(value = "file", required = false) MultipartFile file) {
+        Long userId = authFacade.currentUserId(request);
+        String userType = authFacade.currentUserType(request);
+        return Result.ok(defenseService.uploadMaterial(userId, userType, id, filePath, fileOriginal, file));
+    }
+
+    /** 答辩材料下载（学生本人/院系/教务） */
+    @RequireAuth({UserType.STUDENT, UserType.DEPARTMENT, UserType.ACADEMIC_ADMIN})
+    @GetMapping("/{id:\\d+}/material/download")
+    public ResponseEntity<Resource> downloadMaterial(HttpServletRequest request, @PathVariable Long id) {
+        Long userId = authFacade.currentUserId(request);
+        String userType = authFacade.currentUserType(request);
+        FileView view = defenseService.resolveMaterialFile(userType, userId, id);
+        return ResumableFileResponse.buildDownload(view.path(), view.originalName(),
+                ResumableFileResponse.sha256FromFileName(view.path().getFileName().toString()));
     }
 
     /** 指导教师录入指导分（R-9.2/R-9.3） */

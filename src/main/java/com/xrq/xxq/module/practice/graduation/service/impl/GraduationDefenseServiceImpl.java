@@ -13,11 +13,16 @@ import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
+import com.xrq.xxq.module.file.dto.StoredFileRef;
+import com.xrq.xxq.module.file.entity.FileBizEnum;
 import com.xrq.xxq.module.notification.notice.PracticeNoticeScenes;
+import com.xrq.xxq.module.practice.common.FileView;
+import com.xrq.xxq.module.practice.common.PracticeFileSupport;
 import com.xrq.xxq.module.practice.graduation.dto.DefenseArrangeRequest;
 import com.xrq.xxq.module.practice.graduation.dto.DefenseResponse;
 import com.xrq.xxq.module.practice.graduation.dto.ScoreConfirmRequest;
@@ -43,6 +48,7 @@ import com.xrq.xxq.module.user.mapper.StudentMapper;
 import com.xrq.xxq.module.user.mapper.UserMapper;
 import com.xrq.xxq.util.ParamValidator;
 import com.xrq.xxq.util.StudentScopeResolver;
+import com.xrq.xxq.util.auth.AuthFacade;
 
 import lombok.RequiredArgsConstructor;
 
@@ -63,6 +69,7 @@ public class GraduationDefenseServiceImpl
     private final StudentScopeResolver scopeResolver;
     private final GraduationLogService logService;
     private final PracticeNoticeScenes practiceNoticeScenes;
+    private final PracticeFileSupport fileSupport;
 
     @Override
     @Transactional
@@ -130,6 +137,57 @@ public class GraduationDefenseServiceImpl
                     .toList();
         }
         return toDefenseResponses(list);
+    }
+
+    @Override
+    @Transactional
+    public DefenseResponse uploadMaterial(Long userId, String userType, Long defenseId, String filePath,
+                                          String fileOriginal, MultipartFile file) {
+        GraduationDefense defense = baseMapper.selectById(defenseId);
+        if (defense == null) {
+            throw new BusinessException(404, "答辩安排不存在");
+        }
+        // 院系限本院学生（与 arrangeDefense 同一 scoping），教务全权
+        if (AuthFacade.USER_TYPE_DEPARTMENT.equals(userType)
+                && scopeResolver.isOutsideDept(userId, defense.getStudentId())) {
+            throw new BusinessException(403, "权限不足");
+        }
+        StoredFileRef ref = fileSupport.resolveSubmit(filePath, fileOriginal, file,
+                FileBizEnum.GRADUATION_DEFENSE_MATERIAL, true);
+        String previous = defense.getFileName();
+        defense.setFileName(ref.storedPath());
+        defense.setFileOriginal(ref.originalName());
+        defense.setUpdateTime(LocalDateTime.now());
+        baseMapper.updateById(defense);
+        // 替换下来的旧附件释放引用（内容寻址产物不做即时删，由回收任务对账）
+        fileSupport.release(previous);
+        logService.record(defense.getCampaignId(), userId, userType, "上传答辩材料",
+                "graduation_defense", defenseId,
+                "学生: " + defense.getStudentId() + ", 文件: " + ref.originalName());
+        return toDefenseResponse(defense);
+    }
+
+    @Override
+    public FileView resolveMaterialFile(String userType, Long userId, Long defenseId) {
+        GraduationDefense defense = baseMapper.selectById(defenseId);
+        if (defense == null) {
+            throw new BusinessException(404, "答辩安排不存在");
+        }
+        if (AuthFacade.USER_TYPE_STUDENT.equals(userType)) {
+            if (!defense.getStudentId().equals(userId)) {
+                throw new BusinessException(403, "权限不足");
+            }
+        } else if (AuthFacade.USER_TYPE_DEPARTMENT.equals(userType)) {
+            if (scopeResolver.isOutsideDept(userId, defense.getStudentId())) {
+                throw new BusinessException(403, "权限不足");
+            }
+        }
+        // academic_admin：全量可见；其余类型由端点注解挡在外面
+        if (defense.getFileName() == null || defense.getFileName().isBlank()) {
+            throw new BusinessException(404, "尚未上传答辩材料");
+        }
+        return new FileView(fileSupport.resolveForDownload(defense.getFileName()),
+                defense.getFileOriginal());
     }
 
     @Override
@@ -465,6 +523,8 @@ public class GraduationDefenseServiceImpl
             List<Long> teacherIds = defenseTeacherIdList(d);
             resp.setDefenseTeacherIds(teacherIds);
             resp.setDefenseTeacherNames(teacherIds.stream().map(nameMap::get).toList());
+            resp.setFileName(d.getFileName());
+            resp.setFileOriginal(d.getFileOriginal());
             return resp;
         }).toList();
     }

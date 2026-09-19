@@ -2,6 +2,9 @@ package com.xrq.xxq.module.practice.graduation.service;
 
 import java.util.List;
 
+import org.springframework.web.multipart.MultipartFile;
+
+import com.xrq.xxq.module.practice.common.FileView;
 import com.xrq.xxq.module.practice.graduation.dto.DefenseArrangeRequest;
 import com.xrq.xxq.module.practice.graduation.dto.DefenseResponse;
 import com.xrq.xxq.module.practice.graduation.dto.ScoreConfirmRequest;
@@ -18,6 +21,13 @@ public interface GraduationDefenseService {
 
     /** 答辩安排列表（教务全部/院系本院系/学生本人） */
     List<DefenseResponse> listDefenses(Long campaignId, String userType, Long userId);
+
+    /** 院系/教务上传答辩材料（重复上传为替换；file 与 filePath 二选一，必填其一） */
+    DefenseResponse uploadMaterial(Long userId, String userType, Long defenseId, String filePath,
+                                   String fileOriginal, MultipartFile file);
+
+    /** 答辩材料下载（学生本人/院系本院/教务；未上传 404） */
+    FileView resolveMaterialFile(String userType, Long userId, Long defenseId);
 
     /** 指导教师录入指导分（R-9.2/R-9.3） */
     ScoreResponse submitAdvisorScore(Long teacherUserId, ScoreSubmitRequest request);
