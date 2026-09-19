@@ -1,5 +1,7 @@
 package com.xrq.xxq.module.user.service;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -8,6 +10,13 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.Font;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -188,8 +197,46 @@ public class BatchImportService {
         }
     }
 
-    private GenderEnum parseGender(String genderStr) {
-        if (genderStr == null || genderStr.isBlank()) {
+    /**
+     * 生成导入模板 xlsx：Sheet1「导入数据」仅表头（示例行会被用户忘删而误导入，故不放），
+     * Sheet2「填写说明」写列含义与取值规则。列序即 {@link BatchImportExcelParser} 的解析列序。
+     */
+    public byte[] buildImportTemplate() {
+        String[] headers = {"用户名", "密码", "用户类型", "学号/工号", "年级", "性别", "专业/院系"};
+        String[] notes = {
+                "用户名：登录账号，全库唯一（必填）",
+                "密码：初始密码，导入后以 PBKDF2 加密存储（必填）",
+                "用户类型：student（学生）或 teacher（教师），其余取值一律拒绝（必填）",
+                "学号/工号：学生填学号、教师填工号，全库唯一；可留空",
+                "年级：学生用，填已存在的年级名称；可留空",
+                "性别：男 / 女；留空默认男",
+                "专业/院系：学生填已存在的专业名称、教师填已存在的院系名称；可留空",
+                "首行表头必须保留，从第 2 行开始填数据；全空行自动跳过"
+        };
+        try (XSSFWorkbook wb = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            Sheet sheet = wb.createSheet("导入数据");
+            CellStyle headerStyle = wb.createCellStyle();
+            Font headerFont = wb.createFont();
+            headerFont.setBold(true);
+            headerStyle.setFont(headerFont);
+            Row header = sheet.createRow(0);
+            for (int i = 0; i < headers.length; i++) {
+                Cell cell = header.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(headerStyle);
+            }
+            Sheet note = wb.createSheet("填写说明");
+            for (int i = 0; i < notes.length; i++) {
+                note.createRow(i).createCell(0).setCellValue(notes[i]);
+            }
+            wb.write(out);
+            return out.toByteArray();
+        } catch (IOException e) {
+            throw new BusinessException(500, "导入模板生成失败");
+        }
+    }
+
+    private GenderEnum parseGender(String genderStr) {        if (genderStr == null || genderStr.isBlank()) {
             return GenderEnum.MALE;
         }
         for (GenderEnum g : GenderEnum.values()) {
