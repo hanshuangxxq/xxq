@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -16,7 +17,11 @@ import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.common.PageQuery;
 import com.xrq.xxq.common.PageResult;
+import com.xrq.xxq.module.file.dto.StoredFileRef;
+import com.xrq.xxq.module.file.entity.FileBizEnum;
 import com.xrq.xxq.module.notification.notice.PracticeNoticeScenes;
+import com.xrq.xxq.module.practice.common.FileView;
+import com.xrq.xxq.module.practice.common.PracticeFileSupport;
 import com.xrq.xxq.module.practice.common.entity.AuditStatusEnum;
 import com.xrq.xxq.module.practice.competition.dto.CompetitionCreateRequest;
 import com.xrq.xxq.module.practice.competition.dto.CompetitionResponse;
@@ -37,6 +42,7 @@ import com.xrq.xxq.module.practice.competition.service.CompetitionService;
 import com.xrq.xxq.module.semester.service.SemesterService;
 import com.xrq.xxq.module.user.mapper.UserMapper;
 import com.xrq.xxq.util.ParamValidator;
+import com.xrq.xxq.util.auth.AuthFacade;
 
 import lombok.RequiredArgsConstructor;
 
@@ -51,6 +57,7 @@ public class CompetitionServiceImpl
     private final UserMapper userMapper;
     private final SemesterService semesterService;
     private final PracticeNoticeScenes practiceNoticeScenes;
+    private final PracticeFileSupport fileSupport;
 
     @Override
     @Transactional
@@ -317,6 +324,46 @@ public class CompetitionServiceImpl
             throw new BusinessException(404, "结果不存在");
         }
         resultMapper.deleteById(resultId);
+        // 释放证书引用（内容寻址产物不做即时删，由回收任务对账）
+        fileSupport.release(result.getFileName());
+    }
+
+    @Override
+    @Transactional
+    public CompetitionResultResponse uploadCertificate(Long academicUserId, Long resultId, String filePath,
+                                                       String fileOriginal, MultipartFile file) {
+        CompetitionResult result = resultMapper.selectById(resultId);
+        if (result == null) {
+            throw new BusinessException(404, "结果不存在");
+        }
+        StoredFileRef ref = fileSupport.resolveSubmit(filePath, fileOriginal, file,
+                FileBizEnum.COMPETITION_CERTIFICATE, true);
+        String previous = result.getFileName();
+        result.setFileName(ref.storedPath());
+        result.setFileOriginal(ref.originalName());
+        resultMapper.updateById(result);
+        // 替换下来的旧证书释放引用
+        fileSupport.release(previous);
+        Competition competition = baseMapper.selectById(result.getCompetitionId());
+        return toResultResponse(result, competition != null ? competition.getName() : null,
+                nameOf(result.getStudentId()));
+    }
+
+    @Override
+    public FileView resolveCertificateFile(String userType, Long userId, Long resultId) {
+        CompetitionResult result = resultMapper.selectById(resultId);
+        if (result == null) {
+            throw new BusinessException(404, "结果不存在");
+        }
+        // 结果列表虽全登录可见，证书含个人信息收窄到获奖学生本人 + 教务
+        if (AuthFacade.USER_TYPE_STUDENT.equals(userType) && !result.getStudentId().equals(userId)) {
+            throw new BusinessException(403, "权限不足");
+        }
+        if (result.getFileName() == null || result.getFileName().isBlank()) {
+            throw new BusinessException(404, "尚未上传获奖证书");
+        }
+        return new FileView(fileSupport.resolveForDownload(result.getFileName()),
+                result.getFileOriginal());
     }
 
     // ---- helpers ----
@@ -404,6 +451,8 @@ public class CompetitionServiceImpl
         resp.setAward(result.getAward());
         resp.setScore(result.getScore());
         resp.setComment(result.getComment());
+        resp.setFileName(result.getFileName());
+        resp.setFileOriginal(result.getFileOriginal());
         resp.setAwardTime(result.getAwardTime());
         return resp;
     }

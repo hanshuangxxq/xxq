@@ -4,6 +4,9 @@ import java.util.List;
 
 import jakarta.servlet.http.HttpServletRequest;
 
+import org.springframework.core.io.Resource;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -12,11 +15,14 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.xrq.xxq.common.PageQuery;
 import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.common.Result;
+import com.xrq.xxq.module.practice.common.FileView;
 import com.xrq.xxq.module.practice.competition.dto.CompetitionCreateRequest;
 import com.xrq.xxq.module.practice.competition.dto.CompetitionResponse;
 import com.xrq.xxq.module.practice.competition.dto.CompetitionResultRequest;
@@ -29,8 +35,11 @@ import com.xrq.xxq.module.practice.competition.entity.CompetitionStatusEnum;
 import com.xrq.xxq.module.practice.competition.service.CompetitionService;
 import com.xrq.xxq.util.auth.AuthFacade;
 import com.xrq.xxq.util.auth.RequireAcademicAdmin;
+import com.xrq.xxq.util.auth.RequireAuth;
 import com.xrq.xxq.util.auth.RequireLogin;
 import com.xrq.xxq.util.auth.RequireStudent;
+import com.xrq.xxq.util.auth.UserType;
+import com.xrq.xxq.util.file.ResumableFileResponse;
 
 import lombok.RequiredArgsConstructor;
 
@@ -147,6 +156,29 @@ public class CompetitionController {
     public Result<Void> deleteResult(HttpServletRequest request, @PathVariable Long id) {
         competitionService.deleteResult(id);
         return Result.ok();
+    }
+
+    /** 教务上传/替换获奖证书（file 整传 与 filePath 分片产物 二选一，必填其一） */
+    @PostMapping(value = "/results/{id:\\d+}/certificate", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @RequireAcademicAdmin
+    public Result<CompetitionResultResponse> uploadCertificate(HttpServletRequest request,
+                                                               @PathVariable Long id,
+                                                               @RequestParam(required = false) String filePath,
+                                                               @RequestParam(required = false) String fileOriginal,
+                                                               @RequestPart(value = "file", required = false) MultipartFile file) {
+        return Result.ok(competitionService.uploadCertificate(authFacade.currentUserId(request), id,
+                filePath, fileOriginal, file));
+    }
+
+    /** 获奖证书下载（教务/获奖学生本人） */
+    @GetMapping("/results/{id:\\d+}/certificate/download")
+    @RequireAuth({UserType.ACADEMIC_ADMIN, UserType.STUDENT})
+    public ResponseEntity<Resource> downloadCertificate(HttpServletRequest request, @PathVariable Long id) {
+        Long userId = authFacade.currentUserId(request);
+        String userType = authFacade.currentUserType(request);
+        FileView view = competitionService.resolveCertificateFile(userType, userId, id);
+        return ResumableFileResponse.buildDownload(view.path(), view.originalName(),
+                ResumableFileResponse.sha256FromFileName(view.path().getFileName().toString()));
     }
 
     @GetMapping("/{competitionId}/results")
