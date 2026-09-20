@@ -157,14 +157,19 @@ public class ClassAnalysisServiceImpl implements ClassAnalysisService {
         List<Student> students = studentMapper.selectList(
                 new LambdaQueryWrapper<Student>().in(Student::getUserId, userIds));
         if ("major".equals(groupBy)) {
-            Set<Long> majorIds = students.stream().map(Student::getMajorId)
+            // 专业经班级推导（student 不再直存 major_id）
+            Set<Long> classIds = students.stream().map(Student::getClassId)
                     .filter(Objects::nonNull).collect(Collectors.toSet());
+            Map<Long, Long> majorIdByClass = classNameService.toMajorIdMap(classIds);
+            List<Long> majorIds = majorIdByClass.values().stream().distinct().toList();
             Map<Long, String> majorName = majorIds.isEmpty() ? Map.of()
                     : majorMapper.selectByIds(majorIds).stream()
                             .collect(Collectors.toMap(Major::getId, Major::getMajorName, (a, b) -> a));
-            return students.stream().filter(s -> s.getMajorId() != null)
+            return students.stream()
+                    .filter(s -> s.getClassId() != null && majorIdByClass.containsKey(s.getClassId()))
                     .collect(Collectors.toMap(Student::getUserId,
-                            s -> majorName.getOrDefault(s.getMajorId(), "未知专业"), (a, b) -> a));
+                            s -> majorName.getOrDefault(majorIdByClass.get(s.getClassId()), "未知专业"),
+                            (a, b) -> a));
         }
         Set<Long> classIds = students.stream().map(Student::getClassId)
                 .filter(Objects::nonNull).collect(Collectors.toSet());

@@ -5,14 +5,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Component;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.module.clazz.entity.ClassName;
-import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
+import com.xrq.xxq.module.clazz.service.ClassNameService;
 import com.xrq.xxq.module.course.entity.Course;
 import com.xrq.xxq.module.teachinfo.entity.TeachInfo;
 import com.xrq.xxq.module.teachinfo.mapper.TeachInfoMapper;
@@ -33,14 +32,14 @@ import lombok.RequiredArgsConstructor;
  * 教师按课程归属判断；其余角色抛 403。原散落在 ScoreServiceImpl/各分析服务中的重复逻辑统一抽取到此处。
  * <p>
  * 院系归属自 college 表标准化后统一为 college_id：院系管理员经 department.college_id，
- * 学生经 class_name.college_id，教师经 teacher.college_id。
+ * 教师经 teacher.college_id，学生经 class_name.major_id → major.college_id 两跳推导。
  */
 @Component
 @RequiredArgsConstructor
 public class StudentScopeResolver {
 
     private final StudentMapper studentMapper;
-    private final ClassNameMapper classNameMapper;
+    private final ClassNameService classNameService;
     private final DepartmentMapper departmentMapper;
     private final TeacherMapper teacherMapper;
     private final TeachInfoMapper teachInfoMapper;
@@ -58,28 +57,31 @@ public class StudentScopeResolver {
             if (className == null || className.isBlank()) {
                 return null;
             }
-            List<Long> classIds = classNameMapper.selectList(new LambdaQueryWrapper<ClassName>()
-                            .eq(ClassName::getClassName, className)).stream()
-                    .map(ClassName::getId).toList();
-            return studentIdsByClassIds(classIds);
+            return studentIdsByClassIds(classIdsByClassName(className));
         }
         if (AuthFacade.USER_TYPE_DEPARTMENT.equals(userType)) {
             Department dept = departmentMapper.findByUserId(userId);
             if (dept == null || dept.getCollegeId() == null) {
                 return List.of();
             }
-            List<Long> classIds = classNameMapper.selectList(new LambdaQueryWrapper<ClassName>()
-                            .eq(ClassName::getCollegeId, dept.getCollegeId())).stream()
-                    .map(ClassName::getId).toList();
+            List<Long> classIds = classNameService.classIdsByCollegeId(dept.getCollegeId());
             if (className != null && !className.isBlank()) {
-                List<Long> nameIds = classNameMapper.selectList(new LambdaQueryWrapper<ClassName>()
-                                .eq(ClassName::getClassName, className)).stream()
-                        .map(ClassName::getId).toList();
+                List<Long> nameIds = classIdsByClassName(className);
                 classIds = classIds.stream().filter(nameIds::contains).toList();
             }
             return studentIdsByClassIds(classIds);
         }
         throw new BusinessException(403, "权限不足");
+    }
+
+    /** 按班级名精确查 classId（同名多行全取，DB 未加唯一约束）。 */
+    private List<Long> classIdsByClassName(String className) {
+        return classNameService.lambdaQuery()
+                .select(ClassName::getId)
+                .eq(ClassName::getClassName, className)
+                .list().stream()
+                .map(ClassName::getId)
+                .toList();
     }
 
     /**
@@ -105,8 +107,8 @@ public class StudentScopeResolver {
         if (stu == null || stu.getClassId() == null) {
             return true;
         }
-        ClassName cn = classNameMapper.selectById(stu.getClassId());
-        return cn == null || !Objects.equals(dept.getCollegeId(), cn.getCollegeId());
+        // 班级未挂专业 / 专业未挂院系时 collegeIdOf 返回 null，equals 为 false ⇒ fail-closed
+        return !Objects.equals(dept.getCollegeId(), classNameService.collegeIdOf(stu.getClassId()));
     }
 
     /** 院系管理员所属 college_id（无匹配/未分配返回 null）。 */
@@ -121,15 +123,14 @@ public class StudentScopeResolver {
         return t == null ? null : t.getCollegeId();
     }
 
-    /** 学生所属 college_id（经 class_name.college_id；无班级/无匹配返回 null）。 */
+    /** 学生所属 college_id（经 class_name.major_id → major.college_id；任意一跳缺失返回 null）。 */
     public Long studentCollegeId(Long studentUserId) {
         Student stu = studentMapper.selectOne(
                 new LambdaQueryWrapper<Student>().eq(Student::getUserId, studentUserId));
         if (stu == null || stu.getClassId() == null) {
             return null;
         }
-        ClassName cn = classNameMapper.selectById(stu.getClassId());
-        return cn == null ? null : cn.getCollegeId();
+        return classNameService.collegeIdOf(stu.getClassId());
     }
 
     /**
@@ -150,11 +151,7 @@ public class StudentScopeResolver {
         }
         List<Long> classIds = students.stream().map(Student::getClassId)
                 .filter(Objects::nonNull).distinct().toList();
-        Map<Long, Long> collegeByClassId = classIds.isEmpty()
-                ? Map.of()
-                : classNameMapper.selectByIds(classIds).stream()
-                        .filter(cn -> cn.getCollegeId() != null)
-                        .collect(Collectors.toMap(ClassName::getId, ClassName::getCollegeId, (a, b) -> a));
+        Map<Long, Long> collegeByClassId = classNameService.toCollegeIdMap(classIds);
         Map<Long, Long> map = new HashMap<>();
         for (Student s : students) {
             Long collegeId = s.getClassId() == null ? null : collegeByClassId.get(s.getClassId());

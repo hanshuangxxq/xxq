@@ -28,12 +28,12 @@ import com.xrq.xxq.module.user.dto.BatchImportResponse;
 import com.xrq.xxq.module.user.dto.BatchImportResponse.ImportResultDetail;
 import com.xrq.xxq.module.user.dto.UserImportItem;
 import com.xrq.xxq.module.user.entity.GenderEnum;
-import com.xrq.xxq.module.mojor.entity.Major;
+import com.xrq.xxq.module.clazz.entity.ClassName;
+import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
 import com.xrq.xxq.module.user.entity.User;
 import com.xrq.xxq.module.user.entity.user.Grade;
 import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.entity.user.Teacher;
-import com.xrq.xxq.module.mojor.mapper.MajorMapper;
 import com.xrq.xxq.module.college.mapper.CollegeMapper;
 import com.xrq.xxq.module.college.entity.College;
 import com.xrq.xxq.module.user.mapper.GradeMapper;
@@ -52,7 +52,7 @@ public class BatchImportService {
     private final UserMapper userMapper;
     private final StudentMapper studentMapper;
     private final TeacherMapper teacherMapper;
-    private final MajorMapper majorMapper;
+    private final ClassNameMapper classNameMapper;
     private final GradeMapper gradeMapper;
     private final CollegeMapper collegeMapper;
     private final PlatformTransactionManager transactionManager;
@@ -62,7 +62,7 @@ public class BatchImportService {
         response.setTotal(items.size());
         // 每行独立事务：单行失败仅回滚该行（user+子类型），不影响其他行，避免孤立 user
         TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
-        // 批量预加载（替代逐行查库）：专业/年级/院系字典全量 + 已占用用户名/学号/工号一次 IN 批查
+        // 批量预加载（替代逐行查库）：班级/年级/院系字典全量 + 已占用用户名/学号/工号一次 IN 批查
         ImportContext ctx = preload(items);
 
         Integer index = 0;
@@ -94,7 +94,8 @@ public class BatchImportService {
 
     /** 预加载上下文：字典映射 + 已占用标识集合（导入过程中随成功行递增）。 */
     private static class ImportContext {
-        private Map<String, Long> majorIdByName = Map.of();
+        /** 班级名 -> 班级实体（取值需同时校验存在性与 majorId，故存实体而非裸 id）。 */
+        private Map<String, ClassName> classByName = Map.of();
         private Map<String, Long> gradeIdByName = Map.of();
         private Map<String, Long> collegeIdByName = Map.of();
         private final Set<String> usedUsernames = new HashSet<>();
@@ -117,9 +118,9 @@ public class BatchImportService {
 
     private ImportContext preload(List<UserImportItem> items) {
         ImportContext ctx = new ImportContext();
-        // 字典表体量小（专业/年级/院系数十行），全量加载为名称 -> id 映射
-        ctx.majorIdByName = majorMapper.selectList(null).stream()
-                .collect(Collectors.toMap(Major::getMajorName, Major::getId, (a, b) -> a));
+        // 字典表体量小（班级/年级/院系数十行），全量加载为名称 -> id 映射
+        ctx.classByName = classNameMapper.selectList(null).stream()
+                .collect(Collectors.toMap(ClassName::getClassName, cn -> cn, (a, b) -> a));
         ctx.gradeIdByName = gradeMapper.selectList(null).stream()
                 .collect(Collectors.toMap(Grade::getName, Grade::getId, (a, b) -> a));
         ctx.collegeIdByName = collegeMapper.selectList(null).stream()
@@ -180,8 +181,10 @@ public class BatchImportService {
             Student student = new Student();
             student.setUserId(user.getId());
             student.setStudentNo(item.getIdentifier());
+            // UserImportItem.className 存的是模板第 5 列「年级」值（历史字段命名），非班级
             student.setGradeId(resolveGradeId(item.getClassName(), ctx));
-            student.setMajorId(resolveMajorId(item.getDepartment(), ctx));
+            // 专业/院系由班级推导，模板第 7 列「班级/院系」对学生即班级名
+            student.setClassId(resolveClassId(item.getDepartment(), ctx));
             studentMapper.insert(student);
         } else {
             if (item.getIdentifier() != null && !item.getIdentifier().isBlank()) {
@@ -202,7 +205,7 @@ public class BatchImportService {
      * Sheet2「填写说明」写列含义与取值规则。列序即 {@link BatchImportExcelParser} 的解析列序。
      */
     public byte[] buildImportTemplate() {
-        String[] headers = {"用户名", "密码", "用户类型", "学号/工号", "年级", "性别", "专业/院系"};
+        String[] headers = {"用户名", "密码", "用户类型", "学号/工号", "年级", "性别", "班级/院系"};
         String[] notes = {
                 "用户名：登录账号，全库唯一（必填）",
                 "密码：初始密码，导入后以 PBKDF2 加密存储（必填）",
@@ -210,7 +213,8 @@ public class BatchImportService {
                 "学号/工号：学生填学号、教师填工号，全库唯一；可留空",
                 "年级：学生用，填已存在的年级名称；可留空",
                 "性别：男 / 女；留空默认男",
-                "专业/院系：学生填已存在的专业名称、教师填已存在的院系名称；可留空",
+                "班级/院系：学生填已存在的班级名称、教师填已存在的院系名称；可留空"
+                        + "（学生的专业与院系由所填班级推导，无需另填）",
                 "首行表头必须保留，从第 2 行开始填数据；全空行自动跳过"
         };
         try (XSSFWorkbook wb = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
@@ -247,15 +251,26 @@ public class BatchImportService {
         return GenderEnum.MALE;
     }
 
-    private Long resolveMajorId(String majorName, ImportContext ctx) {
-        if (majorName == null || majorName.isBlank()) {
+    /**
+     * 按班级名称解析 class_id（学生导入：department 字段为班级名）。
+     * <p>
+     * 同时校验班级**已挂专业**：学生的专业与院系全部经班级推导，班级没有专业时该生两项都是
+     * NULL，且院系管理员的可见范围会 fail-closed 到看不见人。若只校验「班级存在」，
+     * 这种行会报「导入成功」却静默丢失归属，事后极难定位，故在此直接判为失败行。
+     */
+    private Long resolveClassId(String className, ImportContext ctx) {
+        if (className == null || className.isBlank()) {
             return null;
         }
-        Long id = ctx.majorIdByName.get(majorName.strip());
-        if (id == null) {
-            throw new BusinessException(400, "专业不存在：" + majorName.strip() + "，请先在基础数据中创建");
+        ClassName cls = ctx.classByName.get(className.strip());
+        if (cls == null) {
+            throw new BusinessException(400, "班级不存在：" + className.strip() + "，请先在基础数据中创建");
         }
-        return id;
+        if (cls.getMajorId() == null) {
+            throw new BusinessException(400,
+                    "班级未挂专业：" + className.strip() + "，请先在班级管理中为该班指定专业");
+        }
+        return cls.getId();
     }
 
     private Long resolveGradeId(String gradeName, ImportContext ctx) {

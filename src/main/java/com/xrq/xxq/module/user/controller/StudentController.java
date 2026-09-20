@@ -73,7 +73,7 @@ public class StudentController {
         return Result.ok(studentService.queryStudents(gradeId, classIds, majorIds, unassigned, name, new PageQuery(page, pageSize)));
     }
 
-    /** 修改学生信息（学号、班级、专业、入学年份）。仅教务管理员可用。 */
+    /** 修改学生信息（学号、班级、年级、入学年份）。仅教务管理员可用。专业随班级，不单独修改。 */
     @PutMapping("/{id}")
     public Result<Boolean> update(HttpServletRequest request,
                                   @PathVariable Long id,

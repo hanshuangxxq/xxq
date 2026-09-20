@@ -9,6 +9,7 @@ import com.xrq.xxq.module.user.entity.User;
 import com.xrq.xxq.module.user.entity.user.AcademicAdmin;
 import com.xrq.xxq.module.user.entity.user.Department;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
+import com.xrq.xxq.module.clazz.service.ClassNameService;
 import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.entity.user.Teacher;
 import com.xrq.xxq.module.user.mapper.AcademicAdminMapper;
@@ -37,6 +38,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     private final AcademicAdminMapper academicAdminMapper;
     private final DepartmentMapper departmentMapper;
     private final ClassNameMapper classNameMapper;
+    private final ClassNameService classNameService;
     private final MajorMapper majorMapper;
     private final GradeMapper gradeMapper;
     private final LoginSessionStore sessionStore;
@@ -93,9 +95,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                     profile.setIdentifier(student.getStudentNo());
                     Grade grade = student.getGradeId() != null ? gradeMapper.selectById(student.getGradeId()) : null;
                     profile.setGrade(grade != null ? grade.getName() : null);
-                    Major major = majorMapper.selectById(student.getMajorId());
+                    // 专业经班级推导（student 不再直存 major_id）
+                    Long majorId = classNameService.majorIdOf(student.getClassId());
+                    Major major = majorId == null ? null : majorMapper.selectById(majorId);
                     profile.setMajor(major != null ? major.getMajorName() : null);
-                    profile.setClassName(classNameMapper.selectById(student.getClassId()));
+                    profile.setClassName(student.getClassId() == null
+                            ? null : classNameMapper.selectById(student.getClassId()));
                     profile.setEnrollmentYear(student.getEnrollmentYear());
                 }
             }

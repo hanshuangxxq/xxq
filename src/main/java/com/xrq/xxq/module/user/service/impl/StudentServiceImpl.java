@@ -64,11 +64,20 @@ public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> impl
         if (gradeId != null) {
             wrapper.eq(Student::getGradeId, gradeId);
         }
-        if (classIds != null && !classIds.isEmpty()) {
-            wrapper.in(Student::getClassId, classIds);
-        }
+        // 专业经班级推导（student 不再直存 major_id）：把专业筛转换成班级筛选，与班级参数取交集
+        List<Long> scopedClassIds = classIds;
         if (majorIds != null && !majorIds.isEmpty()) {
-            wrapper.in(Student::getMajorId, majorIds);
+            List<Long> classIdsOfMajors = classNameService.classIdsByMajorIds(majorIds);
+            scopedClassIds = classIds == null || classIds.isEmpty()
+                    ? classIdsOfMajors
+                    : classIdsOfMajors.stream().filter(classIds::contains).toList();
+            if (scopedClassIds.isEmpty()) {
+                // 空集合会让 IN 生成非法 SQL，且语义上本就是无匹配
+                return new PageResult<>(List.of(), 0L, pageQuery.resolvedPage(), pageQuery.resolvedSize(), 0L);
+            }
+        }
+        if (scopedClassIds != null && !scopedClassIds.isEmpty()) {
+            wrapper.in(Student::getClassId, scopedClassIds);
         }
         if (Boolean.TRUE.equals(unassigned)) {
             wrapper.isNull(Student::getClassId);
@@ -92,11 +101,11 @@ public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> impl
                 .collect(Collectors.toSet());
         Map<Long, String> classNameMap = classNameService.toNameMap(queriedClassIds);
 
-        Set<Long> queriedMajorIds = students.stream()
-                .map(Student::getMajorId)
-                .collect(Collectors.toSet());
-        Map<Long, String> majorNameMap = majorMapper.selectByIds(queriedMajorIds).stream()
-                .collect(Collectors.toMap(Major::getId, Major::getMajorName));
+        // 专业经班级推导（student 不再直存 major_id）
+        Map<Long, Long> majorIdByClassId = classNameService.toMajorIdMap(queriedClassIds);
+        Map<Long, String> majorNameMap = majorIdByClassId.isEmpty() ? Map.of()
+                : majorMapper.selectByIds(majorIdByClassId.values().stream().distinct().toList()).stream()
+                        .collect(Collectors.toMap(Major::getId, Major::getMajorName));
 
         Set<Long> queriedGradeIds = students.stream()
                 .map(Student::getGradeId)
@@ -107,10 +116,14 @@ public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> impl
                         .collect(Collectors.toMap(Grade::getId, Grade::getName));
 
         List<StudentDto> records = students.stream()
-                .map(s -> toDto(s, userMap.get(s.getUserId()),
-                        classNameMap.get(s.getClassId()),
-                        majorNameMap.get(s.getMajorId()),
-                        s.getGradeId() != null ? gradeNameMap.get(s.getGradeId()) : null))
+                .map(s -> {
+                    // 先取 majorId 再查名：classId 为 null 时不能拿 null 去 get（空 Map 会抛 NPE）
+                    Long majorId = s.getClassId() == null ? null : majorIdByClassId.get(s.getClassId());
+                    return toDto(s, userMap.get(s.getUserId()),
+                            classNameMap.get(s.getClassId()),
+                            majorId == null ? null : majorNameMap.get(majorId),
+                            s.getGradeId() != null ? gradeNameMap.get(s.getGradeId()) : null);
+                })
                 .toList();
         return PageResult.of(page, records);
     }
@@ -134,16 +147,14 @@ public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> impl
             if (cn == null) {
                 throw new BusinessException(404, "班级不存在: " + request.getClassName());
             }
+            // 学生的专业与院系全部经班级推导，换到未挂专业的班级会让两项静默变 NULL
+            if (cn.getMajorId() == null) {
+                throw new BusinessException(400,
+                        "班级未挂专业: " + request.getClassName() + "，请先在班级管理中为该班指定专业");
+            }
             wrapper.set(Student::getClassId, cn.getId());
         }
-        if (request.getMajorName() != null && !request.getMajorName().isBlank()) {
-            Major major = majorMapper.selectOne(
-                    new LambdaQueryWrapper<Major>().eq(Major::getMajorName, request.getMajorName()));
-            if (major == null) {
-                throw new BusinessException(404, "专业不存在: " + request.getMajorName());
-            }
-            wrapper.set(Student::getMajorId, major.getId());
-        }
+        // 专业不在本表：改专业只能通过换班级（班级挂专业），故请求体不再接受 majorName
         if (request.getGradeName() != null && !request.getGradeName().isBlank()) {
             Grade grade = gradeMapper.selectOne(
                     new LambdaQueryWrapper<Grade>().eq(Grade::getName, request.getGradeName()));

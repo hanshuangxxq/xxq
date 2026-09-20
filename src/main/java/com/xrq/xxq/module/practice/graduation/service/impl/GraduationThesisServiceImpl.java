@@ -56,7 +56,7 @@ import com.xrq.xxq.module.practice.graduation.mapper.GraduationOpeningReportMapp
 import com.xrq.xxq.module.practice.graduation.mapper.GraduationThesisMapper;
 import com.xrq.xxq.module.practice.graduation.service.GraduationLogService;
 import com.xrq.xxq.module.practice.graduation.service.GraduationThesisService;
-import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
+import com.xrq.xxq.module.clazz.service.ClassNameService;
 import com.xrq.xxq.module.college.mapper.CollegeMapper;
 import com.xrq.xxq.module.user.entity.user.Student;
 import com.xrq.xxq.module.user.mapper.StudentMapper;
@@ -84,7 +84,7 @@ public class GraduationThesisServiceImpl
     private final GraduationDuplicateCheckMapper duplicateCheckMapper;
     private final StudentMapper studentMapper;
     private final UserMapper userMapper;
-    private final ClassNameMapper classNameMapper;
+    private final ClassNameService classNameService;
     private final CollegeMapper collegeMapper;
     private final StudentScopeResolver scopeResolver;
     private final PracticeFileSupport fileSupport;
@@ -492,7 +492,7 @@ public class GraduationThesisServiceImpl
         return studentIds.isEmpty() ? Map.of() : studentMapper.toStudentNoMap(studentIds);
     }
 
-    /** 学生 -> 院系名（student -> class_name -> college 链） */
+    /** 学生 -> 院系名（student -> class_name -> major -> college 链；归属缺失记空串） */
     private Map<Long, String> collegeNameMap(List<GraduationThesis> theses) {
         List<Long> studentIds = theses.stream().map(GraduationThesis::getStudentId).distinct().toList();
         if (studentIds.isEmpty()) {
@@ -501,21 +501,14 @@ public class GraduationThesisServiceImpl
         Map<Long, Long> studentClass = studentMapper.selectBatchIds(studentIds).stream()
                 .collect(java.util.stream.Collectors.toMap(Student::getUserId,
                         s -> s.getClassId() != null ? s.getClassId() : -1L, (a, b) -> a));
-        List<Long> classIds = studentClass.values().stream().filter(id -> id > 0).distinct().toList();
-        if (classIds.isEmpty()) {
-            return Map.of();
-        }
-        Map<Long, Long> classCollege = classNameMapper.selectBatchIds(classIds).stream()
-                .collect(java.util.stream.Collectors.toMap(
-                        c -> c.getId(), c -> c.getCollegeId() != null ? c.getCollegeId() : -1L, (a, b) -> a));
-        List<Long> collegeIds = classCollege.values().stream().filter(id -> id > 0).distinct().toList();
-        Map<Long, String> collegeNames = collegeIds.isEmpty() ? Map.of()
-                : collegeMapper.toNameMap(collegeIds);
+        Map<Long, Long> classCollege = classNameService.toCollegeIdMap(
+                studentClass.values().stream().filter(id -> id > 0).distinct().toList());
+        Map<Long, String> collegeNames = classCollege.isEmpty() ? Map.of()
+                : collegeMapper.toNameMap(classCollege.values().stream().distinct().toList());
         Map<Long, String> result = new java.util.HashMap<>();
         for (Long studentId : studentIds) {
-            Long classId = studentClass.getOrDefault(studentId, -1L);
-            Long collegeId = classCollege.getOrDefault(classId, -1L);
-            result.put(studentId, collegeNames.getOrDefault(collegeId, ""));
+            Long collegeId = classCollege.get(studentClass.getOrDefault(studentId, -1L));
+            result.put(studentId, collegeId == null ? "" : collegeNames.getOrDefault(collegeId, ""));
         }
         return result;
     }

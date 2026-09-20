@@ -18,6 +18,7 @@ import com.xrq.xxq.module.teachinfo.entity.TeachInfo;
 import com.xrq.xxq.module.time.entity.Time;
 import com.xrq.xxq.module.time.entity.TimeRestriction;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
+import com.xrq.xxq.module.clazz.service.ClassNameService;
 import com.xrq.xxq.module.college.mapper.CollegeMapper;
 import com.xrq.xxq.module.course.service.CourseInfoResolver;
 import com.xrq.xxq.module.local.entity.LocalTypeEnum;
@@ -77,6 +78,7 @@ public class SchedulingServiceImpl implements SchedulingService {
     private final CourseInfoResolver courseInfoResolver;
     private final StudentMapper studentMapper;
     private final ClassNameMapper classNameMapper;
+    private final ClassNameService classNameService;
     private final CollegeMapper collegeMapper;
     private final TimeRestrictionMapper timeRestrictionMapper;
     private final SelectionClassMapper selectionClassMapper;
@@ -301,15 +303,21 @@ public class SchedulingServiceImpl implements SchedulingService {
         List<ClassName> allClasses = classNameMapper.selectList(null);
         Map<String, Long> classNameToClassId = allClasses.stream()
                 .collect(Collectors.toMap(
-                        cn -> cn.getClassName(),
-                        cn -> cn.getId(),
+                        ClassName::getClassName,
+                        ClassName::getId,
                         (a, b) -> a));
+        // 院系经 班级 -> 专业 两跳推导
+        Map<Long, Long> collegeByClassId = classNameService.toCollegeIdMap(
+                allClasses.stream().map(ClassName::getId).toList());
         Map<Long, String> collegeNameMap = collegeMapper.toNameMap(
-                allClasses.stream().map(ClassName::getCollegeId).filter(Objects::nonNull).distinct().toList());
+                collegeByClassId.values().stream().distinct().toList());
         Map<String, String> classNameToCollege = allClasses.stream()
                 .collect(Collectors.toMap(
                         ClassName::getClassName,
-                        cn -> cn.getCollegeId() != null ? collegeNameMap.getOrDefault(cn.getCollegeId(), "") : "",
+                        cn -> {
+                            Long collegeId = collegeByClassId.get(cn.getId());
+                            return collegeId != null ? collegeNameMap.getOrDefault(collegeId, "") : "";
+                        },
                         (a, b) -> a));
 
         // 选课班：teachInfoId -> SelectionClass.studentCount

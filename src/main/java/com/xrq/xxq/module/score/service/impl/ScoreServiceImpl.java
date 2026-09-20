@@ -19,8 +19,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.module.analysis.util.ScoreStats;
-import com.xrq.xxq.module.clazz.entity.ClassName;
-import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
+import com.xrq.xxq.module.clazz.service.ClassNameService;
 import com.xrq.xxq.module.clazz.util.ClassNameUtil;
 import com.xrq.xxq.module.course.service.CourseInfoResolver;
 import com.xrq.xxq.module.course.util.CourseRouting;
@@ -71,7 +70,7 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
     private final TeachInfoMapper teachInfoMapper;
     private final CourseInfoResolver courseInfoResolver;
     private final StudentMapper studentMapper;
-    private final ClassNameMapper classNameMapper;
+    private final ClassNameService classNameService;
     private final UserMapper userMapper;
     private final TeacherMapper teacherMapper;
     private final DepartmentMapper departmentMapper;
@@ -615,7 +614,7 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
         if (names.isEmpty() || collegeId == null) {
             return false;
         }
-        return classNameMapper.selectList(new LambdaQueryWrapper<ClassName>().in(ClassName::getClassName, names))
-                .stream().anyMatch(c -> collegeId.equals(c.getCollegeId()));
+        // 合班任一班属于该院系即放行（院系经班级 -> 专业两跳推导）
+        return classNameService.toCollegeIdMapByClassName(names).containsValue(collegeId);
     }
 }

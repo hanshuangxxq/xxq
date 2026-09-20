@@ -19,6 +19,7 @@ import com.xrq.xxq.module.college.entity.College;
 import com.xrq.xxq.module.college.mapper.CollegeMapper;
 import com.xrq.xxq.module.teachinfo.entity.TeachInfo;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
+import com.xrq.xxq.module.clazz.service.ClassNameService;
 import com.xrq.xxq.module.course.service.CourseInfoResolver;
 import com.xrq.xxq.module.user.entity.user.Teacher;
 import com.xrq.xxq.module.user.mapper.TeacherMapper;
@@ -51,6 +52,7 @@ public class DraftCacheManager {
     private final TeacherMapper teacherMapper;
     private final UserMapper userMapper;
     private final ClassNameMapper classNameMapper;
+    private final ClassNameService classNameService;
     private final CollegeMapper collegeMapper;
 
     private final List<DraftItem> drafts = Collections.synchronizedList(new ArrayList<>());
@@ -295,11 +297,17 @@ public class DraftCacheManager {
         }
         List<ClassName> classes = classNameMapper.selectList(
                 new LambdaQueryWrapper<ClassName>().in(ClassName::getClassName, classNames));
+        // 院系经 班级 -> 专业 两跳推导
+        Map<Long, Long> collegeByClassId = classNameService.toCollegeIdMap(
+                classes.stream().map(ClassName::getId).toList());
         Map<Long, String> collegeNameMap = collegeMapper.toNameMap(
-                classes.stream().map(ClassName::getCollegeId).filter(java.util.Objects::nonNull).distinct().toList());
+                collegeByClassId.values().stream().distinct().toList());
         return classes.stream()
                 .collect(Collectors.toMap(ClassName::getClassName,
-                        cn -> cn.getCollegeId() != null ? collegeNameMap.getOrDefault(cn.getCollegeId(), "") : "",
+                        cn -> {
+                            Long collegeId = collegeByClassId.get(cn.getId());
+                            return collegeId != null ? collegeNameMap.getOrDefault(collegeId, "") : "";
+                        },
                         (a, b) -> a));
     }
 

@@ -13,6 +13,7 @@ import com.xrq.xxq.module.course.dto.UserCourseDto;
 import com.xrq.xxq.module.course.dto.WeekScheduleDto;
 import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.module.clazz.entity.ClassName;
+import com.xrq.xxq.module.clazz.service.ClassNameService;
 import com.xrq.xxq.module.clazz.util.ClassNameUtil;
 import com.xrq.xxq.module.college.mapper.CollegeMapper;
 import com.xrq.xxq.module.course.entity.Course;
@@ -66,6 +67,7 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
     private final CourseMapper courseMapper;
     private final TeacherMapper teacherMapper;
     private final ClassNameMapper classNameMapper;
+    private final ClassNameService classNameService;
     private final StudentMapper studentMapper;
     private final DepartmentMapper departmentMapper;
     private final LocalMapper localMapper;
@@ -276,12 +278,7 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
                 if (dept == null) {
                     return null;
                 }
-                List<String> classNames = classNameMapper.selectList(
-                                new LambdaQueryWrapper<ClassName>()
-                                        .eq(ClassName::getCollegeId, dept.getCollegeId()))
-                        .stream()
-                        .map(ClassName::getClassName)
-                        .toList();
+                List<String> classNames = classNameService.classNamesByCollegeId(dept.getCollegeId());
                 if (classNames.isEmpty()) {
                     return null;
                 }
@@ -366,10 +363,12 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
 
         Map<Long, String> teacherNameMap = teacherNameResolver.namesForTeachers(teacherMap.values());
 
-        // 院系名称解析：教师 collegeId + 班级 collegeId -> college.name（用于展示 department/college）
+        // 院系名称解析：教师 collegeId + 班级 collegeId（经 major 两跳）-> college.name
+        // （用于展示 department/college）
+        Map<String, Long> classCollegeMap = classNameService.toCollegeIdMapByClassName(classMap.keySet());
         List<Long> collegeIds = java.util.stream.Stream.concat(
                 teacherMap.values().stream().map(Teacher::getCollegeId),
-                classMap.values().stream().map(ClassName::getCollegeId))
+                classCollegeMap.values().stream())
                 .filter(Objects::nonNull).distinct().toList();
         Map<Long, String> collegeNameMap = collegeMapper.toNameMap(collegeIds);
 
@@ -414,7 +413,7 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
             }
 
             resp.setClassName(info.getClassName());
-            resp.setCollege(resolveCollege(info.getClassName(), classMap, collegeNameMap));
+            resp.setCollege(resolveCollege(info.getClassName(), classCollegeMap, collegeNameMap));
 
             resp.setDayOfWeek(info.getDayOfWeek());
             resp.setStartWeek(info.getStartWeek());
@@ -481,12 +480,12 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
     }
 
     /** 合班时拆分班级名，逐个查院系后去重拼接。单班直接返回对应院系。 */
-    private String resolveCollege(String className, Map<String, ClassName> classMap, Map<Long, String> collegeNameMap) {
+    private String resolveCollege(String className, Map<String, Long> classCollegeMap, Map<Long, String> collegeNameMap) {
         var colleges = new java.util.LinkedHashSet<String>();
         for (String trimmed : ClassNameUtil.splitClassNames(className)) {
-            ClassName cls = classMap.get(trimmed);
-            if (cls != null && cls.getCollegeId() != null) {
-                String name = collegeNameMap.get(cls.getCollegeId());
+            Long collegeId = classCollegeMap.get(trimmed);
+            if (collegeId != null) {
+                String name = collegeNameMap.get(collegeId);
                 if (name != null && !name.isEmpty()) {
                     colleges.add(name);
                 }

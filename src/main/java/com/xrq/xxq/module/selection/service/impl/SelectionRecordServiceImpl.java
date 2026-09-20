@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.xrq.xxq.common.BusinessException;
+import com.xrq.xxq.module.clazz.service.ClassNameService;
 import com.xrq.xxq.module.course.entity.Course;
 import com.xrq.xxq.module.course.mapper.CourseMapper;
 import com.xrq.xxq.module.selection.dto.SelectionRecordRequest;
@@ -58,6 +59,7 @@ public class SelectionRecordServiceImpl implements SelectionRecordService {
     private final SelectionGroupMapper selectionGroupMapper;
     private final SelectionCampaignTimeRestrictionMapper selectionCampaignTimeRestrictionMapper;
     private final StudentMapper studentMapper;
+    private final ClassNameService classNameService;
     private final CourseMapper courseMapper;
     private final SemesterService semesterService;
     private final StringRedisTemplate redisTemplate;
@@ -108,7 +110,8 @@ public class SelectionRecordServiceImpl implements SelectionRecordService {
         if (student == null) {
             throw new BusinessException(403, "学生信息不存在");
         }
-        if (!isAllowed(campaign, student.getGradeId(), student.getMajorId())) {
+        // 专业经班级推导（student 不再直存 major_id）
+        if (!isAllowed(campaign, student.getGradeId(), classNameService.majorIdOf(student.getClassId()))) {
             throw new BusinessException(409, "本课程不对您的年级或专业开放");
         }
 

@@ -26,6 +26,7 @@ import com.xrq.xxq.module.analysis.util.ScoreStats;
 import com.xrq.xxq.util.StudentScopeResolver;
 import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
+import com.xrq.xxq.module.clazz.service.ClassNameService;
 import com.xrq.xxq.module.course.mapper.CourseMapper;
 import com.xrq.xxq.module.course.service.CourseInfoResolver;
 import com.xrq.xxq.module.mojor.entity.Major;
@@ -53,6 +54,7 @@ public class StudentProfileServiceImpl implements StudentProfileService {
     private final StudentMapper studentMapper;
     private final UserMapper userMapper;
     private final ClassNameMapper classNameMapper;
+    private final ClassNameService classNameService;
     private final MajorMapper majorMapper;
     private final CourseMapper courseMapper;
     private final CourseInfoResolver courseInfoResolver;
@@ -71,7 +73,9 @@ public class StudentProfileServiceImpl implements StudentProfileService {
         }
         User user = userMapper.selectById(studentUserId);
         ClassName cn = stu.getClassId() == null ? null : classNameMapper.selectById(stu.getClassId());
-        Major major = stu.getMajorId() == null ? null : majorMapper.selectById(stu.getMajorId());
+        // 专业经班级推导（student 不再直存 major_id）
+        Long majorId = classNameService.majorIdOf(stu.getClassId());
+        Major major = majorId == null ? null : majorMapper.selectById(majorId);
 
         // 全部 REGULAR 成绩
         List<Score> all = scoreMapper.selectList(new LambdaQueryWrapper<Score>()

@@ -16,6 +16,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
+import com.xrq.xxq.module.clazz.service.ClassNameService;
 import com.xrq.xxq.module.college.entity.College;
 import com.xrq.xxq.module.college.mapper.CollegeMapper;
 import com.xrq.xxq.module.practice.graduation.dto.DashboardRow;
@@ -59,6 +60,7 @@ public class GraduationDashboardQuery {
     private final StudentMapper studentMapper;
     private final UserMapper userMapper;
     private final ClassNameMapper classNameMapper;
+    private final ClassNameService classNameService;
     private final CollegeMapper collegeMapper;
     private final GradeMapper gradeMapper;
     private final GraduationProposalMapper proposalMapper;
@@ -97,8 +99,10 @@ public class GraduationDashboardQuery {
         Map<Long, ClassName> classMap = toIdMap(classNameMapper,
                 students.stream().map(Student::getClassId).filter(Objects::nonNull).distinct().toList(),
                 ClassName::getId);
+        // 院系经 班级 -> 专业 两跳推导
+        Map<Long, Long> classCollegeMap = classNameService.toCollegeIdMap(classMap.keySet());
         Map<Long, College> collegeMap = toIdMap(collegeMapper,
-                classMap.values().stream().map(ClassName::getCollegeId).filter(Objects::nonNull).distinct().toList(),
+                classCollegeMap.values().stream().distinct().toList(),
                 College::getId);
         Map<Long, Grade> gradeMap = toIdMap(gradeMapper, gradeIds, Grade::getId);
 
@@ -137,7 +141,7 @@ public class GraduationDashboardQuery {
                 // 等价原 INNER JOIN user：用户缺失（含已逻辑删除）的学生不出行
                 continue;
             }
-            rows.add(assembleRow(s, u, classMap, collegeMap, gradeMap,
+            rows.add(assembleRow(s, u, classMap, classCollegeMap, collegeMap, gradeMap,
                     proposalMap, approvedTimeMap, assignmentMap, teacherNameMap, midtermMap));
         }
         return rows.stream().filter(row -> matches(row, collegeId, keyword, status)).toList();
@@ -146,7 +150,8 @@ public class GraduationDashboardQuery {
     // ---- 合并与筛选 ----
 
     private DashboardRow assembleRow(Student s, User u,
-                                     Map<Long, ClassName> classMap, Map<Long, College> collegeMap,
+                                     Map<Long, ClassName> classMap, Map<Long, Long> classCollegeMap,
+                                     Map<Long, College> collegeMap,
                                      Map<Long, Grade> gradeMap, Map<Long, GraduationProposal> proposalMap,
                                      Map<Long, LocalDateTime> approvedTimeMap,
                                      Map<Long, GraduationAssignment> assignmentMap,
@@ -158,8 +163,9 @@ public class GraduationDashboardQuery {
         ClassName cls = s.getClassId() == null ? null : classMap.get(s.getClassId());
         if (cls != null) {
             row.setClassName(cls.getClassName());
-            row.setCollegeId(cls.getCollegeId());
-            College college = cls.getCollegeId() == null ? null : collegeMap.get(cls.getCollegeId());
+            Long collegeId = classCollegeMap.get(cls.getId());
+            row.setCollegeId(collegeId);
+            College college = collegeId == null ? null : collegeMap.get(collegeId);
             if (college != null) {
                 row.setCollegeName(college.getCollegeName());
             }
