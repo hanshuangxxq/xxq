@@ -30,22 +30,19 @@ public class MajorController {
     @PostMapping
     @RequireAcademicAdmin
     public Result<Major> create(HttpServletRequest request, @RequestBody Major major) {
-        majorService.save(major);
-        return Result.ok(major);
+        return Result.ok(majorService.create(major));
     }
 
     @PutMapping("/{id}")
     @RequireAcademicAdmin
     public Result<Major> update(HttpServletRequest request, @PathVariable Long id, @RequestBody Major major) {
-        major.setId(id);
-        majorService.updateById(major);
-        return Result.ok(major);
+        return Result.ok(majorService.update(id, major));
     }
 
     @DeleteMapping("/{id}")
     @RequireAcademicAdmin
     public Result<Void> delete(HttpServletRequest request, @PathVariable Long id) {
-        majorService.removeById(id);
+        majorService.delete(id);
         return Result.ok();
     }
 }
