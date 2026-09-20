@@ -6,6 +6,7 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -656,7 +657,7 @@ public class GraduationDefenseServiceImpl
     private Map<Long, String> collegeNameMap(List<GraduationScore> scores) {
         List<Long> studentIds = scores.stream().map(GraduationScore::getStudentId).distinct().toList();
         if (studentIds.isEmpty()) {
-            return Map.of();
+            return new HashMap<>(); // 不用 Map.of():get(null) 会 NPE
         }
         Map<Long, Long> studentClass = studentMapper.selectBatchIds(studentIds).stream()
                 .collect(Collectors.toMap(

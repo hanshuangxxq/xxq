@@ -35,7 +35,8 @@ public class ClassNameServiceImpl extends ServiceImpl<ClassNameMapper, ClassName
     public Map<Long, String> toNameMap(Collection<Long> ids) {
         List<Long> clean = cleanIds(ids);
         if (clean.isEmpty()) {
-            return Map.of();
+            // 空查找 map 用 HashMap:Map.of() 的 get(null) 会抛 NPE,而调用方会传可空的 class_id
+            return new HashMap<>();
         }
         return listByIds(clean).stream()
                 .collect(Collectors.toMap(ClassName::getId, ClassName::getClassName, (a, b) -> a));
@@ -51,7 +52,7 @@ public class ClassNameServiceImpl extends ServiceImpl<ClassNameMapper, ClassName
     public Map<Long, Long> toMajorIdMap(Collection<Long> classIds) {
         List<Long> ids = cleanIds(classIds);
         if (ids.isEmpty()) {
-            return Map.of();
+            return new HashMap<>();
         }
         return listByIds(ids).stream()
                 .filter(cn -> cn.getMajorId() != null)
@@ -67,11 +68,11 @@ public class ClassNameServiceImpl extends ServiceImpl<ClassNameMapper, ClassName
     public Map<Long, Long> toCollegeIdMap(Collection<Long> classIds) {
         Map<Long, Long> majorByClass = toMajorIdMap(classIds);
         if (majorByClass.isEmpty()) {
-            return Map.of();
+            return new HashMap<>();
         }
         Map<Long, Long> collegeByMajor = collegeIdByMajorIds(majorByClass.values());
         if (collegeByMajor.isEmpty()) {
-            return Map.of();
+            return new HashMap<>();
         }
         Map<Long, Long> collegeByClass = new HashMap<>();
         majorByClass.forEach((classId, majorId) -> {
@@ -86,12 +87,12 @@ public class ClassNameServiceImpl extends ServiceImpl<ClassNameMapper, ClassName
     @Override
     public Map<String, Long> toCollegeIdMapByClassName(Collection<String> classNames) {
         if (classNames == null || classNames.isEmpty()) {
-            return Map.of();
+            return new HashMap<>();
         }
         List<ClassName> classes = list(new LambdaQueryWrapper<ClassName>()
                 .in(ClassName::getClassName, classNames));
         if (classes.isEmpty()) {
-            return Map.of();
+            return new HashMap<>();
         }
         // 同名班级理论上唯一，但 DB 未加唯一约束（约束走应用层），重复名取先出现的一行
         Map<Long, Long> collegeByClass = toCollegeIdMap(
@@ -158,7 +159,7 @@ public class ClassNameServiceImpl extends ServiceImpl<ClassNameMapper, ClassName
     private Map<Long, Long> collegeIdByMajorIds(Collection<Long> majorIds) {
         List<Long> ids = cleanIds(majorIds);
         if (ids.isEmpty()) {
-            return Map.of();
+            return new HashMap<>();
         }
         return majorMapper.selectList(new LambdaQueryWrapper<Major>()
                         .select(Major::getId, Major::getCollegeId)

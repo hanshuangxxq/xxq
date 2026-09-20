@@ -1,5 +1,6 @@
 package com.xrq.xxq.module.analysis.service.impl;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -124,7 +125,8 @@ public class EvaluationItemServiceImpl implements EvaluationItemService {
 
     private Map<Long, Long> loadUsedCount(List<EvaluationItem> items) {
         if (items.isEmpty()) {
-            return Map.of();
+            // 空查找 map 用 HashMap:Map.of() 的 get(null) 会抛 NPE
+            return new HashMap<>();
         }
         List<Long> ids = items.stream().map(EvaluationItem::getId).toList();
         return templateItemMapper.selectList(new LambdaQueryWrapper<EvaluationTemplateItem>()

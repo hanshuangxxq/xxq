@@ -152,7 +152,8 @@ public class ClassAnalysisServiceImpl implements ClassAnalysisService {
     /** userId -&gt; 组名（班级名或专业名）；无法确定的用户不进入映射。 */
     private Map<Long, String> loadGroupMap(List<Long> userIds, String groupBy) {
         if (userIds.isEmpty()) {
-            return Map.of();
+            // 空查找 map 用 HashMap:Map.of() 的 get(null) 会抛 NPE
+            return new HashMap<>();
         }
         List<Student> students = studentMapper.selectList(
                 new LambdaQueryWrapper<Student>().in(Student::getUserId, userIds));

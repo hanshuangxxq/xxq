@@ -448,7 +448,7 @@ public class GraduationThesisServiceImpl
                         .in(GraduationDuplicateCheck::getThesisId, thesisIds)
                         .orderByAsc(GraduationDuplicateCheck::getCheckTime));
         if (checks.isEmpty()) {
-            return Map.of();
+            return new HashMap<>(); // 不用 Map.of():get(null) 会 NPE
         }
         Map<Long, String> operatorNames = userMapper.toNameMap(
                 checks.stream().map(GraduationDuplicateCheck::getOperatorId)
@@ -489,14 +489,14 @@ public class GraduationThesisServiceImpl
 
     private Map<Long, String> studentNoMap(List<GraduationThesis> theses) {
         List<Long> studentIds = theses.stream().map(GraduationThesis::getStudentId).distinct().toList();
-        return studentIds.isEmpty() ? Map.of() : studentMapper.toStudentNoMap(studentIds);
+        return studentIds.isEmpty() ? new HashMap<>() : studentMapper.toStudentNoMap(studentIds);
     }
 
     /** 学生 -> 院系名（student -> class_name -> major -> college 链；归属缺失记空串） */
     private Map<Long, String> collegeNameMap(List<GraduationThesis> theses) {
         List<Long> studentIds = theses.stream().map(GraduationThesis::getStudentId).distinct().toList();
         if (studentIds.isEmpty()) {
-            return Map.of();
+            return new HashMap<>(); // 不用 Map.of():get(null) 会 NPE
         }
         Map<Long, Long> studentClass = studentMapper.selectBatchIds(studentIds).stream()
                 .collect(java.util.stream.Collectors.toMap(Student::getUserId,

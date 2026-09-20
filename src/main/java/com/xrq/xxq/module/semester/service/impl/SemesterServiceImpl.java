@@ -1,6 +1,7 @@
 package com.xrq.xxq.module.semester.service.impl;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -31,7 +32,7 @@ public class SemesterServiceImpl extends ServiceImpl<SemesterMapper, Semester> i
     @Override
     public Map<Long, String> toNameMap(Collection<Long> ids) {
         if (ids == null || ids.isEmpty()) {
-            return Map.of();
+            return new HashMap<>(); // 不用 Map.of():get(null) 会 NPE,调用方会传可空外键
         }
         return listByIds(ids).stream()
                 .collect(Collectors.toMap(Semester::getId, Semester::getName, (a, b) -> a));

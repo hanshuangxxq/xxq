@@ -142,12 +142,13 @@ public class StudentScopeResolver {
      */
     public Map<Long, Long> studentCollegeIdMap(Collection<Long> studentUserIds) {
         if (studentUserIds == null || studentUserIds.isEmpty()) {
-            return Map.of();
+            // 空查找 map 用 HashMap:Map.of() 的 get(null) 会抛 NPE,调用方会传可空外键
+            return new HashMap<>();
         }
         List<Student> students = studentMapper.selectList(
                 new LambdaQueryWrapper<Student>().in(Student::getUserId, studentUserIds));
         if (students.isEmpty()) {
-            return Map.of();
+            return new HashMap<>();
         }
         List<Long> classIds = students.stream().map(Student::getClassId)
                 .filter(Objects::nonNull).distinct().toList();

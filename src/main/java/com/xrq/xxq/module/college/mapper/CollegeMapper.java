@@ -1,6 +1,7 @@
 package com.xrq.xxq.module.college.mapper;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -23,10 +24,16 @@ public interface CollegeMapper extends BaseMapper<College> {
         return selectOne(new LambdaQueryWrapper<College>().eq(College::getCollegeName, name));
     }
 
-    /** 批量解析 college.id -> 名称 Map（空集合返回空 Map）。 */
+    /**
+     * 批量解析 college.id -> 名称 Map（空集合返回空 Map）。
+     * <p>
+     * 空集合分支返回 {@code HashMap} 而非 {@code Map.of()}：调用方普遍用可空外键直接查表
+     * （如 {@code map.get(teacher.getCollegeId())}，college_id 可为 NULL），
+     * 而 {@code Map.of()} 的 {@code get(null)} 会抛 NPE。
+     */
     default Map<Long, String> toNameMap(Collection<Long> ids) {
         if (ids == null || ids.isEmpty()) {
-            return Map.of();
+            return new HashMap<>();
         }
         return selectBatchIds(ids).stream()
                 .collect(Collectors.toMap(College::getId, College::getCollegeName, (a, b) -> a));

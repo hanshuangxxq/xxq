@@ -2,6 +2,7 @@ package com.xrq.xxq.util;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -161,7 +162,8 @@ public class StudentEnrollmentResolver {
         List<Long> ids = teachInfoIds == null ? List.of()
                 : teachInfoIds.stream().filter(Objects::nonNull).distinct().toList();
         if (ids.isEmpty()) {
-            return Map.of();
+            // 空查找 map 用 HashMap:Map.of() 的 get(null) 会抛 NPE
+            return new HashMap<>();
         }
         return selectionClassMapper.selectList(
                         new LambdaQueryWrapper<SelectionClass>().in(SelectionClass::getTeachInfoId, ids)).stream()

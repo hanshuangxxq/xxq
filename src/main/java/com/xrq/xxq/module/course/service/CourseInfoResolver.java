@@ -1,6 +1,7 @@
 package com.xrq.xxq.module.course.service;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -70,7 +71,8 @@ public class CourseInfoResolver {
     public Map<Long, CourseInfo> resolveCourses(Collection<Long> courseIds) {
         List<Long> ids = nonNullDistinct(courseIds);
         if (ids.isEmpty()) {
-            return Map.of();
+            // 空查找 map 用 HashMap:Map.of() 的 get(null) 会抛 NPE
+            return new HashMap<>();
         }
         return courseMapper.selectByIds(ids).stream()
                 .collect(Collectors.toMap(Course::getId, CourseInfoResolver::toInfo, (a, b) -> a));
@@ -80,7 +82,7 @@ public class CourseInfoResolver {
     public Map<Long, CourseInfo> resolveCampaigns(Collection<Long> campaignIds) {
         List<Long> ids = nonNullDistinct(campaignIds);
         if (ids.isEmpty()) {
-            return Map.of();
+            return new HashMap<>();
         }
         return selectionCampaignMapper.selectByIds(ids).stream()
                 .collect(Collectors.toMap(SelectionCampaign::getId, CourseInfoResolver::toInfo, (a, b) -> a));

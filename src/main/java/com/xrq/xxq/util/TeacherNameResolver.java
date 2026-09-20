@@ -33,12 +33,15 @@ public class TeacherNameResolver {
     /**
      * 按 teacher.id 批量解析姓名（内部先查 teacher.userId 再查 user.name）。
      * teacherId 无对应教师或 userId 为 null 时，该 id 不出现在结果中。
+     * <p>
+     * 返回的空 Map 允许 null key 查询：调用方会用可空外键直接查表
+     * （如 {@code map.get(local.getManagerId())}），{@code Map.of()} 的 {@code get(null)} 会抛 NPE。
      */
     public Map<Long, String> namesByIds(Collection<Long> teacherIds) {
         List<Long> ids = teacherIds == null ? List.of()
                 : teacherIds.stream().filter(Objects::nonNull).distinct().toList();
         if (ids.isEmpty()) {
-            return Map.of();
+            return new HashMap<>();
         }
         return namesForTeachers(teacherMapper.selectByIds(ids));
     }
@@ -49,13 +52,13 @@ public class TeacherNameResolver {
      */
     public Map<Long, String> namesForTeachers(Collection<Teacher> teachers) {
         if (teachers == null || teachers.isEmpty()) {
-            return Map.of();
+            return new HashMap<>(); // 不用 Map.of():get(null) 会 NPE,调用方会传可空外键
         }
         Map<Long, Long> idToUserId = teachers.stream()
                 .filter(t -> t.getId() != null && t.getUserId() != null)
                 .collect(Collectors.toMap(Teacher::getId, Teacher::getUserId, (a, b) -> a));
         if (idToUserId.isEmpty()) {
-            return Map.of();
+            return new HashMap<>(); // 同上:结果为空时仍要能安全地 get(null)
         }
         Map<Long, String> userName = userMapper.toNameMap(idToUserId.values());
         Map<Long, String> result = new HashMap<>();

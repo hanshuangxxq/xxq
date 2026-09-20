@@ -293,7 +293,8 @@ public class DraftCacheManager {
 
     private Map<String, String> loadClassNameToCollege(Set<String> classNames) {
         if (classNames.isEmpty()) {
-            return Map.of();
+            // 空查找 map 用 HashMap:Map.of() 的 get(null) 会抛 NPE
+            return new HashMap<>();
         }
         List<ClassName> classes = classNameMapper.selectList(
                 new LambdaQueryWrapper<ClassName>().in(ClassName::getClassName, classNames));
