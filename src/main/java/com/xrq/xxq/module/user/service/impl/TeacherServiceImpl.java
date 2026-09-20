@@ -34,8 +34,10 @@ public class TeacherServiceImpl extends ServiceImpl<TeacherMapper, Teacher> impl
         if (teachers.isEmpty()) {
             return PageResult.of(page, List.of());
         }
+        // 姓名兜底：user.name 列可空，而 Collectors.toMap 遇到 null 值会抛 NPE（不是跳过而是整表失败）
         Map<Long, String> userIdToName = userMapper.selectList(null).stream()
-                .collect(Collectors.toMap(User::getId, User::getName, (a, b) -> a));
+                .collect(Collectors.toMap(User::getId,
+                        u -> u.getName() == null ? "未知" : u.getName(), (a, b) -> a));
         Map<Long, String> collegeNameMap = collegeMapper.toNameMap(
                 teachers.stream().map(Teacher::getCollegeId).filter(java.util.Objects::nonNull).distinct().toList());
 
@@ -46,7 +48,8 @@ public class TeacherServiceImpl extends ServiceImpl<TeacherMapper, Teacher> impl
                     dto.setName(userIdToName.getOrDefault(t.getUserId(), "未知"));
                     dto.setTeacherNo(t.getTeacherNo());
                     dto.setTitle(t.getTitle());
-                    dto.setDepartment(collegeNameMap.get(t.getCollegeId()));
+                    // college_id 可空（教师未挂院系），空值直接为 null，不拿 null 去查表
+                    dto.setDepartment(t.getCollegeId() == null ? null : collegeNameMap.get(t.getCollegeId()));
                     return dto;
                 })
                 .toList();
