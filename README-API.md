@@ -640,9 +640,9 @@ Content-Type: application/json
 | password | String | 是 | 明文密码（服务端使用 PBKDF2 哈希存储） |
 | userType | String | 是 | 用户类型，仅允许 `student` 或 `teacher`，其他类型拒绝 |
 | identifier | String | 否 | 编号（学生→学号 studentNo，教师→教师编号 teacherNo） |
-| className | String | 否 | 班级（仅对学生写入 grade 字段） |
+| className | String | 否 | **字段名有历史歧义：学生写入的是 `gradeId`（年级），不是班级**。填已存在的年级名称 |
 | gender | String | 否 | 性别（`男` / `女` / `未知`，默认 `未知`） |
-| department | String | 否 | 院系（学生→专业 major，教师→所属部门 department） |
+| department | String | 否 | 学生→班级名称（写入 `classId`，专业与院系由班级推导）；教师→院系名称（写入 `collegeId`）。两者均须已存在，否则该行以「班级不存在 / 院系不存在」失败 |
 
 **请求示例**
 
@@ -654,9 +654,9 @@ Content-Type: application/json
       "password": "123456",
       "userType": "student",
       "identifier": "2024001",
-      "className": "计算机科学1班",
+      "className": "2024",
       "gender": "男",
-      "department": "计算机科学与技术"
+      "department": "计算机科学1班"
     },
     {
       "username": "李四",
@@ -707,12 +707,14 @@ Content-Type: application/json
 
 **数据写入规则**
 
-| userType | user 表 | 子类型表 | 编号字段 | 班级字段 | 院系字段 |
-|----------|---------|----------|----------|----------|----------|
-| student | ✓ | student | studentNo | grade | major |
-| teacher | ✓ | teacher | teacherNo | — | department |
+| userType | user 表 | 子类型表 | 编号字段 | 落库的归属字段 |
+|----------|---------|----------|----------|----------------|
+| student | ✓ | student | studentNo | `gradeId`（第 5 列「年级」）、`classId`（第 7 列「班级/院系」）。**专业与院系不落库**，由班级推导 |
+| teacher | ✓ | teacher | teacherNo | `collegeId`（第 7 列「院系」） |
 
 > 每条记录在事务中独立写入，单条失败不影响其他记录。密码使用 `EncryptUtils.hashWithPbkdf2()` 进行 PBKDF2WithHmacSHA256 哈希（100,000 次迭代，256 bit 密钥）。
+>
+> 学生行只写班级外键，因此导入时**必须**填一个已挂专业的班级，否则该生专业/院系为空、在院系视图中消失——这种行会被判为失败而不是静默成功。
 
 **错误场景**
 
@@ -720,6 +722,18 @@ Content-Type: application/json
 |-------------|---------|
 | 403 | 仅教务管理员可执行此操作 |
 | 400 | 导入数据不能为空 |
+
+**常见逐条错误**（出现在 `details[].message`，不影响其它行）
+
+| message |
+|---------|
+| 用户类型只允许 student 或 teacher，收到: xxx |
+| 用户名已存在：xxx |
+| 学号已存在：xxx / 工号已存在：xxx |
+| 年级不存在：xxx，请先在基础数据中创建 |
+| 班级不存在：xxx，请先在基础数据中创建 |
+| 班级未挂专业：xxx，请先在班级管理中为该班指定专业 |
+| 院系不存在：xxx，请先在基础数据中创建 |
 
 **逐条错误示例**（部分失败时的响应）
 
@@ -770,7 +784,7 @@ Content-Type: multipart/form-data
 | 4 | 学号/工号 | identifier | 可空 |
 | 5 | 年级 | className | 学生用，填已存在的年级名称 |
 | 6 | 性别 | gender | `男` / `女`，留空默认男 |
-| 7 | 专业/院系 | department | 学生填专业名、教师填院系名，须已存在 |
+| 7 | 班级/院系 | department | 学生填已存在的**且已挂专业**的班级名称、教师填已存在的院系名称；学生的专业与院系由所填班级推导，无需另填 |
 
 **错误场景**
 
@@ -796,12 +810,14 @@ Authorization: Bearer <accessToken>
 
 ### 4.6 学生管理（教务管理员）
 
-仅教务管理员（`academic_admin`）可操作。用于查询和修改全校学生的学号、班级、专业、入学年份等信息。
+仅教务管理员（`academic_admin`）可操作。用于查询和修改全校学生的学号、班级、年级、入学年份等信息。
 
+> **学籍归属链为严格四层**：`院系 → 专业 → 班级 → 学生`。学生**不直存专业**，`majorName` 由所属班级（`class_name.major_id → major.major_name`）推导而来；要改学生的专业，只能改其班级。`gradeId`（当前学业年级）与 `enrollmentYear`（学籍入学年份）并存不可互推——留级学生的年级会高于入学年份。
+>
 > **前端对接提示**：
-> - 班级下拉列表 → `GET /api/class-names`（见 [5.6 班级 CRUD](#56-班级-crud)），返回 `[{id, className, college}, ...]`
+> - 班级下拉列表 → `GET /api/class-names`（见 [5.6 班级 CRUD](#56-班级-crud)），返回 `[{id, className, majorId}, ...]`
 > - 专业下拉列表 → `GET /api/majors`（见 [4.7 专业管理](#47-专业管理)），返回 `[{id, majorName}, ...]`
-> - 展示和修改时均传名称字符串即可，后端自动解析为内部 ID
+> - 学生侧只传班级名称字符串即可，后端自动解析为 `classId`；专业为只读派生值
 
 #### 4.6.1 查询学生列表
 
@@ -816,13 +832,20 @@ Authorization: Bearer <accessToken>
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| grade | String | 否 | 按班级名称筛选（精确匹配，对应 student.grade 字段） |
-| className | String | 否 | 按班级筛选（精确匹配，通过 class_name 表解析为 classId） |
-| major | String | 否 | 按专业筛选（精确匹配） |
+| gradeId | Long | 否 | 按年级 ID 筛选（对应 `student.grade_id`） |
+| className | String | 否 | 按班级筛选（模糊匹配，通过 class_name 表解析为 classId） |
+| major | String | 否 | 按专业筛选（模糊匹配，经 `class_name.major_id` 反查出班级后再筛学生） |
 | unassigned | Boolean | 否 | `true` 时仅返回未分班学生（classId 为空） |
 | name | String | 否 | 按姓名模糊查询（LIKE 匹配 user.name） |
+| page / pageSize | Integer | 否 | 分页参数 |
 
 > 所有参数可任意组合；不带任何参数时返回全部学生。`name` 模糊查询与其他条件取交集。
+>
+> `className` 与 `major` 同时传入时取**交集**（先各自解析出班级集合，再求交）；交集为空直接返回空列表，不会退化成「不过滤」。
+>
+> ⚠ **`major` 与 `unassigned=true` 组合恒为空集**：学生不直存专业，专业由班级推导，
+> 未分班（`classId` 为空）就意味着没有专业。这个组合在旧模型下有意义（学生可"有专业但没班级"），
+> 新模型下已不成立，前端不要再这样拼参数。
 
 **响应示例**
 
@@ -834,7 +857,8 @@ Authorization: Bearer <accessToken>
     {
       "studentId": 1,
       "studentNo": "2024001",
-      "grade": "计科2401",
+      "gradeId": 1,
+      "gradeName": "2024",
       "majorName": "计算机科学与技术",
       "className": "计科2401",
       "enrollmentYear": 2024,
@@ -847,7 +871,8 @@ Authorization: Bearer <accessToken>
     {
       "studentId": 2,
       "studentNo": "2024002",
-      "grade": "计科2401",
+      "gradeId": 1,
+      "gradeName": "2024",
       "majorName": "计算机科学与技术",
       "className": "计科2401",
       "enrollmentYear": 2024,
@@ -869,8 +894,9 @@ Authorization: Bearer <accessToken>
 |------|------|------|
 | studentId | Long | 学生记录主键（student 表 id），修改时用作路径参数 |
 | studentNo | String | 学号 |
-| grade | String | 班级名称（student 表冗余字段） |
-| majorName | String | 专业名称（从 major 表关联，未设置专业时为 null） |
+| gradeId | Long | 年级 ID（FK -> grade.id），未设置时为 null |
+| gradeName | String | 年级名称（从 grade 表关联），未设置时为 null |
+| majorName | String | 专业名称（**经班级推导**：class_name.major_id -> major.major_name；未分班或班级未挂专业时为 null） |
 | className | String | 班级名称（从 class_name 表关联，未分班时为 null） |
 | enrollmentYear | Integer | 入学年份 |
 | userId | Long | 关联的 user 表 ID |
@@ -886,8 +912,8 @@ Authorization: Bearer <accessToken>
 curl -X GET "http://localhost:8080/api/students" \
   -H "Authorization: Bearer <accessToken>"
 
-# 按班级名称筛选（student.grade 字段）
-curl -X GET "http://localhost:8080/api/students?grade=计科2401" \
+# 按年级 ID 筛选
+curl -X GET "http://localhost:8080/api/students?gradeId=1" \
   -H "Authorization: Bearer <accessToken>"
 
 # 按班级筛选（通过 class_name 表解析）
@@ -906,10 +932,12 @@ curl -X GET "http://localhost:8080/api/students?name=张" \
 curl -X GET "http://localhost:8080/api/students?unassigned=true" \
   -H "Authorization: Bearer <accessToken>"
 
-# 组合筛选：软件工程专业中未分班的学生
-curl -X GET "http://localhost:8080/api/students?major=软件工程&unassigned=true" \
+# 组合筛选：某年级的未分班学生
+curl -X GET "http://localhost:8080/api/students?gradeId=1&unassigned=true" \
   -H "Authorization: Bearer <accessToken>"
 ```
+
+> 注意不要把 `major` 与 `unassigned=true` 组合：未分班即无专业，该组合恒为空集。
 
 **错误场景**
 
@@ -940,11 +968,13 @@ Content-Type: application/json
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | studentNo | String | 否 | 学号 |
-| className | String | 否 | 班级名称（通过 `GET /api/class-names` 获取下拉列表后选择） |
-| majorName | String | 否 | 专业名称（通过 `GET /api/majors` 获取下拉列表后选择） |
+| className | String | 否 | 班级名称（通过 `GET /api/class-names` 获取下拉列表后选择；班级不存在返回 404） |
+| gradeName | String | 否 | 年级名称（通过班级管理/年级字典获取；年级不存在返回 404） |
 | enrollmentYear | Integer | 否 | 入学年份 |
 
-> `grade` 和 `className` 均由后端根据 `className` 对应的 `class_name` 记录自动维护。后端将 `majorName` 通过 `major` 表解析为 `majorId` 后写入。
+> **无 `majorName`**：专业挂在班级上，单独改专业会让学生的专业与班级所属专业相矛盾。要调整学生的专业，请传一个属于目标专业的 `className`。
+>
+> `gradeName` 与 `enrollmentYear` 互相独立：留级学生二者不对等，不可由其中一个推导另一个。
 
 **请求示例**
 
@@ -952,14 +982,14 @@ Content-Type: application/json
 {
   "studentNo": "2024001",
   "className": "计科2401",
-  "majorName": "软件工程",
+  "gradeName": "2024",
   "enrollmentYear": 2024
 }
 ```
 
 ```json
 {
-  "majorName": "数据科学与大数据技术"
+  "className": "软工2402"
 }
 ```
 
@@ -977,15 +1007,20 @@ Content-Type: application/json
 
 | HTTP 状态码 | message |
 |-------------|---------|
+| 400 | 班级未挂专业: xxx，请先在班级管理中为该班指定专业 |
 | 403 | 仅教务管理员可操作学生数据 |
 | 404 | 学生不存在 |
 | 404 | 班级不存在: xxx |
+| 404 | 年级不存在: xxx |
+
+> 「班级未挂专业」是为防止静默丢失归属：学生的专业与院系全部经班级推导，
+> 换到一个没有专业的班级会让这两项变 NULL，该生在院系管理员视图中直接消失。
 
 ---
 
 ### 4.7 专业管理
 
-专业表（`major`）与学生信息解耦，通过 `majorName` 关联。仅教务管理员可增删改，所有登录用户可查看。
+专业表（`major`）挂在院系下（`college_id`），班级再挂到专业上（`class_name.major_id`）；学生的专业由其班级推导，不单独存。仅教务管理员可增删改，所有登录用户可查看。
 
 ```
 GET    /api/majors        # 查询全部专业
@@ -999,7 +1034,21 @@ DELETE /api/majors/{id}   # 删除专业（仅 academic_admin）
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | id | Long | 专业 ID（自动生成） |
-| majorName | String | 专业名称 |
+| majorName | String | 专业名称（必填） |
+| collegeId | Long | 所属院系 ID（FK -> `college.id`，**新增时必填**） |
+
+**约束与错误场景**
+
+| HTTP 状态码 | message | 触发条件 |
+|-------------|---------|---------|
+| 400 | 专业名称不能为空 | 新增时 `majorName` 为空 |
+| 400 | 所属院系不能为空 | 新增时 `collegeId` 为空 |
+| 400 | 引用的院系不存在(id=x) | `collegeId` 指向不存在的院系 |
+| 404 | 专业不存在 | 修改/删除的 id 不存在 |
+| 409 | 该专业下仍有 N 个班级，无法删除 | 删除前须先把这些班级改挂其它专业 |
+
+> `collegeId` 必填是为了保住院系链：学生的院系 = `class_name.major_id → major.college_id → college`，
+> 专业不挂院系会让其下所有班级与学生一起失去院系归属。修改时传 `null` 表示保持原院系不变。
 
 **响应示例（GET）**
 
@@ -1008,9 +1057,9 @@ DELETE /api/majors/{id}   # 删除专业（仅 academic_admin）
   "code": 200,
   "message": "success",
   "data": [
-    { "id": 1, "majorName": "计算机科学与技术" },
-    { "id": 2, "majorName": "软件工程" },
-    { "id": 3, "majorName": "数据科学与大数据技术" }
+    { "id": 1, "majorName": "计算机科学与技术", "collegeId": 1 },
+    { "id": 2, "majorName": "软件工程", "collegeId": 1 },
+    { "id": 3, "majorName": "数据科学与大数据技术", "collegeId": 1 }
   ]
 }
 ```
@@ -1019,9 +1068,12 @@ DELETE /api/majors/{id}   # 删除专业（仅 academic_admin）
 
 ```json
 {
-  "majorName": "人工智能"
+  "majorName": "人工智能",
+  "collegeId": 1
 }
 ```
+
+> `collegeId` 是「班级 → 院系」推导链的最后一跳：前端拿到班级的 `majorId` 后，用本接口的 `collegeId` 即可显示班级所属院系。
 
 ---
 
@@ -1329,11 +1381,27 @@ Authorization: Bearer <accessToken>
 |------|------|------|
 | id | Long | 班级 ID（自动生成） |
 | className | String | 班级名称 |
-| college | String | 所属学院 |
+| majorId | Long | 所属专业 ID（FK -> `major.id`，**新增时必填**） |
 
-> GET /api/class-names/{id} 查询单个班级，班级不存在时返回 404："班级不存在"。院系管理者仅可查看本院系的班级。
+**约束与错误场景**
+
+| HTTP 状态码 | message | 触发条件 |
+|-------------|---------|---------|
+| 400 | 所属专业不能为空 | 新增时 `majorId` 为空 |
+| 400 | 引用的专业不存在(id=x) | 新增/修改时 `majorId` 指向不存在的专业 |
+| 403 | 无权查看其他院系的班级 | 院系管理者访问非本院系的班级 |
+| 404 | 班级不存在 | 查询/删除的 id 不存在 |
+| 409 | 该班级下仍有 N 名学生，无法删除 | 删除前须先把这些学生转到别的班级 |
+
+> 学籍归属链为严格四层：`院系 → 专业 → 班级 → 学生`。班级**只挂专业**，不存 `collegeId`——院系由 `major.college_id` 推导。前端展示院系需自行用 `GET /api/majors` 把 `majorId` 映射为专业，再经专业的 `collegeId` 得到院系。
 >
-> GET /api/class-names/department 仅院系管理者（department）可调用，返回本院系的班级列表。其他角色返回 403。
+> `majorId` 必填、且删除班级要先清空学生，都是为了防止静默丢失归属：学生的专业与院系完全靠班级推导，班级没有专业或整个班级被删掉，这些学生在院系管理员视图中会直接消失。
+>
+> GET /api/class-names/{id} 查询单个班级，班级不存在时返回 404："班级不存在"。院系管理者仅可查看本院系的班级（经专业推导出的院系比对，任一跳缺失即拒绝）。
+>
+> GET /api/class-names/department 仅院系管理者（department）可调用，返回本院系的班级列表。其他角色返回 403。本院系无班级时返回空数组。
+>
+> PUT 时 `majorId` 传 `null` 表示保持原专业不变（MyBatis Plus `NOT_NULL` 策略），传了值则必须存在。
 
 ### 5.7 上课地点 CRUD
 
