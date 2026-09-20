@@ -8,6 +8,7 @@ import java.util.Objects;
 import org.springframework.stereotype.Service;
 
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.module.local.entity.Local;
@@ -62,6 +63,20 @@ public class LocalServiceImpl extends ServiceImpl<LocalMapper, Local> implements
             fillManagerName(List.of(local));
         }
         return local;
+    }
+
+    /**
+     * 分页查询同样需要回填管理者姓名。
+     * <p>
+     * 列表接口（{@code LocalController#list}）走的是分页查询而非 {@link #list()}，
+     * 若漏掉这一层覆写，分页响应里 {@code managerName} 恒为 null，列表「管理者」列永远空白、
+     * 前端编辑回显也只能退化成裸 id。
+     */
+    @Override
+    public <E extends IPage<Local>> E page(E page, Wrapper<Local> queryWrapper) {
+        E result = super.page(page, queryWrapper);
+        fillManagerName(result.getRecords());
+        return result;
     }
 
     /**
