@@ -46,16 +46,27 @@ public class CourseController {
     private final SelectionCampaignService selectionCampaignService;
     private final AuthFacade authFacade;
 
+    /**
+     * 查询课程列表。
+     *
+     * @param source 传 {@code MANUAL} 时只返回 course 表常规课，不追加合成的公选课条目。
+     *               公选课的 id 实为 campaignId、没有真实 course 记录，任何会把
+     *               course.id 当外键写入的场景（排课草稿、补考/重修考试、时段预留）
+     *               都必须排除它们。这类过滤必须在服务端完成：客户端按页过滤会与
+     *               服务端的 total/pages 脱节，出现空白页。
+     */
     @GetMapping
     @RequireLogin
     public Result<PageResult<Course>> list(HttpServletRequest request,
                                            @RequestParam(required = false) Integer page,
-                                           @RequestParam(required = false) Integer pageSize) {
+                                           @RequestParam(required = false) Integer pageSize,
+                                           @RequestParam(required = false) String source) {
         String userType = authFacade.currentUserType(request);
         PageQuery pageQuery = new PageQuery(page, pageSize);
         List<Course> courses = new ArrayList<>(courseService.list());
         // 公选课不在 course 表，教务管理者视图追加由 selection_campaign 合成的公选课条目
-        if (!AuthFacade.USER_TYPE_DEPARTMENT.equals(userType)) {
+        boolean manualOnly = Course.SOURCE_MANUAL.equals(source);
+        if (!manualOnly && !AuthFacade.USER_TYPE_DEPARTMENT.equals(userType)) {
             courses.addAll(synthesizePublicCourses());
         }
         // 多源合并后按 id 排序保证分页稳定，再内存切片
