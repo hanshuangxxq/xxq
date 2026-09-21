@@ -99,6 +99,8 @@ public class PracticeFileUsageContributor implements FileUsageContributor {
                     collect(campaignMaterialMapper, GraduationCampaignMaterial::getFileName);
             case GRADUATION_DEFENSE_MATERIAL -> collect(defenseMapper, GraduationDefense::getFileName);
             case COMPETITION_CERTIFICATE -> collect(competitionResultMapper, CompetitionResult::getFileName);
+            // 分发按 biz() 集合命中（FileMaintenanceTask.contributorOf），非本域 biz 不可达
+            default -> Set.of();
         };
     }
 

@@ -46,7 +46,19 @@ public enum FileBizEnum {
     GRADUATION_DEFENSE_MATERIAL("graduation-defense-material", 20L * 1024 * 1024, Ext.DOC),
 
     /** 竞赛获奖证书（competition_result.file_name），证书是扫描件/照片，放行图片格式。 */
-    COMPETITION_CERTIFICATE("competition-certificate", 20L * 1024 * 1024, Ext.CERT);
+    COMPETITION_CERTIFICATE("competition-certificate", 20L * 1024 * 1024, Ext.CERT),
+
+    /** 作业附件（course_assignment.file_name）。 */
+    COURSE_ASSIGNMENT("course-assignment", 20L * 1024 * 1024, Ext.DOC),
+
+    /** 作业提交（course_assignment_submission.file_name）。 */
+    COURSE_ASSIGNMENT_SUBMISSION("course-assignment-submission", 20L * 1024 * 1024, Ext.DOC),
+
+    /** 教学视频（course_video.file_name）；大文件走分片（上限取全局 file.max-file-size），整传仅兜底小文件。 */
+    COURSE_VIDEO("course-video", 50L * 1024 * 1024, Ext.VIDEO),
+
+    /** 课程资料（course_material.file_name）。 */
+    COURSE_MATERIAL("course-material", 50L * 1024 * 1024, Ext.MATERIAL);
 
     /**
      * 扩展名集合持有者。
@@ -64,6 +76,13 @@ public enum FileBizEnum {
 
         /** 证书类允许扩展名：扫描件/照片 + PDF。 */
         private static final Set<String> CERT = Set.of(".jpg", ".jpeg", ".png", ".pdf");
+
+        /** 视频类允许扩展名：仅 mp4（MSE 播放兼容性最稳）。 */
+        private static final Set<String> VIDEO = Set.of(".mp4");
+
+        /** 课程资料允许扩展名：文档 + PPT + 表格 + PDF + 压缩包 + 图片。 */
+        private static final Set<String> MATERIAL = Set.of(".doc", ".docx", ".ppt", ".pptx",
+                ".xls", ".xlsx", ".pdf", ".zip", ".rar", ".jpg", ".jpeg", ".png");
     }
 
     /** 业务目录名（同时是 HTTP 入参/出参取值），落盘为 {@code chunks|objects/{code}/}。 */
