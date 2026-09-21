@@ -35,7 +35,7 @@ public interface CollegeMapper extends BaseMapper<College> {
         if (ids == null || ids.isEmpty()) {
             return new HashMap<>();
         }
-        return selectBatchIds(ids).stream()
+        return selectByIds(ids).stream()
                 .collect(Collectors.toMap(College::getId, College::getCollegeName, (a, b) -> a));
     }
 }
