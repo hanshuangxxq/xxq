@@ -2,6 +2,7 @@ package com.xrq.xxq.module.score.service.impl;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -27,6 +28,7 @@ import com.xrq.xxq.module.exam.dto.MakeupScoreEntryRequest;
 import com.xrq.xxq.module.exam.entity.Exam;
 import com.xrq.xxq.module.exam.entity.ExamTypeEnum;
 import com.xrq.xxq.module.exam.mapper.ExamMapper;
+import com.xrq.xxq.module.score.dto.ApplyRegularScoreResult;
 import com.xrq.xxq.module.score.dto.ScoreBatchRequest;
 import com.xrq.xxq.module.score.dto.ScoreEntryRequest;
 import com.xrq.xxq.module.score.dto.ScoreRosterDto;
@@ -82,6 +84,65 @@ public class ScoreServiceImpl extends ServiceImpl<ScoreMapper, Score> implements
     private final ReferenceValidator referenceValidator;
     private final StudentScopeResolver studentScopeResolver;
     private final StudentEnrollmentResolver enrollmentResolver;
+
+    // ==================== 平时分批量写入（coursework 合成入口） ====================
+
+    @Override
+    @Transactional
+    public ApplyRegularScoreResult applyRegularScores(Long teachInfoId, Map<Long, BigDecimal> regularScores,
+                                                      Long operatorUserId) {
+        TeachInfo info = teachInfoMapper.selectById(teachInfoId);
+        if (info == null) {
+            throw new BusinessException(404, "授课安排不存在");
+        }
+        ScoreConfig config = scoreConfigMapper.selectOne(
+                new LambdaQueryWrapper<ScoreConfig>().eq(ScoreConfig::getTeachInfoId, teachInfoId));
+        int defaultRatio = config != null && config.getRegularRatio() != null ? config.getRegularRatio() : 0;
+        List<Long> skippedLocked = new ArrayList<>();
+        int updated = 0;
+        for (Map.Entry<Long, BigDecimal> e : regularScores.entrySet()) {
+            Score g = baseMapper.selectOne(new LambdaQueryWrapper<Score>()
+                    .eq(Score::getTeachInfoId, teachInfoId)
+                    .eq(Score::getStudentUserId, e.getKey())
+                    .eq(Score::getScoreType, ScoreTypeEnum.REGULAR)
+                    .last("LIMIT 1"));
+            boolean isNew = g == null;
+            if (isNew) {
+                g = new Score();
+                g.setTeachInfoId(teachInfoId);
+                g.setCourseId(info.getCourseId());
+                g.setCampaignId(info.getCampaignId());
+                g.setTeacherId(info.getTeacherId());
+                g.setStudentUserId(e.getKey());
+                g.setSemesterId(info.getSemesterId());
+                g.setRegularRatio(defaultRatio);
+                g.setScoreType(ScoreTypeEnum.REGULAR);
+                g.setLocked(0);
+                g.setCreateTime(LocalDateTime.now());
+            }
+            if (Integer.valueOf(1).equals(g.getLocked())) {
+                skippedLocked.add(e.getKey());
+                continue;
+            }
+            g.setRegularScore(e.getValue());
+            // 期末成绩未出时无法合成总评，保持 null；已有期末则按行内占比快照重算
+            if (g.getFinalScore() != null) {
+                int ratio = g.getRegularRatio() != null ? g.getRegularRatio() : 0;
+                BigDecimal total = computeTotal(e.getValue(), g.getFinalScore(), ratio);
+                g.setTotalScore(total);
+                g.setScoreLevel(ScoreStats.levelOf(total));
+            }
+            g.setEnterUserId(operatorUserId);
+            g.setUpdateTime(LocalDateTime.now());
+            if (isNew) {
+                baseMapper.insert(g);
+            } else {
+                baseMapper.updateById(g);
+            }
+            updated++;
+        }
+        return new ApplyRegularScoreResult(updated, skippedLocked);
+    }
 
     // ==================== 权限 ====================
 

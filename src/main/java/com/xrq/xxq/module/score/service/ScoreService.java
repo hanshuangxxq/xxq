@@ -1,9 +1,12 @@
 package com.xrq.xxq.module.score.service;
 
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 import com.baomidou.mybatisplus.spring.service.IService;
 import com.xrq.xxq.module.exam.dto.MakeupScoreEntryRequest;
+import com.xrq.xxq.module.score.dto.ApplyRegularScoreResult;
 import com.xrq.xxq.module.score.dto.ScoreBatchRequest;
 import com.xrq.xxq.module.score.dto.ScoreEntryRequest;
 import com.xrq.xxq.module.score.dto.ScoreRosterDto;
@@ -49,4 +52,13 @@ public interface ScoreService extends IService<Score> {
      * 院系仅本院学生、教务全校；可按课程/班级/学期过滤。
      */
     List<ScoreStatisticsDto> statistics(Long courseId, String source, String className, Long semesterId, Long userId, String userType);
+
+    /**
+     * 批量写入平时分（coursework 作业合成入口）。
+     * <p>无成绩行则按 teach_info 快照创建（REGULAR 类型，regularRatio 取 score_config，无配置为 0）；
+     * 已锁定（locked=1）的行跳过并列入结果；期末成绩未出时 totalScore/scoreLevel 保持 null，
+     * 已有期末成绩则按行内占比快照重算总评。覆盖式写入，重复调用幂等。
+     */
+    ApplyRegularScoreResult applyRegularScores(Long teachInfoId, Map<Long, BigDecimal> regularScores,
+                                               Long operatorUserId);
 }

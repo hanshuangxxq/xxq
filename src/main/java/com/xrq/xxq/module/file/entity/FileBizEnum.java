@@ -54,11 +54,16 @@ public enum FileBizEnum {
     /** 作业提交（course_assignment_submission.file_name）。 */
     COURSE_ASSIGNMENT_SUBMISSION("course-assignment-submission", 20L * 1024 * 1024, Ext.DOC),
 
-    /** 教学视频（course_video.file_name）；大文件走分片（上限取全局 file.max-file-size），整传仅兜底小文件。 */
-    COURSE_VIDEO("course-video", 50L * 1024 * 1024, Ext.VIDEO),
+    /**
+     * 教学视频（course_video.file_name）。
+     * <p>整传上限与其它 biz 保持 20MB：整传受 Spring multipart 的 25MB 闸门约束，
+     * 声明更高只会让超限请求在 DispatcherServlet 解析阶段被拒（返回无意义 500），
+     * 而不是走到本枚举的业务层校验。视频本体请走分片路径（上限取全局 file.max-file-size）。
+     */
+    COURSE_VIDEO("course-video", 20L * 1024 * 1024, Ext.VIDEO),
 
-    /** 课程资料（course_material.file_name）。 */
-    COURSE_MATERIAL("course-material", 50L * 1024 * 1024, Ext.MATERIAL);
+    /** 课程资料（course_material.file_name）；大资料同样走分片。 */
+    COURSE_MATERIAL("course-material", 20L * 1024 * 1024, Ext.MATERIAL);
 
     /**
      * 扩展名集合持有者。
