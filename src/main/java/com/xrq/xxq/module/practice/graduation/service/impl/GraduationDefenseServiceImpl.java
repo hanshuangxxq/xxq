@@ -659,7 +659,7 @@ public class GraduationDefenseServiceImpl
         if (studentIds.isEmpty()) {
             return new HashMap<>(); // 不用 Map.of():get(null) 会 NPE
         }
-        Map<Long, Long> studentClass = studentMapper.selectBatchIds(studentIds).stream()
+        Map<Long, Long> studentClass = studentMapper.selectByIds(studentIds).stream()
                 .collect(Collectors.toMap(
                         Student::getUserId, s -> s.getClassId() != null ? s.getClassId() : -1L, (a, b) -> a));
         Map<Long, Long> classCollege = classNameService.toCollegeIdMap(
