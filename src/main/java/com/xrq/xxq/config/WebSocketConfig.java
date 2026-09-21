@@ -1,5 +1,7 @@
 package com.xrq.xxq.config;
 
+import com.xrq.xxq.module.coursework.video.ws.VideoStreamHandshakeInterceptor;
+import com.xrq.xxq.module.coursework.video.ws.VideoStreamWebSocketHandler;
 import com.xrq.xxq.module.notification.ws.NotificationHandshakeInterceptor;
 import com.xrq.xxq.module.notification.ws.NotificationWebSocketHandler;
 import com.xrq.xxq.module.user.service.avatar.AvatarWebSocketHandler;
@@ -17,6 +19,8 @@ public class WebSocketConfig implements WebSocketConfigurer {
     private final AvatarWebSocketHandler avatarHandler;
     private final NotificationWebSocketHandler notificationHandler;
     private final NotificationHandshakeInterceptor notificationHandshakeInterceptor;
+    private final VideoStreamWebSocketHandler videoStreamHandler;
+    private final VideoStreamHandshakeInterceptor videoStreamHandshakeInterceptor;
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
@@ -26,6 +30,11 @@ public class WebSocketConfig implements WebSocketConfigurer {
         // 消息提醒：握手时通过 ?token=xxx 鉴权绑定 userId
         registry.addHandler(notificationHandler, "/ws/notification")
                 .addInterceptors(notificationHandshakeInterceptor)
+                .setAllowedOrigins("*");
+
+        // 视频流式播放：/ws/video/{videoId}?token=xxx，握手鉴权 + 可见性校验
+        registry.addHandler(videoStreamHandler, "/ws/video/*")
+                .addInterceptors(videoStreamHandshakeInterceptor)
                 .setAllowedOrigins("*");
     }
 }

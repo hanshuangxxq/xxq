@@ -52,3 +52,13 @@ file:
   migration:
     enabled: false                 # 存量 practice 文件迁移开关（一次性脚本，运行后应删除该类）
     apply: false                   # false = 仅演练（dry-run），只写日志不动 DB 与磁盘
+
+# 课程课业模块（module/coursework）：教学视频 WS 流式播放流控
+coursework:
+  video:
+    chunk-max-bytes: 1048576     # 单次 read 上限（1MB，客户端建议 512KB）
+    max-inflight: 8              # 每连接在途 read 上限（滑动窗口）
+    rate-limit-mbps: 32          # 单连接发送限速（MB/s）
+    max-connections: 200         # 全局并发连接上限
+    header-cache-entries: 32     # 头/尾段缓存条目上限（每视频 2 条）
+    header-cache-bytes: 524288   # 头/尾段缓存字节窗口（512KB）

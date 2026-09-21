@@ -18,6 +18,14 @@ import com.xrq.xxq.module.clazz.util.ClassNameUtil;
 import com.xrq.xxq.module.college.mapper.CollegeMapper;
 import com.xrq.xxq.module.course.entity.Course;
 import com.xrq.xxq.module.course.entity.CurseEnum;
+import com.xrq.xxq.module.coursework.announcement.entity.CourseAnnouncement;
+import com.xrq.xxq.module.coursework.announcement.mapper.CourseAnnouncementMapper;
+import com.xrq.xxq.module.coursework.assignment.entity.CourseAssignment;
+import com.xrq.xxq.module.coursework.assignment.mapper.CourseAssignmentMapper;
+import com.xrq.xxq.module.coursework.material.entity.CourseMaterial;
+import com.xrq.xxq.module.coursework.material.mapper.CourseMaterialMapper;
+import com.xrq.xxq.module.coursework.video.entity.CourseVideo;
+import com.xrq.xxq.module.coursework.video.mapper.CourseVideoMapper;
 import com.xrq.xxq.module.exam.entity.Exam;
 import com.xrq.xxq.module.exam.mapper.ExamMapper;
 import com.xrq.xxq.module.local.entity.Local;
@@ -82,6 +90,10 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
     private final StudentEnrollmentResolver enrollmentResolver;
     private final TeacherNameResolver teacherNameResolver;
     private final CollegeMapper collegeMapper;
+    private final CourseAssignmentMapper courseAssignmentMapper;
+    private final CourseVideoMapper courseVideoMapper;
+    private final CourseMaterialMapper courseMaterialMapper;
+    private final CourseAnnouncementMapper courseAnnouncementMapper;
 
     @Override
     public CourseDto getDetailById(Long id, Long userId, String userType) {
@@ -219,6 +231,26 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
         }
         if (enrollmentResolver.hasSelectionClass((Long) id)) {
             throw new BusinessException(409, "该授课安排关联选课班，无法删除");
+        }
+        Long assignmentCount = courseAssignmentMapper.selectCount(new LambdaQueryWrapper<CourseAssignment>()
+                .eq(CourseAssignment::getTeachInfoId, id));
+        if (assignmentCount != null && assignmentCount > 0) {
+            throw new BusinessException(409, "该授课安排已关联课程作业，无法删除");
+        }
+        Long videoCount = courseVideoMapper.selectCount(new LambdaQueryWrapper<CourseVideo>()
+                .eq(CourseVideo::getTeachInfoId, id));
+        if (videoCount != null && videoCount > 0) {
+            throw new BusinessException(409, "该授课安排已关联教学视频，无法删除");
+        }
+        Long materialCount = courseMaterialMapper.selectCount(new LambdaQueryWrapper<CourseMaterial>()
+                .eq(CourseMaterial::getTeachInfoId, id));
+        if (materialCount != null && materialCount > 0) {
+            throw new BusinessException(409, "该授课安排已关联课程资料，无法删除");
+        }
+        Long announcementCount = courseAnnouncementMapper.selectCount(new LambdaQueryWrapper<CourseAnnouncement>()
+                .eq(CourseAnnouncement::getTeachInfoId, id));
+        if (announcementCount != null && announcementCount > 0) {
+            throw new BusinessException(409, "该授课安排已关联课程公告，无法删除");
         }
         Boolean ok = super.removeById(id);
         if (ok) {
