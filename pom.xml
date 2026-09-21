@@ -13,25 +13,26 @@
     <version>0.0.1-SNAPSHOT</version>
     <name>xxq</name>
     <description>xxq</description>
-    <url/>
-    <licenses>
-        <license/>
-    </licenses>
-    <developers>
-        <developer/>
-    </developers>
-    <scm>
-        <connection/>
-        <developerConnection/>
-        <tag/>
-        <url/>
-    </scm>
     <properties>
         <java.version>25</java.version>
         <mybatis-plus.version>3.5.17</mybatis-plus.version>
         <jjwt.version>0.13.0</jjwt.version>
-        <timefold.version>2.2.0</timefold.version>
+        <timefold.version>2.6.0</timefold.version>
+        <poi.version>5.5.1</poi.version>
+        <openpdf.version>3.0.5</openpdf.version>
+        <!-- 锁定 commons-compress：poi-ooxml 5.5.1 自带 1.28.0（已修 CVE-2024-25710 / CVE-2024-26308），
+             此处显式钉住，防止被其它传递依赖拉低回漏洞版本 -->
+        <commons-compress.version>1.28.0</commons-compress.version>
     </properties>
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-compress</artifactId>
+                <version>${commons-compress.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -119,36 +120,20 @@
         <dependency>
             <groupId>org.apache.poi</groupId>
             <artifactId>poi</artifactId>
-            <version>5.2.5</version>
+            <version>${poi.version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.poi</groupId>
             <artifactId>poi-ooxml</artifactId>
-            <version>5.2.5</version>
+            <version>${poi.version}</version>
         </dependency>
 
         <!-- PDF 导出: OpenPDF -->
         <dependency>
             <groupId>com.github.librepdf</groupId>
             <artifactId>openpdf</artifactId>
-            <version>2.0.3</version>
+            <version>${openpdf.version}</version>
         </dependency>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
