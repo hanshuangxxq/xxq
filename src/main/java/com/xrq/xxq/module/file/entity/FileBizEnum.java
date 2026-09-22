@@ -51,8 +51,8 @@ public enum FileBizEnum {
     /** 作业附件（course_assignment.file_name）。 */
     COURSE_ASSIGNMENT("course-assignment", 20L * 1024 * 1024, Ext.DOC),
 
-    /** 作业提交（course_assignment_submission.file_name）。 */
-    COURSE_ASSIGNMENT_SUBMISSION("course-assignment-submission", 20L * 1024 * 1024, Ext.DOC),
+    /** 作业提交作答附件（course_assignment_submission.file_name / course_assignment_answer.answer_json files[].path），拍照作答放行图片格式。 */
+    COURSE_ASSIGNMENT_SUBMISSION("course-assignment-submission", 20L * 1024 * 1024, Ext.SUBMISSION),
 
     /**
      * 教学视频（course_video.file_name）。
@@ -81,6 +81,10 @@ public enum FileBizEnum {
 
         /** 证书类允许扩展名：扫描件/照片 + PDF。 */
         private static final Set<String> CERT = Set.of(".jpg", ".jpeg", ".png", ".pdf");
+
+        /** 作业作答附件：文档 + 图片（拍照作答）。 */
+        private static final Set<String> SUBMISSION = Set.of(".doc", ".docx", ".pdf", ".zip", ".rar",
+                ".jpg", ".jpeg", ".png");
 
         /** 视频类允许扩展名：仅 mp4（MSE 播放兼容性最稳）。 */
         private static final Set<String> VIDEO = Set.of(".mp4");
