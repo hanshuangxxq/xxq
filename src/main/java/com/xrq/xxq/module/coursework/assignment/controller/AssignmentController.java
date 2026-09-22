@@ -20,9 +20,10 @@ import com.xrq.xxq.common.Result;
 import com.xrq.xxq.module.coursework.assignment.dto.AssignmentSaveRequest;
 import com.xrq.xxq.module.coursework.assignment.dto.AssignmentView;
 import com.xrq.xxq.module.coursework.assignment.dto.CloneAssignmentRequest;
+import com.xrq.xxq.module.coursework.assignment.dto.DraftSaveRequest;
 import com.xrq.xxq.module.coursework.assignment.dto.SubmissionRowView;
 import com.xrq.xxq.module.coursework.assignment.dto.SubmissionView;
-import com.xrq.xxq.module.coursework.assignment.dto.SubmitRequest;
+import com.xrq.xxq.module.coursework.assignment.dto.SubmitAnswersRequest;
 import com.xrq.xxq.module.coursework.assignment.service.AssignmentService;
 import com.xrq.xxq.module.coursework.assignment.service.SubmissionService;
 import com.xrq.xxq.util.auth.AuthFacade;
@@ -128,13 +129,21 @@ public class AssignmentController {
         return Result.ok(submissionService.roster(authFacade.currentUserId(request), id));
     }
 
-    /** 学生提交/重交。 */
+    /** 学生提交/重交（纯 JSON 全量答案；附件先经 file 模块上传拿 path）。 */
     @PostMapping("/{id}/submit")
     @RequireStudent
     public Result<SubmissionView> submit(HttpServletRequest request, @PathVariable Long id,
-                                         @RequestPart("data") SubmitRequest body,
-                                         @RequestPart(value = "file", required = false) MultipartFile file) {
-        return Result.ok(submissionService.submit(authFacade.currentUserId(request), id, body, file));
+                                         @RequestBody SubmitAnswersRequest body) {
+        return Result.ok(submissionService.submit(authFacade.currentUserId(request), id, body));
+    }
+
+    /** 学生暂存草稿（仅 Redis，不落库；整体覆盖语义）。 */
+    @PutMapping("/{id}/draft")
+    @RequireStudent
+    public Result<Void> saveDraft(HttpServletRequest request, @PathVariable Long id,
+                                  @RequestBody DraftSaveRequest body) {
+        submissionService.saveDraft(authFacade.currentUserId(request), id, body);
+        return Result.ok();
     }
 
     /** 我的提交（未提交返回 null data）。 */

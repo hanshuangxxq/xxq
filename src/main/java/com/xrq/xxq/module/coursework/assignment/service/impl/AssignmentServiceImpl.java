@@ -19,6 +19,7 @@ import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.common.PageQuery;
 import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.module.course.service.CourseInfoResolver;
+import com.xrq.xxq.module.coursework.assignment.cache.AssignmentDraftStore;
 import com.xrq.xxq.module.coursework.assignment.cache.AssignmentViewedStore;
 import com.xrq.xxq.module.coursework.assignment.dto.AssignmentQuestionView;
 import com.xrq.xxq.module.coursework.assignment.dto.AssignmentSaveRequest;
@@ -64,6 +65,7 @@ public class AssignmentServiceImpl extends ServiceImpl<CourseAssignmentMapper, C
     private final AssignmentQuestionService assignmentQuestionService;
     private final ObjectMapper objectMapper;
     private final AssignmentViewedStore assignmentViewedStore;
+    private final AssignmentDraftStore assignmentDraftStore;
 
     @Override
     @Transactional
@@ -290,8 +292,13 @@ public class AssignmentServiceImpl extends ServiceImpl<CourseAssignmentMapper, C
             throw new BusinessException(404, "作业不存在");
         }
         groupResolver.assertVisibleToStudent(a.getTeachInfoId(), studentUserId);
+        assignmentViewedStore.markViewed(id, studentUserId, a.getDeadline());
         AssignmentView v = toView(a);
         enrichMySubmission(List.of(v), studentUserId);
+        // 已提交的学生走 my-submission 看作答；作答页只回显草稿（answer_visible 管的是提交后的查看）
+        Map<String, String> draft = v.getMySubmissionId() == null
+                ? assignmentDraftStore.load(id, studentUserId) : null;
+        enrichQuestions(v, assignmentQuestionService.listQuestions(id), false, draft);
         return v;
     }
 

@@ -2,27 +2,26 @@ package com.xrq.xxq.module.coursework.assignment.dto;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import com.xrq.xxq.module.coursework.assignment.entity.SubmissionStatusEnum;
 import lombok.Data;
 
-/** 教师视角提交名单行：花名册 LEFT JOIN 提交，未交学生 submitted=false 其余提交字段为空。 */
+/** 教师视角单份提交详情：含学生信息与全部逐题作答（恒含标准答案）。 */
 @Data
-public class SubmissionRowView {
+public class TeacherSubmissionView {
 
-    private Long submissionId;      // 未交为 null
+    private Long id;
+    private Long assignmentId;
     private Long studentUserId;
     private String studentName;
     private String studentNo;
-    private Boolean submitted;
+    private LocalDateTime submitTime;
     private Integer late;
     private SubmissionStatusEnum status;
-    /** 五态：GRADED/SUBMITTED/DRAFTING/VIEWED/NOT_VIEWED。 */
-    private String state;
     private BigDecimal score;
-    /** 客观题自动得分合计（未提交为 null）。 */
     private BigDecimal autoScore;
     private String comment;
     private Integer version;
-    private LocalDateTime submitTime;
+    private List<AnswerView> answers;
 }
