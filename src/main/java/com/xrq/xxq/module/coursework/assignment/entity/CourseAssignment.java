@@ -28,6 +28,7 @@ public class CourseAssignment {
     private LocalDateTime deadline;
     private BigDecimal totalScore;   // 满分
     private AssignmentStatusEnum status;
+    private AnswerVisibleEnum answerVisible;
     private Long teacherId;          // 发布人 user.id
     private LocalDateTime createTime;
     private LocalDateTime updateTime;

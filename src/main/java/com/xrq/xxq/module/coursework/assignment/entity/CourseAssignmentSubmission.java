@@ -29,6 +29,7 @@ public class CourseAssignmentSubmission {
     private Integer late;            // 迟交标记：1=迟交
     private SubmissionStatusEnum status;
     private BigDecimal score;
+    private BigDecimal autoScore;    // 客观题自动得分合计
     private String comment;          // 评语
     private LocalDateTime gradeTime;
     private Integer version;         // 第几次提交
