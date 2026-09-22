@@ -178,18 +178,25 @@ accessToken 由登录接口返回，默认有效期 30 分钟。过期后调用�
 | GET | `/api/practice/graduation/defense/{id}/material/download` | 答辩材料下载 | 是 | 11.5 |
 | POST | `/api/practice/competitions/results/{id}/certificate` | 上传 / 替换获奖证书 | 是 | 11.5 |
 | GET | `/api/practice/competitions/results/{id}/certificate/download` | 获奖证书下载 | 是 | 11.5 |
+| POST | `/api/coursework/question-bank` | 题库录入 | 教师 | 12.2 |
+| GET | `/api/coursework/question-bank` | 题库分页（courseId/campaignId/type/keyword 筛选） | 教师 | 12.2 |
+| PUT | `/api/coursework/question-bank/{id}` | 题库修改 | 教师 | 12.2 |
+| DELETE | `/api/coursework/question-bank/{id}` | 题库软删 | 教师 | 12.2 |
 | POST | `/api/coursework/assignments` | 新建作业 | 教师 | 12.2 |
 | PUT | `/api/coursework/assignments/{id}` | 修改作业（JSON） | 教师 | 12.2 |
 | POST | `/api/coursework/assignments/{id}/attachment` | 替换作业附件 | 教师 | 12.2 |
+| POST | `/api/coursework/assignments/{id}/clone` | 克隆到其它授课组 `{teachInfoId, deadline}` | 教师 | 12.2 |
 | DELETE | `/api/coursework/assignments/{id}` | 删除作业（仅草稿） | 教师 | 12.2 |
 | POST | `/api/coursework/assignments/{id}/publish` | 发布作业 | 教师 | 12.2 |
 | POST | `/api/coursework/assignments/{id}/close` | 关闭作业 | 教师 | 12.2 |
 | GET | `/api/coursework/assignments` | 作业列表（教师/学生双视角） | 教师/学生 | 12.2 |
 | GET | `/api/coursework/assignments/{id}` | 作业详情 | 教师/学生 | 12.2 |
-| GET | `/api/coursework/assignments/{id}/submissions` | 提交名单（含未交） | 教师 | 12.2 |
-| POST | `/api/coursework/assignments/{id}/submit` | 提交 / 重交作业 | 学生 | 12.2 |
+| GET | `/api/coursework/assignments/{id}/submissions` | 提交名单（含未交，五态 state） | 教师 | 12.2 |
+| POST | `/api/coursework/assignments/{id}/submit` | 提交 / 重交作业（纯 JSON 逐题作答） | 学生 | 12.2 |
+| PUT | `/api/coursework/assignments/{id}/draft` | 暂存作答草稿（仅 Redis） | 学生 | 12.2 |
 | GET | `/api/coursework/assignments/{id}/my-submission` | 我的提交 | 学生 | 12.2 |
-| POST | `/api/coursework/submissions/{id}/grade` | 批改作业 | 教师 | 12.2 |
+| GET | `/api/coursework/submissions/{id}` | 单份提交详情（含标准答案） | 教师 | 12.2 |
+| POST | `/api/coursework/submissions/{id}/grade` | 逐题批改（仅大题可改判） | 教师 | 12.2 |
 | POST | `/api/coursework/videos` | 登记教学视频 | 教师 | 12.3 |
 | PUT | `/api/coursework/videos/{id}` | 改视频元数据 | 教师 | 12.3 |
 | DELETE | `/api/coursework/videos/{id}` | 删除视频 | 教师 | 12.3 |
@@ -3211,29 +3218,68 @@ practice 的 5 个提交端点（论文 / 开题 / 中期 / 实习报告 / 社�
 
 ### 12.2 作业
 
+**题库（教师个人）**：
+
 | 方法 | 路径 | 权限 | 说明 |
 |------|------|------|------|
-| POST | `/api/coursework/assignments` | 教师 | 新建作业（`data` 必填，可选 `file`；`publish=true` 直接发布） |
-| PUT | `/api/coursework/assignments/{id}` | 教师 | 修改（JSON；已发布只允许**延长**截止、不可改满分） |
+| GET | `/api/coursework/question-bank?page=&pageSize=&courseId=&campaignId=&type=&keyword=` | 教师 | 分页（type 为题型枚举，keyword 匹配题干） |
+| POST | `/api/coursework/question-bank` | 教师 | 录入 |
+| PUT | `/api/coursework/question-bank/{id}` | 教师 | 修改 |
+| DELETE | `/api/coursework/question-bank/{id}` | 教师 | 软删 |
+
+**作业与作答**：
+
+| 方法 | 路径 | 权限 | 说明 |
+|------|------|------|------|
+| POST | `/api/coursework/assignments` | 教师 | 新建（`data` 必填，可选 `file`；`publish=true` 直接发布） |
+| PUT | `/api/coursework/assignments/{id}` | 教师 | 修改（JSON；**PUBLISHED 拒绝题目变更、只允许延长截止**） |
 | POST | `/api/coursework/assignments/{id}/attachment` | 教师 | 替换附件（multipart，因 Tomcat 不解析 PUT 的 multipart） |
-| DELETE | `/api/coursework/assignments/{id}` | 教师 | 删除（**仅草稿**；已发布请关闭） |
-| POST | `/api/coursework/assignments/{id}/publish` | 教师 | 发布（DRAFT → PUBLISHED，通知授课组学生） |
+| POST | `/api/coursework/assignments/{id}/clone` | 教师 | 克隆到其它授课组 `{teachInfoId, deadline}`（题目快照随复制，落 DRAFT） |
+| DELETE | `/api/coursework/assignments/{id}` | 教师 | 删除（**仅草稿**；级联软删题目快照） |
+| POST | `/api/coursework/assignments/{id}/publish` | 教师 | 发布（DRAFT → PUBLISHED，**要求 ≥1 道 score>0 的题目**，通知授课组学生） |
 | POST | `/api/coursework/assignments/{id}/close` | 教师 | 关闭（PUBLISHED → CLOSED，停止提交） |
 | GET | `/api/coursework/assignments?teachInfoId=` | 教师/学生 | 分页列表（教师带提交统计，学生带我的提交摘要） |
-| GET | `/api/coursework/assignments/{id}` | 教师/学生 | 详情（草稿对学生按 404） |
-| GET | `/api/coursework/assignments/{id}/submissions` | 教师 | 提交名单（花名册 LEFT JOIN，**含未交学生**） |
-| POST | `/api/coursework/assignments/{id}/submit` | 学生 | 提交/重交（`data` 必填，可选 `file`） |
-| GET | `/api/coursework/assignments/{id}/my-submission` | 学生 | 我的提交（未提交返回 `data: null`） |
-| POST | `/api/coursework/submissions/{id}/grade` | 教师 | 批改（分数须在 `[0, 满分]`，通知学生） |
+| GET | `/api/coursework/assignments/{id}` | 教师/学生 | 详情（草稿对学生按 404；学生视图**不含**标准答案/解析，`myAnswer` 仅在未提交时回显草稿） |
+| GET | `/api/coursework/assignments/{id}/submissions` | 教师 | 提交名单（花名册 LEFT JOIN，**含未交学生**；五态 `state`：`GRADED`/`SUBMITTED`/`DRAFTING`/`VIEWED`/`NOT_VIEWED` + `autoScore`） |
+| POST | `/api/coursework/assignments/{id}/submit` | 学生 | 提交/重交（**纯 JSON** `{answers:[{questionId, answer}]}`，不再是 multipart） |
+| PUT | `/api/coursework/assignments/{id}/draft` | 学生 | 暂存草稿（**仅 Redis**，整体替换 `{answers:[...]}`，提交后自动失效） |
+| GET | `/api/coursework/assignments/{id}/my-submission` | 学生 | 我的提交（未提交返回 `data: null`；标准答案/解析受 `answerVisible` 门控） |
+| GET | `/api/coursework/submissions/{id}` | 教师 | 单份提交详情（**总是**含标准答案/解析，供批改） |
+| POST | `/api/coursework/submissions/{id}/grade` | 教师 | 逐题批改 `{items:[{answerId, score, comment}], comment}`；**客观题不可改判**；大题全部批完 → 状态 GRADED、通知学生 |
 
 **状态机**：`DRAFT → PUBLISHED → CLOSED`。仅草稿可删除；已发布可关闭但不能回退。
+
+**出题模型**：作业题目 = `questionIds`（题库引用 `[{questionId, score}]`）+ `newQuestions`（直接内嵌新题，默认同步存入题库），发布时对题目做**完整快照**——之后题库改动不影响已发布作业。`totalScore` 由 Σ题目配分派生，请求传入值被忽略。
+
+**题型与作答 JSON**（`answer` 字段按题型区分形状）：
+
+| 题型 | answer 形状 | 判分 |
+|------|------------|------|
+| `SINGLE_CHOICE` | `"A"` | 自动（与标准答案精确相等） |
+| `MULTI_CHOICE` | `["A","B"]` | 自动；多选计分规则 `ALL_OR_NOTHING` / `HALF_ON_PARTIAL`（默认后者，教师可选） |
+| `JUDGE` | `true` / `false` | 自动 |
+| `FILL_BLANK` | `["空1","空2"]` | 自动；支持无序匹配、可选大小写敏感 |
+| `ESSAY` | `{text, files:[{path, original}]}` | 教师人工批改 |
+
+**附件**：作业附件 `data` 里给 `filePath`（分片产物）或表单给 `file`（整传），二选一，同时给 400；
+作业附件 ≤20MB，允许 `.doc/.docx/.pdf/.zip/.rar`。大题附件（≤3 个/题）先走 `/api/file` 上传拿 `path`
+（biz=`course-assignment-submission`，放行文档/压缩包/`.jpg`/`.jpeg`/`.png`），`requireFile=true` 的大题必须带附件才可交。
+
+**自动判分**：提交时客观题即时判分出分；**全客观作业提交即 `GRADED`**（`autoScore`/`score` 即时给出，不通知教师）；
+含大题的作业提交后状态 `SUBMITTED`，由教师逐题批改，大题全批完自动 `GRADED` 并通知。
+
+**`answerVisible`**（作业级，门控学生提交后可见标准答案/解析的时机）：`SUBMIT`（默认，提交后即可见）/
+`DEADLINE`（截止后）/`CLOSED`（作业关闭后）/`NEVER`（不可见）。教师端与批改视图不受限。
 
 **重交语义**：截止前可反复提交，`version` 递增；重交会**清空已批改痕迹**（`score`/`comment`/`gradeTime` 置空、状态回到 `SUBMITTED`），教师需重新批改。不带新附件重交时保留旧附件。
 
 **迟交**：截止时间之后仍允许提交，但置 `late=1`；恰好等于截止时间不算迟交。作业 `CLOSED` 后拒绝提交（400）。
 
-**附件**：`data` 里给 `filePath`（分片产物）或表单给 `file`（整传），二选一，同时给 400。
-作业附件 ≤20MB，允许 `.doc/.docx/.pdf/.zip/.rar`。
+**Redis 暂存**：已查看集合 `coursework:viewed:{assignmentId}` 与草稿 `coursework:draft:{assignmentId}:{studentId}`
+只存 Redis（TTL = max(截止+7d, 7d)），**提交是唯一的 SQL 写入口**；名单五态中的 `DRAFTING` 表示学生已查看/起稿但未提交。
+
+**视图变化**：`AssignmentView` 增 `answerVisible`/`questionTypes`/`hasFileQuestion`/`questions`（仅详情）；
+提交视图去 `content`/`fileName`/`fileOriginal`，增 `autoScore`/`answers`（逐题：标准答案/得分/评语）。
 
 ### 12.3 教学视频（WS 流式播放）
 
