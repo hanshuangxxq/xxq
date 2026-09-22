@@ -18,6 +18,8 @@ import com.xrq.xxq.module.clazz.entity.ClassName;
 import com.xrq.xxq.module.clazz.mapper.ClassNameMapper;
 import com.xrq.xxq.module.course.entity.Course;
 import com.xrq.xxq.module.course.mapper.CourseMapper;
+import com.xrq.xxq.module.coursework.assignment.entity.CourseAssignment;
+import com.xrq.xxq.module.coursework.assignment.mapper.CourseAssignmentMapper;
 import com.xrq.xxq.module.selection.dto.SelectionClassResponse;
 import com.xrq.xxq.module.selection.dto.StudentSelectionDto;
 import com.xrq.xxq.module.selection.entity.CampaignStatusEnum;
@@ -62,6 +64,7 @@ public class SelectionClassServiceImpl implements SelectionClassService {
     private final DraftCacheManager draftCacheManager;
     private final ClassScheduleCacheManager classScheduleCacheManager;
     private final ReferenceValidator referenceValidator;
+    private final CourseAssignmentMapper courseAssignmentMapper;
 
     @Override
     @Transactional
@@ -175,6 +178,14 @@ public class SelectionClassServiceImpl implements SelectionClassService {
                 selectionClassMemberMapper.delete(new LambdaQueryWrapper<SelectionClassMember>()
                         .eq(SelectionClassMember::getClassId, sc.getId()));
                 if (sc.getTeachInfoId() != null) {
+                    // 直接删 teach_info 会绕过 TeachInfoServiceImpl.removeById 的下游引用保护，
+                    // 这里补同口径校验：该班已挂课程内容时拒绝重建，避免作业/视频等变成孤儿。
+                    Long courseworkCount = courseAssignmentMapper.selectCount(
+                            new LambdaQueryWrapper<CourseAssignment>()
+                                    .eq(CourseAssignment::getTeachInfoId, sc.getTeachInfoId()));
+                    if (courseworkCount != null && courseworkCount > 0) {
+                        throw new BusinessException(409, "该授课安排已关联课程内容，无法重建分班");
+                    }
                     TeachInfo oldTi = existingTiMap.get(sc.getTeachInfoId());
                     if (oldTi != null && oldTi.getClassName() != null && !oldTi.getClassName().isBlank()) {
                         draftCacheManager.removeByClassName(oldTi.getClassName());

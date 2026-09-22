@@ -178,6 +178,33 @@ accessToken 由登录接口返回，默认有效期 30 分钟。过期后调用�
 | GET | `/api/practice/graduation/defense/{id}/material/download` | 答辩材料下载 | 是 | 11.5 |
 | POST | `/api/practice/competitions/results/{id}/certificate` | 上传 / 替换获奖证书 | 是 | 11.5 |
 | GET | `/api/practice/competitions/results/{id}/certificate/download` | 获奖证书下载 | 是 | 11.5 |
+| POST | `/api/coursework/assignments` | 新建作业 | 教师 | 12.2 |
+| PUT | `/api/coursework/assignments/{id}` | 修改作业（JSON） | 教师 | 12.2 |
+| POST | `/api/coursework/assignments/{id}/attachment` | 替换作业附件 | 教师 | 12.2 |
+| DELETE | `/api/coursework/assignments/{id}` | 删除作业（仅草稿） | 教师 | 12.2 |
+| POST | `/api/coursework/assignments/{id}/publish` | 发布作业 | 教师 | 12.2 |
+| POST | `/api/coursework/assignments/{id}/close` | 关闭作业 | 教师 | 12.2 |
+| GET | `/api/coursework/assignments` | 作业列表（教师/学生双视角） | 教师/学生 | 12.2 |
+| GET | `/api/coursework/assignments/{id}` | 作业详情 | 教师/学生 | 12.2 |
+| GET | `/api/coursework/assignments/{id}/submissions` | 提交名单（含未交） | 教师 | 12.2 |
+| POST | `/api/coursework/assignments/{id}/submit` | 提交 / 重交作业 | 学生 | 12.2 |
+| GET | `/api/coursework/assignments/{id}/my-submission` | 我的提交 | 学生 | 12.2 |
+| POST | `/api/coursework/submissions/{id}/grade` | 批改作业 | 教师 | 12.2 |
+| POST | `/api/coursework/videos` | 登记教学视频 | 教师 | 12.3 |
+| PUT | `/api/coursework/videos/{id}` | 改视频元数据 | 教师 | 12.3 |
+| DELETE | `/api/coursework/videos/{id}` | 删除视频 | 教师 | 12.3 |
+| GET | `/api/coursework/videos` | 视频列表 | 教师/学生 | 12.3 |
+| GET | `/api/coursework/videos/{id}` | 视频元数据 | 教师/学生 | 12.3 |
+| WS | `/ws/video/{videoId}?token=` | 视频流式播放 | 教师/学生 | 12.3 |
+| POST | `/api/coursework/materials` | 上传课程资料 | 教师 | 12.4 |
+| PUT | `/api/coursework/materials/{id}` | 改资料元数据 | 教师 | 12.4 |
+| DELETE | `/api/coursework/materials/{id}` | 删除资料 | 教师 | 12.4 |
+| GET | `/api/coursework/materials` | 资料列表 | 教师/学生 | 12.4 |
+| POST | `/api/coursework/announcements` | 发布课程公告 | 教师 | 12.5 |
+| PUT | `/api/coursework/announcements/{id}` | 编辑公告（不重复通知） | 教师 | 12.5 |
+| DELETE | `/api/coursework/announcements/{id}` | 删除公告 | 教师 | 12.5 |
+| GET | `/api/coursework/announcements` | 公告列表 | 教师/学生 | 12.5 |
+| POST | `/api/coursework/teach-infos/{id}/regular-score/sync` | 作业成绩合成平时分 | 教师 | 12.6 |
 
 > **文件上传 / 下载**：通用端点 8 个见第 11 节；业务上传端点（头像 / practice 提交系 5 个 /
 > 查重登记 / 活动资料 / 答辩材料 / 获奖证书 / Excel 导入）与业务下载端点（practice 系 5 个 +
@@ -3167,9 +3194,113 @@ practice 的 5 个提交端点（论文 / 开题 / 中期 / 实习报告 / 社�
 
 ---
 
-## 12. 附录
+## 12. 课程课业模块
 
-### 12.1 完整调用流程示例
+课程课业（`module/coursework`）为**授课安排**提供作业闭环、教学视频、课程资料、课程公告与平时分合成五项能力。
+
+### 12.1 授课组锚点（重要约定）
+
+同一「学期 + 课程/活动 + 教师 + 班级名」在 `teach_info` 里可能有多条行（对应多个上课时段）。
+课业内容**只挂其中的锚点行**（组内最小 `id`），服务端在写入/读取时统一归一。
+
+因此所有 `teachInfoId` 入参**接受组内任意一行**，无需前端自己找锚点；返回的 `teachInfoId` 一律是锚点行 id。
+
+### 12.2 作业
+
+| 方法 | 路径 | 权限 | 说明 |
+|------|------|------|------|
+| POST | `/api/coursework/assignments` | 教师 | 新建作业（`data` 必填，可选 `file`；`publish=true` 直接发布） |
+| PUT | `/api/coursework/assignments/{id}` | 教师 | 修改（JSON；已发布只允许**延长**截止、不可改满分） |
+| POST | `/api/coursework/assignments/{id}/attachment` | 教师 | 替换附件（multipart，因 Tomcat 不解析 PUT 的 multipart） |
+| DELETE | `/api/coursework/assignments/{id}` | 教师 | 删除（**仅草稿**；已发布请关闭） |
+| POST | `/api/coursework/assignments/{id}/publish` | 教师 | 发布（DRAFT → PUBLISHED，通知授课组学生） |
+| POST | `/api/coursework/assignments/{id}/close` | 教师 | 关闭（PUBLISHED → CLOSED，停止提交） |
+| GET | `/api/coursework/assignments?teachInfoId=` | 教师/学生 | 分页列表（教师带提交统计，学生带我的提交摘要） |
+| GET | `/api/coursework/assignments/{id}` | 教师/学生 | 详情（草稿对学生按 404） |
+| GET | `/api/coursework/assignments/{id}/submissions` | 教师 | 提交名单（花名册 LEFT JOIN，**含未交学生**） |
+| POST | `/api/coursework/assignments/{id}/submit` | 学生 | 提交/重交（`data` 必填，可选 `file`） |
+| GET | `/api/coursework/assignments/{id}/my-submission` | 学生 | 我的提交（未提交返回 `data: null`） |
+| POST | `/api/coursework/submissions/{id}/grade` | 教师 | 批改（分数须在 `[0, 满分]`，通知学生） |
+
+**状态机**：`DRAFT → PUBLISHED → CLOSED`。仅草稿可删除；已发布可关闭但不能回退。
+
+**重交语义**：截止前可反复提交，`version` 递增；重交会**清空已批改痕迹**（`score`/`comment`/`gradeTime` 置空、状态回到 `SUBMITTED`），教师需重新批改。不带新附件重交时保留旧附件。
+
+**迟交**：截止时间之后仍允许提交，但置 `late=1`；恰好等于截止时间不算迟交。作业 `CLOSED` 后拒绝提交（400）。
+
+**附件**：`data` 里给 `filePath`（分片产物）或表单给 `file`（整传），二选一，同时给 400。
+作业附件 ≤20MB，允许 `.doc/.docx/.pdf/.zip/.rar`。
+
+### 12.3 教学视频（WS 流式播放）
+
+| 方法 | 路径 | 权限 | 说明 |
+|------|------|------|------|
+| POST | `/api/coursework/videos` | 教师 | 登记视频（`data` + `file` 或 `filePath`，必填其一） |
+| PUT | `/api/coursework/videos/{id}` | 教师 | 改元数据（标题/描述/排序/时长；**文件不可换**） |
+| DELETE | `/api/coursework/videos/{id}` | 教师 | 软删（产物由回收任务对账清理） |
+| GET | `/api/coursework/videos?teachInfoId=` | 教师/学生 | 列表（按 `sortNo` 升序） |
+| GET | `/api/coursework/videos/{id}` | 教师/学生 | 元数据（WS 播放前置：拿 `size`/`sha256`/`durationSec`） |
+
+视频本体走**分片上传**（上限取全局 `file.max-file-size`），扩展名仅放行 `.mp4`。
+时长 `durationSec` 由**客户端解析 MP4 后回传**（服务端不解析视频，不转码）。
+播放走 WebSocket，协议详见 `docs/课程视频WS协议.md`：
+
+- 连接：`ws://host/ws/video/{videoId}?token={accessToken}`
+- 握手 401 = 未登录/过期；403 = 无权限（未选课学生 / 非归属教师）
+- 指令 `open` / `read{req,offset,length}` / `cancel{req}`；应答为 `meta`/`error` 文本 JSON 与
+  `[req:int32 BE][offset:int64 BE]+payload` 二进制数据帧
+- 一次 `read` 恰好回一帧；尾部短读的帧长小于请求 `length` 属正常；`offset` 越界回 12 字节空头帧
+- 在途 `read` 上限 8，超出回 429 error 帧（减速信号）；单连接限速 32MB/s
+
+### 12.4 课程资料
+
+| 方法 | 路径 | 权限 | 说明 |
+|------|------|------|------|
+| POST | `/api/coursework/materials` | 教师 | 上传资料（`data` + `file` 或 `filePath`，必填其一） |
+| PUT | `/api/coursework/materials/{id}` | 教师 | 改元数据（标题/描述） |
+| DELETE | `/api/coursework/materials/{id}` | 教师 | 删除（逻辑删） |
+| GET | `/api/coursework/materials?teachInfoId=` | 教师/学生 | 列表 |
+
+资料 ≤20MB，放行文档 / PPT / 表格 / PDF / 压缩包 / 图片。**下载走文件模块的
+`POST /api/file/download`**，请求体带列表返回的 `fileName` 作为 `filePath`。
+
+### 12.5 课程公告
+
+| 方法 | 路径 | 权限 | 说明 |
+|------|------|------|------|
+| POST | `/api/coursework/announcements` | 教师 | 发布公告（**通知授课组学生**） |
+| PUT | `/api/coursework/announcements/{id}` | 教师 | 编辑（**不重复通知**） |
+| DELETE | `/api/coursework/announcements/{id}` | 教师 | 删除 |
+| GET | `/api/coursework/announcements?teachInfoId=` | 教师/学生 | 列表 |
+
+### 12.6 作业成绩合成平时分
+
+| 方法 | 路径 | 权限 | 说明 |
+|------|------|------|------|
+| POST | `/api/coursework/teach-infos/{teachInfoId}/regular-score/sync` | 教师 | 将该授课组已批改作业合成为平时分 |
+
+**合成口径**：每份**已批改**作业按自身满分归一化（`得分 / 满分`），再对学生取算术平均，
+百分制保留 2 位小数。分母只计已批改份数——未提交/未批改的作业既不拉低也不抬高。
+
+**写入语义**：覆盖式重算，可重复触发（幂等）。仅 `PUBLISHED`/`CLOSED` 状态的作业参与。
+无成绩行则按授课安排快照新建（`score_type=REGULAR`，`regularRatio` 取 `score_config`，无配置为 0）；
+期末成绩未出时 `totalScore`/`scoreLevel` 保持 `null`，已有期末则按行内占比快照重算总评。
+
+**跳过项**（随响应返回，便于前端提示）：
+
+| 字段 | 含义 |
+|------|------|
+| `updatedCount` | 成功写入平时分的学生数 |
+| `skippedLockedUserIds` | 成绩已锁定（`locked=1`）被跳过的学生 |
+| `skippedUngradedUserIds` | 授课组名单中无已批改作业的学生 |
+
+无已发布作业（400「该授课组暂无已发布作业」）或全部未批改（400「暂无已批改的作业提交」）时报错而非静默成功。
+
+---
+
+## 13. 附录
+
+### 13.1 完整调用流程示例
 
 ```bash
 # 1. 注册
@@ -3263,7 +3394,7 @@ curl -X POST http://localhost:8080/api/login/logout \
   -H "Authorization: Bearer <accessToken>"
 ```
 
-### 12.2 token 有效期配置
+### 13.2 token 有效期配置
 
 ```yaml
 jwt:
@@ -3272,7 +3403,7 @@ jwt:
   refresh-token-expiration: 7d    # refreshToken / session 有效期
 ```
 
-### 12.3 密码安全
+### 13.3 密码安全
 
 - 算法：**PBKDF2WithHmacSHA256**
 - 迭代次数：**100,000**
