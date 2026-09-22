@@ -6,6 +6,7 @@ import com.xrq.xxq.common.PageQuery;
 import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.module.coursework.assignment.dto.AssignmentSaveRequest;
 import com.xrq.xxq.module.coursework.assignment.dto.AssignmentView;
+import com.xrq.xxq.module.coursework.assignment.dto.CloneAssignmentRequest;
 
 /**
  * 课程作业服务：教师 CRUD + 状态机（DRAFT→PUBLISHED→CLOSED）+ 双视角列表/详情。
@@ -31,6 +32,9 @@ public interface AssignmentService {
 
     /** 关闭：PUBLISHED → CLOSED，停止提交。 */
     AssignmentView close(Long teacherUserId, Long id);
+
+    /** 克隆作业到本人其它授课组（题目快照一并复制，落为 DRAFT 需另行发布）。 */
+    AssignmentView clone(Long teacherUserId, Long id, CloneAssignmentRequest req);
 
     /** 教师视角分页列表（含提交/已批改计数）。 */
     PageResult<AssignmentView> listForTeacher(Long teacherUserId, Long teachInfoId, PageQuery pageQuery);

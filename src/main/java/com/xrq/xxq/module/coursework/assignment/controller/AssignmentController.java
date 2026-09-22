@@ -19,6 +19,7 @@ import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.common.Result;
 import com.xrq.xxq.module.coursework.assignment.dto.AssignmentSaveRequest;
 import com.xrq.xxq.module.coursework.assignment.dto.AssignmentView;
+import com.xrq.xxq.module.coursework.assignment.dto.CloneAssignmentRequest;
 import com.xrq.xxq.module.coursework.assignment.dto.SubmissionRowView;
 import com.xrq.xxq.module.coursework.assignment.dto.SubmissionView;
 import com.xrq.xxq.module.coursework.assignment.dto.SubmitRequest;
@@ -88,6 +89,14 @@ public class AssignmentController {
     @RequireTeacher
     public Result<AssignmentView> close(HttpServletRequest request, @PathVariable Long id) {
         return Result.ok(assignmentService.close(authFacade.currentUserId(request), id));
+    }
+
+    /** 克隆作业到本人其它授课组（题目快照一并复制，落为 DRAFT）。 */
+    @PostMapping("/{id}/clone")
+    @RequireTeacher
+    public Result<AssignmentView> clone(HttpServletRequest request, @PathVariable Long id,
+                                        @RequestBody CloneAssignmentRequest body) {
+        return Result.ok(assignmentService.clone(authFacade.currentUserId(request), id, body));
     }
 
     /** 列表：教师看全部状态 + 提交统计；学生看已发布/已关闭 + 我的提交摘要。 */

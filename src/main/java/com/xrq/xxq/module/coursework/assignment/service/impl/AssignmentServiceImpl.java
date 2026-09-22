@@ -3,6 +3,7 @@ package com.xrq.xxq.module.coursework.assignment.service.impl;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -18,23 +19,32 @@ import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.common.PageQuery;
 import com.xrq.xxq.common.PageResult;
 import com.xrq.xxq.module.course.service.CourseInfoResolver;
+import com.xrq.xxq.module.coursework.assignment.cache.AssignmentViewedStore;
+import com.xrq.xxq.module.coursework.assignment.dto.AssignmentQuestionView;
 import com.xrq.xxq.module.coursework.assignment.dto.AssignmentSaveRequest;
 import com.xrq.xxq.module.coursework.assignment.dto.AssignmentView;
+import com.xrq.xxq.module.coursework.assignment.dto.CloneAssignmentRequest;
+import com.xrq.xxq.module.coursework.assignment.entity.AnswerVisibleEnum;
 import com.xrq.xxq.module.coursework.assignment.entity.AssignmentStatusEnum;
 import com.xrq.xxq.module.coursework.assignment.entity.CourseAssignment;
+import com.xrq.xxq.module.coursework.assignment.entity.CourseAssignmentQuestion;
 import com.xrq.xxq.module.coursework.assignment.entity.CourseAssignmentSubmission;
 import com.xrq.xxq.module.coursework.assignment.entity.SubmissionStatusEnum;
 import com.xrq.xxq.module.coursework.assignment.mapper.CourseAssignmentMapper;
 import com.xrq.xxq.module.coursework.assignment.mapper.CourseAssignmentSubmissionMapper;
+import com.xrq.xxq.module.coursework.assignment.service.AssignmentQuestionService;
 import com.xrq.xxq.module.coursework.assignment.service.AssignmentService;
 import com.xrq.xxq.module.coursework.common.CourseGroupResolver;
 import com.xrq.xxq.module.coursework.common.CourseworkFileSupport;
+import com.xrq.xxq.module.coursework.common.QuestionTypeEnum;
 import com.xrq.xxq.module.file.dto.StoredFileRef;
 import com.xrq.xxq.module.file.entity.FileBizEnum;
 import com.xrq.xxq.module.notification.notice.CourseworkNoticeScenes;
 import com.xrq.xxq.module.teachinfo.entity.TeachInfo;
 
 import lombok.RequiredArgsConstructor;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * 作业服务实现。通知经 {@link CourseworkNoticeScenes} 注解场景在事务提交后发送。
@@ -44,7 +54,6 @@ import lombok.RequiredArgsConstructor;
 public class AssignmentServiceImpl extends ServiceImpl<CourseAssignmentMapper, CourseAssignment>
         implements AssignmentService {
 
-    private static final BigDecimal DEFAULT_TOTAL = new BigDecimal("100");
     private static final DateTimeFormatter DEADLINE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private final CourseAssignmentSubmissionMapper submissionMapper;
@@ -52,6 +61,9 @@ public class AssignmentServiceImpl extends ServiceImpl<CourseAssignmentMapper, C
     private final CourseworkFileSupport fileSupport;
     private final CourseInfoResolver courseInfoResolver;
     private final CourseworkNoticeScenes courseworkNoticeScenes;
+    private final AssignmentQuestionService assignmentQuestionService;
+    private final ObjectMapper objectMapper;
+    private final AssignmentViewedStore assignmentViewedStore;
 
     @Override
     @Transactional
@@ -64,10 +76,6 @@ public class AssignmentServiceImpl extends ServiceImpl<CourseAssignmentMapper, C
         if (req.getDeadline() == null) {
             throw new BusinessException(400, "截止时间不能为空");
         }
-        BigDecimal total = req.getTotalScore() != null ? req.getTotalScore() : DEFAULT_TOTAL;
-        if (total.signum() <= 0) {
-            throw new BusinessException(400, "满分必须大于 0");
-        }
         StoredFileRef ref = fileSupport.resolveSubmit(req.getFilePath(), file, FileBizEnum.COURSE_ASSIGNMENT, false);
 
         CourseAssignment a = new CourseAssignment();
@@ -75,9 +83,9 @@ public class AssignmentServiceImpl extends ServiceImpl<CourseAssignmentMapper, C
         a.setTitle(req.getTitle().trim());
         a.setContent(req.getContent());
         a.setDeadline(req.getDeadline());
-        a.setTotalScore(total);
-        a.setStatus(Boolean.TRUE.equals(req.getPublish())
-                ? AssignmentStatusEnum.PUBLISHED : AssignmentStatusEnum.DRAFT);
+        a.setTotalScore(BigDecimal.ZERO); // 总分由题目配分求和，下面重算
+        a.setAnswerVisible(AnswerVisibleEnum.orDefault(req.getAnswerVisible()));
+        a.setStatus(AssignmentStatusEnum.DRAFT); // 先落草稿，题目校验通过后按 publish 标志转发布
         a.setTeacherId(teacherUserId);
         if (ref != null) {
             a.setFileName(ref.storedPath());
@@ -86,6 +94,17 @@ public class AssignmentServiceImpl extends ServiceImpl<CourseAssignmentMapper, C
         a.setCreateTime(LocalDateTime.now());
         a.setUpdateTime(LocalDateTime.now());
         baseMapper.insert(a);
+
+        assignmentQuestionService.replaceQuestions(a.getId(), teacherUserId,
+                req.getQuestionIds(), req.getNewQuestions());
+        a.setTotalScore(assignmentQuestionService.totalScoreOf(a.getId()));
+
+        if (Boolean.TRUE.equals(req.getPublish())) {
+            requirePublishable(a.getId());
+            a.setStatus(AssignmentStatusEnum.PUBLISHED);
+        }
+        a.setUpdateTime(LocalDateTime.now());
+        baseMapper.updateById(a);
 
         if (a.getStatus() == AssignmentStatusEnum.PUBLISHED) {
             notifyPublished(a, anchor);
@@ -100,12 +119,13 @@ public class AssignmentServiceImpl extends ServiceImpl<CourseAssignmentMapper, C
         if (a.getStatus() == AssignmentStatusEnum.CLOSED) {
             throw new BusinessException(409, "作业已关闭，不可修改");
         }
+        boolean hasQuestionPayload = req.getQuestionIds() != null || req.getNewQuestions() != null;
         if (a.getStatus() == AssignmentStatusEnum.PUBLISHED) {
+            if (hasQuestionPayload) {
+                throw new BusinessException(400, "已发布作业不可修改题目");
+            }
             if (req.getDeadline() != null && req.getDeadline().isBefore(a.getDeadline())) {
                 throw new BusinessException(400, "已发布作业只允许延长截止时间");
-            }
-            if (req.getTotalScore() != null && req.getTotalScore().compareTo(a.getTotalScore()) != 0) {
-                throw new BusinessException(400, "已发布作业不可修改满分");
             }
         }
         if (req.getTitle() != null) {
@@ -118,11 +138,14 @@ public class AssignmentServiceImpl extends ServiceImpl<CourseAssignmentMapper, C
         if (req.getDeadline() != null) {
             a.setDeadline(req.getDeadline());
         }
-        if (req.getTotalScore() != null) {
-            if (req.getTotalScore().signum() <= 0) {
-                throw new BusinessException(400, "满分必须大于 0");
-            }
-            a.setTotalScore(req.getTotalScore());
+        if (req.getAnswerVisible() != null) {
+            a.setAnswerVisible(req.getAnswerVisible());
+        }
+        // totalScore 不再受理前端传值：始终由题目配分求和派生
+        if (hasQuestionPayload) {
+            assignmentQuestionService.replaceQuestions(a.getId(), teacherUserId,
+                    req.getQuestionIds(), req.getNewQuestions());
+            a.setTotalScore(assignmentQuestionService.totalScoreOf(a.getId()));
         }
         a.setUpdateTime(LocalDateTime.now());
         baseMapper.updateById(a);
@@ -158,6 +181,8 @@ public class AssignmentServiceImpl extends ServiceImpl<CourseAssignmentMapper, C
         if (submissions != null && submissions > 0) {
             throw new BusinessException(409, "该作业已有提交记录，无法删除");
         }
+        assignmentQuestionService.replaceQuestions(id, teacherUserId, List.of(), List.of()); // 软删快照
+        assignmentViewedStore.clear(id);
         baseMapper.deleteById(id);
     }
 
@@ -168,6 +193,8 @@ public class AssignmentServiceImpl extends ServiceImpl<CourseAssignmentMapper, C
         if (a.getStatus() != AssignmentStatusEnum.DRAFT) {
             throw new BusinessException(409, "仅草稿可发布");
         }
+        requirePublishable(id);
+        a.setTotalScore(assignmentQuestionService.totalScoreOf(id));
         a.setStatus(AssignmentStatusEnum.PUBLISHED);
         a.setUpdateTime(LocalDateTime.now());
         baseMapper.updateById(a);
@@ -186,6 +213,33 @@ public class AssignmentServiceImpl extends ServiceImpl<CourseAssignmentMapper, C
         a.setUpdateTime(LocalDateTime.now());
         baseMapper.updateById(a);
         return toView(a);
+    }
+
+    @Override
+    @Transactional
+    public AssignmentView clone(Long teacherUserId, Long id, CloneAssignmentRequest req) {
+        CourseAssignment src = requireOwnedAssignment(id, teacherUserId);
+        TeachInfo targetAnchor = groupResolver.requireOwnedAnchor(req.getTeachInfoId(), teacherUserId);
+        if (assignmentQuestionService.listQuestions(id).isEmpty()) {
+            throw new BusinessException(400, "源作业没有题目，无法克隆");
+        }
+        CourseAssignment copy = new CourseAssignment();
+        copy.setTeachInfoId(targetAnchor.getId());
+        copy.setTitle(src.getTitle());
+        copy.setContent(src.getContent());
+        // 内容寻址产物路径直接共享是安全的（同路径字节永不改变）
+        copy.setFileName(src.getFileName());
+        copy.setFileOriginal(src.getFileOriginal());
+        copy.setDeadline(req.getDeadline());
+        copy.setTotalScore(src.getTotalScore());
+        copy.setAnswerVisible(src.getAnswerVisible());
+        copy.setStatus(AssignmentStatusEnum.DRAFT);
+        copy.setTeacherId(teacherUserId);
+        copy.setCreateTime(LocalDateTime.now());
+        copy.setUpdateTime(LocalDateTime.now());
+        baseMapper.insert(copy);
+        assignmentQuestionService.cloneQuestions(id, copy.getId());
+        return toView(copy);
     }
 
     @Override
@@ -221,6 +275,7 @@ public class AssignmentServiceImpl extends ServiceImpl<CourseAssignmentMapper, C
         CourseAssignment a = requireOwnedAssignment(id, teacherUserId);
         AssignmentView v = toView(a);
         enrichTeacherStats(List.of(v));
+        enrichQuestions(v, assignmentQuestionService.listQuestions(id), true, null);
         return v;
     }
 
@@ -246,6 +301,14 @@ public class AssignmentServiceImpl extends ServiceImpl<CourseAssignmentMapper, C
         }
         groupResolver.requireOwnedAnchor(a.getTeachInfoId(), teacherUserId);
         return a;
+    }
+
+    /** 发布前置校验：至少一道题且总分 > 0。 */
+    private void requirePublishable(Long assignmentId) {
+        BigDecimal total = assignmentQuestionService.totalScoreOf(assignmentId);
+        if (total.signum() <= 0) {
+            throw new BusinessException(400, "发布前请至少添加一道配分大于 0 的题目");
+        }
     }
 
     private void notifyPublished(CourseAssignment a, TeachInfo anchor) {
@@ -303,6 +366,52 @@ public class AssignmentServiceImpl extends ServiceImpl<CourseAssignmentMapper, C
         }
     }
 
+    /**
+     * 回填题目视图 + 题型汇总。
+     *
+     * @param revealAnswer 是否附标准答案/解析（教师端 true；学生端按 answer_visible 判定后传入）
+     * @param draft        学生草稿（questionId → 答案 JSON 子串；教师端传 null）
+     */
+    void enrichQuestions(AssignmentView v, List<CourseAssignmentQuestion> questions,
+                         boolean revealAnswer, Map<String, String> draft) {
+        List<AssignmentQuestionView> views = new ArrayList<>(questions.size());
+        for (CourseAssignmentQuestion q : questions) {
+            AssignmentQuestionView qv = new AssignmentQuestionView();
+            qv.setId(q.getId());
+            qv.setType(q.getType().getCode());
+            qv.setStem(q.getStem());
+            qv.setOptions(parseJson(q.getOptionsJson()));
+            qv.setScore(q.getScore());
+            qv.setSortOrder(q.getSortOrder());
+            qv.setScoreRule(q.getScoreRule() != null ? q.getScoreRule().getCode() : null);
+            qv.setCaseSensitive(q.getCaseSensitive() != null && q.getCaseSensitive() == 1);
+            qv.setRequireFile(q.getRequireFile() != null && q.getRequireFile() == 1);
+            if (revealAnswer) {
+                qv.setAnswer(parseJson(q.getAnswerJson()));
+                qv.setAnalysis(q.getAnalysis());
+            }
+            if (draft != null) {
+                qv.setMyAnswer(parseJson(draft.get(String.valueOf(q.getId()))));
+            }
+            views.add(qv);
+        }
+        v.setQuestions(views);
+        v.setQuestionTypes(views.stream().map(AssignmentQuestionView::getType).distinct().toList());
+        v.setHasFileQuestion(questions.stream().anyMatch(q -> q.getType() == QuestionTypeEnum.ESSAY));
+    }
+
+    /** JSON 列 → JsonNode；null/损坏 → null。 */
+    JsonNode parseJson(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readTree(json);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
     private AssignmentView toView(CourseAssignment a) {
         AssignmentView v = new AssignmentView();
         v.setId(a.getId());
@@ -316,6 +425,7 @@ public class AssignmentServiceImpl extends ServiceImpl<CourseAssignmentMapper, C
         v.setStatus(a.getStatus());
         v.setTeacherId(a.getTeacherId());
         v.setCreateTime(a.getCreateTime());
+        v.setAnswerVisible(a.getAnswerVisible());
         return v;
     }
 

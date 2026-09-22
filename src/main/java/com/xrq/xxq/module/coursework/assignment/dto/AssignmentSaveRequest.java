@@ -2,7 +2,9 @@ package com.xrq.xxq.module.coursework.assignment.dto;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
+import com.xrq.xxq.module.coursework.assignment.entity.AnswerVisibleEnum;
 import lombok.Data;
 import org.jspecify.annotations.NonNull;
 
@@ -27,9 +29,18 @@ public class AssignmentSaveRequest {
     @NonNull
     private LocalDateTime deadline;
 
-    /** 满分，默认 100。已发布后不可修改。 */
+    /** @deprecated 总分由题目配分求和派生，前端传值被忽略。 */
     private BigDecimal totalScore;
 
     /** true=创建后直接发布；修改时忽略。 */
     private Boolean publish;
+
+    /** 答案可见性（默认 SUBMIT）。 */
+    private AnswerVisibleEnum answerVisible;
+
+    /** 从题库抽题（与 newQuestions 合并为完整题目集；顺序 = 本列表序 + newQuestions 序）。 */
+    private List<QuestionRefInput> questionIds;
+
+    /** 直接录入的题目（saveToBank 默认 true）。 */
+    private List<QuestionInput> newQuestions;
 }
