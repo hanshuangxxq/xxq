@@ -39,7 +39,9 @@ public class QuestionBankController {
                                                  @RequestParam(required = false) Long campaignId,
                                                  @RequestParam(required = false) QuestionTypeEnum type,
                                                  @RequestParam(required = false) String keyword,
-                                                 PageQuery pageQuery) {
+                                                 @RequestParam(required = false) Integer page,
+                                                 @RequestParam(required = false) Integer pageSize) {
+        PageQuery pageQuery = new PageQuery(page, pageSize);
         return Result.ok(questionBankService.list(authFacade.currentUserId(request),
                 courseId, campaignId, type, keyword, pageQuery));
     }

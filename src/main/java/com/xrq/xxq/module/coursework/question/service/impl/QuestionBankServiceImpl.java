@@ -84,7 +84,7 @@ public class QuestionBankServiceImpl extends ServiceImpl<CourseQuestionBankMappe
     }
 
     /** 结构 + 字段校验。 */
-    static void validate(QuestionSaveRequest req) {
+    private static void validate(QuestionSaveRequest req) {
         if (req.getStem() == null || req.getStem().isBlank()) {
             throw new BusinessException(400, "题干不能为空");
         }
@@ -119,7 +119,7 @@ public class QuestionBankServiceImpl extends ServiceImpl<CourseQuestionBankMappe
 
     private CourseQuestionBank requireOwned(Long id, Long ownerUserId) {
         CourseQuestionBank q = baseMapper.selectById(id);
-        if (q == null || !q.getOwnerTeacherId().equals(ownerUserId)) {
+        if (q == null || !ownerUserId.equals(q.getOwnerTeacherId())) {
             throw new BusinessException(404, "题目不存在");
         }
         return q;
@@ -144,7 +144,7 @@ public class QuestionBankServiceImpl extends ServiceImpl<CourseQuestionBankMappe
     }
 
     /** JSON 列 → JsonNode；null/损坏 → null（题库行损坏不阻断列表，由编辑时修正）。 */
-    JsonNode parse(String json) {
+    private JsonNode parse(String json) {
         if (json == null || json.isBlank()) {
             return null;
         }

@@ -2,6 +2,7 @@ package com.xrq.xxq.module.coursework.common;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 import com.xrq.xxq.common.BusinessException;
@@ -30,7 +31,7 @@ public final class QuestionPayloadValidator {
             case SINGLE_CHOICE -> {
                 Set<String> keys = requireOptions(options);
                 if (answer == null || !answer.isString()
-                        || !keys.contains(answer.asString().trim().toUpperCase(java.util.Locale.ROOT))) {
+                        || !keys.contains(answer.asString().trim().toUpperCase(Locale.ROOT))) {
                     throw new BusinessException(400, "单选题标准答案必须是选项 key 之一");
                 }
             }
@@ -41,7 +42,7 @@ public final class QuestionPayloadValidator {
                 }
                 for (JsonNode node : answer) {
                     if (!node.isString()
-                            || !keys.contains(node.asString().trim().toUpperCase(java.util.Locale.ROOT))) {
+                            || !keys.contains(node.asString().trim().toUpperCase(Locale.ROOT))) {
                         throw new BusinessException(400, "多选题标准答案必须全部命中选项 key");
                     }
                 }
@@ -55,6 +56,9 @@ public final class QuestionPayloadValidator {
                 if (answer == null || !answer.isObject() || !answer.path("blanks").isArray()
                         || answer.path("blanks").isEmpty()) {
                     throw new BusinessException(400, "填空题标准答案须为 {\"ordered\":bool,\"blanks\":[[\"可接受答案\",...],...]}");
+                }
+                if (answer.has("ordered") && !answer.path("ordered").isBoolean()) {
+                    throw new BusinessException(400, "填空题 ordered 必须是布尔值");
                 }
                 for (JsonNode group : answer.path("blanks")) {
                     if (!group.isArray() || group.isEmpty()) {
@@ -85,7 +89,7 @@ public final class QuestionPayloadValidator {
             if (item == null || item.getKey() == null || item.getKey().isBlank()) {
                 throw new BusinessException(400, "选项 key 不能为空");
             }
-            if (!keys.add(item.getKey().trim().toUpperCase(java.util.Locale.ROOT))) {
+            if (!keys.add(item.getKey().trim().toUpperCase(Locale.ROOT))) {
                 throw new BusinessException(400, "选项 key 重复: " + item.getKey());
             }
         }
