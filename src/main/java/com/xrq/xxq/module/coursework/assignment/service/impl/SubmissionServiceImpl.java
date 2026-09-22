@@ -89,7 +89,16 @@ public class SubmissionServiceImpl
         List<CourseAssignmentQuestion> questions = listQuestions(assignmentId);
         Set<Long> known = questions.stream().map(CourseAssignmentQuestion::getId).collect(Collectors.toSet());
         Map<String, String> draft = new HashMap<>();
+        if (req.getAnswers() == null) {
+            throw new BusinessException(400, "答案列表不能为空");
+        }
         for (AnswerInput input : req.getAnswers()) {
+            if (input == null) {
+                throw new BusinessException(400, "作答项不能为空");
+            }
+            if (input.getQuestionId() == null) {
+                throw new BusinessException(400, "题目 id 不能为空");
+            }
             if (!known.contains(input.getQuestionId())) {
                 throw new BusinessException(400, "题目不属于该作业: " + input.getQuestionId());
             }
@@ -114,12 +123,16 @@ public class SubmissionServiceImpl
         Map<Long, JsonNode> answerMap = new HashMap<>();
         if (req.getAnswers() != null) {
             for (AnswerInput input : req.getAnswers()) {
+                if (input == null) {
+                    throw new BusinessException(400, "作答项不能为空");
+                }
                 if (input.getQuestionId() == null) {
                     throw new BusinessException(400, "题目 id 不能为空");
                 }
-                if (answerMap.put(input.getQuestionId(), input.getAnswer()) != null) {
+                if (answerMap.containsKey(input.getQuestionId())) {
                     throw new BusinessException(400, "题目重复作答: " + input.getQuestionId());
                 }
+                answerMap.put(input.getQuestionId(), input.getAnswer());
             }
         }
         Set<Long> known = questions.stream().map(CourseAssignmentQuestion::getId).collect(Collectors.toSet());
@@ -320,6 +333,15 @@ public class SubmissionServiceImpl
 
         LocalDateTime now = LocalDateTime.now();
         for (GradeRequest.GradeItem item : req.getItems()) {
+            if (item == null) {
+                throw new BusinessException(400, "批改项不能为空");
+            }
+            if (item.getAnswerId() == null) {
+                throw new BusinessException(400, "批改项 id 不能为空");
+            }
+            if (item.getScore() == null) {
+                throw new BusinessException(400, "分数不能为空");
+            }
             CourseAssignmentAnswer ans = byId.get(item.getAnswerId());
             if (ans == null) {
                 throw new BusinessException(400, "作答记录不属于该提交: " + item.getAnswerId());
@@ -396,7 +418,8 @@ public class SubmissionServiceImpl
 
     private List<CourseAssignmentAnswer> listAnswers(Long submissionId) {
         return answerMapper.selectList(new LambdaQueryWrapper<CourseAssignmentAnswer>()
-                .eq(CourseAssignmentAnswer::getSubmissionId, submissionId));
+                .eq(CourseAssignmentAnswer::getSubmissionId, submissionId)
+                .orderByAsc(CourseAssignmentAnswer::getId));
     }
 
     /** 客观题答案形状校验（未答 → null）。 */
