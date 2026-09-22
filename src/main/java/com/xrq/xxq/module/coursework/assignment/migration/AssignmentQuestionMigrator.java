@@ -25,6 +25,15 @@ import lombok.extern.slf4j.Slf4j;
  * coursework.migration.apply=true     # 真正执行
  * </pre>
  *
+ * <p><b>AOT 陷阱</b>：本工程启用 Spring AOT 构建，{@code @ConditionalOnProperty} 在<b>构建期</b>求值——
+ * 构建时 {@code coursework.migration.enabled} 不存在 ⇒ 本类被排除在 AOT 产物之外，
+ * 常规 {@code spring-boot:run}/{@code java -jar} 加开关参数也<b>不会装配</b>。
+ * 必须关闭 AOT 运行（条件在运行期重新求值）：
+ * <pre>
+ * java -Dspring.aot.enabled=false -jar target/xxq.jar \
+ *   --spring.profiles.active=dev --coursework.migration.enabled=true [--coursework.migration.apply=true]
+ * </pre>
+ *
  * 可重入：已迁移的作业（存在快照题）/已迁移的提交（存在 answer）自动跳过。
  * <p><b>本类是临时脚本，迁移完成并观察一个窗口后请连同配置一起删除。</b>
  */
