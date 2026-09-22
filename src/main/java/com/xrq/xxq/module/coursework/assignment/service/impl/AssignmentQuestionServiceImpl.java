@@ -66,6 +66,12 @@ public class AssignmentQuestionServiceImpl implements AssignmentQuestionService 
         }
         if (inputs != null) {
             for (QuestionInput input : inputs) {
+                if (input.getStem() == null || input.getStem().isBlank()) {
+                    throw new BusinessException(400, "题干不能为空");
+                }
+                if (input.getCourseId() != null && input.getCampaignId() != null) {
+                    throw new BusinessException(400, "课程标签与公选活动标签只能二选一");
+                }
                 requirePositiveScore(input.getScore());
                 QuestionPayloadValidator.validate(input.getType(), input.getOptions(), input.getAnswer());
                 Long bankId = null;
@@ -106,7 +112,7 @@ public class AssignmentQuestionServiceImpl implements AssignmentQuestionService 
     @Override
     public BigDecimal totalScoreOf(Long assignmentId) {
         return listQuestions(assignmentId).stream()
-                .map(CourseAssignmentQuestion::getScore)
+                .map(q -> q.getScore() == null ? BigDecimal.ZERO : q.getScore())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 

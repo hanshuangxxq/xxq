@@ -220,6 +220,9 @@ public class AssignmentServiceImpl extends ServiceImpl<CourseAssignmentMapper, C
     public AssignmentView clone(Long teacherUserId, Long id, CloneAssignmentRequest req) {
         CourseAssignment src = requireOwnedAssignment(id, teacherUserId);
         TeachInfo targetAnchor = groupResolver.requireOwnedAnchor(req.getTeachInfoId(), teacherUserId);
+        if (req.getDeadline() == null) {
+            throw new BusinessException(400, "截止时间不能为空");
+        }
         if (assignmentQuestionService.listQuestions(id).isEmpty()) {
             throw new BusinessException(400, "源作业没有题目，无法克隆");
         }
