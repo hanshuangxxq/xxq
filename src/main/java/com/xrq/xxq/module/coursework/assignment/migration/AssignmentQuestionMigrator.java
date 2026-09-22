@@ -36,6 +36,10 @@ import lombok.extern.slf4j.Slf4j;
  *
  * 可重入：已迁移的作业（存在快照题）/已迁移的提交（存在 answer）自动跳过。
  * <p><b>本类是临时脚本，迁移完成并观察一个窗口后请连同配置一起删除。</b>
+ * <p><b>已知限制</b>：迁移行的 submission.auto_score 不回填（恒 null，仅展示影响）；
+ * 无内容无附件的旧提交生成 {@code "{}"} 而非 NULL（新代码对未答写 NULL，语义等价于空大题作答）；
+ * 若 apply 中途崩溃，已插快照但 answer 未迁完的作业会被重跑的 NOT EXISTS 守卫跳过——
+ * 需手工删该作业的快照行后重跑（一次性工具 + dry-run 预演，接受该窗口）。
  */
 @Slf4j
 @Component

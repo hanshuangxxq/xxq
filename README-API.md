@@ -3271,7 +3271,14 @@ practice 的 5 个提交端点（论文 / 开题 / 中期 / 实习报告 / 社�
 **`answerVisible`**（作业级，门控学生提交后可见标准答案/解析的时机）：`SUBMIT`（默认，提交后即可见）/
 `DEADLINE`（截止后）/`CLOSED`（作业关闭后）/`NEVER`（不可见）。教师端与批改视图不受限。
 
-**重交语义**：截止前可反复提交，`version` 递增；重交会**清空已批改痕迹**（`score`/`comment`/`gradeTime` 置空、状态回到 `SUBMITTED`），教师需重新批改。不带新附件重交时保留旧附件。
+**重交语义**：截止前可反复提交，`version` 递增；重交会**清空已批改痕迹**（`score`/`comment`/`gradeTime` 置空、状态回到 `SUBMITTED`），教师需重新批改。
+重交为**全量替换**：旧答案行软删、按当次提交重建（附件以 `answer_json.files` 为准）。
+
+**空提交**：`submit` 允许 `answers` 为空/null（视为全部未答，仍可提交占位）；`saveDraft` 则要求 `answers` 非 null（400）。
+
+**存量迁移**：`AssignmentQuestionMigrator` 需关闭 AOT 运行——
+`java -Dspring.aot.enabled=false -jar target/xxq.jar --coursework.migration.enabled=true [--coursework.migration.apply=true]`
+（AOT 构建期求值 `@ConditionalOnProperty`，常规启动加开关不会装配迁移器）；默认 dry-run，可重入。
 
 **迟交**：截止时间之后仍允许提交，但置 `late=1`；恰好等于截止时间不算迟交。作业 `CLOSED` 后拒绝提交（400）。
 
