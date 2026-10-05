@@ -396,6 +396,9 @@ public class AssignmentServiceImpl extends ServiceImpl<CourseAssignmentMapper, C
             qv.setScoreRule(q.getScoreRule() != null ? q.getScoreRule().getCode() : null);
             qv.setCaseSensitive(q.getCaseSensitive() != null && q.getCaseSensitive() == 1);
             qv.setRequireFile(q.getRequireFile() != null && q.getRequireFile() == 1);
+            if (q.getType() == QuestionTypeEnum.FILL_BLANK) {
+                qv.setBlankCount(fillBlankCount(q.getAnswerJson()));
+            }
             if (revealAnswer) {
                 qv.setAnswer(parseJson(q.getAnswerJson()));
                 qv.setAnalysis(q.getAnalysis());
@@ -408,6 +411,15 @@ public class AssignmentServiceImpl extends ServiceImpl<CourseAssignmentMapper, C
         v.setQuestions(views);
         v.setQuestionTypes(views.stream().map(AssignmentQuestionView::getType).distinct().toList());
         v.setHasFileQuestion(questions.stream().anyMatch(q -> q.getType() == QuestionTypeEnum.ESSAY));
+    }
+
+    /** 填空题空位数：学生端不下发标准答案，但渲染作答输入框需要空位数（空位数本身非敏感）。 */
+    private Integer fillBlankCount(String answerJson) {
+        JsonNode answer = parseJson(answerJson);
+        if (answer == null || !answer.isObject() || !answer.path("blanks").isArray()) {
+            return null;
+        }
+        return answer.path("blanks").size();
     }
 
     /** JSON 列 → JsonNode；null/损坏 → null。 */

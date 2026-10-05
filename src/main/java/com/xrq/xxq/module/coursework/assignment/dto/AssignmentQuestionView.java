@@ -22,6 +22,8 @@ public class AssignmentQuestionView {
     private String scoreRule;       // 多选计分规则 code
     private Boolean caseSensitive;  // 填空
     private Boolean requireFile;    // 大题
+    /** 填空题空位数（仅 FILL_BLANK；学生端渲染输入框个数用。空位数非敏感，与答案可见性无关）。 */
+    private Integer blankCount;
     private JsonNode answer;        // 标准答案（按可见性）
     private String analysis;        // 解析（按可见性）
     private JsonNode myAnswer;      // 学生端草稿答案（未提交时）
