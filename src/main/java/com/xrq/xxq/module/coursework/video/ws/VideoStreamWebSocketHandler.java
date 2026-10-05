@@ -190,7 +190,12 @@ public class VideoStreamWebSocketHandler extends TextWebSocketHandler {
             return;
         }
         synchronized (st) {
+            // 取消的任务从队列摘掉后不会再被 drain 处理，而 drain 是唯一释放 inflight 名额的地方，
+            // 所以必须在这里一并移除 —— 否则该 req 会永久占着 inflight 名额，取消满 maxInflight 次后
+            // 这条连接的所有 read 都会被 429 拒绝（名额泄漏，不可恢复）。
+            // 若任务已被 drain 取走在发送中，这里提前移除同样安全：drain 随后的 remove 是幂等的。
             st.queue.removeIf(t -> t.req() == req);
+            st.inflight.remove(req);
         }
     }
 
