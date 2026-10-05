@@ -168,6 +168,8 @@ accessToken 由登录接口返回，默认有效期 30 分钟。过期后调用�
 | DELETE | `/api/file/uploads/{uploadId}` | 取消上传 | 是 | 11.1 |
 | POST | `/api/file/whole` | 小文件整传（multipart：biz + file） | 是 | 11.1 |
 | POST | `/api/file/download` | 通用下载（POST 传路径，支持 Range → 206） | 是 | 11.1 |
+| GET | `/api/file/preview` | 在线预览（inline + Range 懒加载 → 206，类型白名单） | 是 | 11.6 |
+| GET | `/api/file/preview/info` | 预览元信息（大小 / 类型 / 可预览性） | 是 | 11.6 |
 | POST | `/api/practice/graduation/theses/duplicate-checks` | 登记查重结果（multipart，可附查重报告） | 是 | 11.5 |
 | GET | `/api/practice/graduation/theses/duplicate-checks/{checkId}/download` | 查重报告下载 | 是 | 11.5 |
 | POST | `/api/practice/graduation/campaigns/{id}/materials` | 上传活动资料 | 是 | 11.5 |
@@ -3051,7 +3053,8 @@ Authorization: Bearer <accessToken>
 
 ## 11. 文件模块
 
-通用文件传输：分片上传（断点续传 / 秒传 / SHA-256 完整性校验）、小文件整传、可续传下载。
+通用文件传输：分片上传（断点续传 / 秒传 / SHA-256 完整性校验）、小文件整传、可续传下载、
+在线预览（Range 懒加载）。
 
 **鉴权**：所有端点只要求「已登录」，**不做归属判权** —— 文件归属由各业务表自行记录，
 敏感文件一律走业务自己的下载端点。
@@ -3076,6 +3079,8 @@ Authorization: Bearer <accessToken>
 | DELETE | `/api/file/uploads/{uploadId}` | 取消上传 |
 | POST | `/api/file/whole` | 小文件整传 |
 | POST | `/api/file/download` | 通用下载 |
+| GET | `/api/file/preview` | 在线预览（inline + Range 懒加载 → 206） |
+| GET | `/api/file/preview/info` | 预览元信息（大小 / 类型 / 可预览性） |
 
 ### 11.2 完整分片上传流程
 
@@ -3198,6 +3203,54 @@ practice 的 5 个提交端点（论文 / 开题 / 中期 / 实习报告 / 社�
 - `GET /api/scores/export`、`GET /api/practice/graduation/dashboard/{campaignId}/export`、
   `GET /api/practice/graduation/defense/scores/export`：响应头统一为
   RFC5987 文件名 + `Accept-Ranges: bytes` + 内容 SHA-256 强 ETag（支持 206）。
+
+### 11.6 在线预览（懒加载）
+
+浏览器内联预览专用端点，与「下载」的核心差异是 `Content-Disposition: inline`（浏览器直接渲染
+而非触发下载）+ **GET**（pdf.js / `<img>` / `<video>` / iframe 只能发 GET，无法 POST）。
+
+**为什么懒加载能解决大文件慢**：客户端带 `Range: bytes=a-b` 请求时服务端只回该分段（206），
+pdf.js 按页拉取、`<video>` 按拖动位置拉取，**首屏永不整传**。内容寻址产物附带
+`Cache-Control: private, max-age=1年, immutable`（路径即内容摘要，字节永不改变），
+**二次打开零传输**。
+
+#### 11.6.1 预览元信息（先调，零内容传输）
+
+```bash
+curl "http://localhost:8080/api/file/preview/info?filePath=objects/course-material/<sha256>.pdf" \
+  -H "Authorization: Bearer <accessToken>"
+# → { "code": 200, "data": { "size": 52428800, "contentType": "application/pdf", "previewable": true } }
+```
+
+前端据此决定策略：`previewable=false`（docx/xlsx/zip 等浏览器无法原生渲染的类型）→ 直接回退
+`POST /api/file/download`；`size` 大 → 提示「将按需加载」；`contentType` → 选 viewer。
+
+#### 11.6.2 预览内容
+
+```bash
+curl "http://localhost:8080/api/file/preview?filePath=objects/course-material/<sha256>.pdf&originalName=第一章课件.pdf" \
+  -H "Authorization: Bearer <accessToken>" -H "Range: bytes=0-1048575"
+# → 206 Partial Content / Content-Range: bytes 0-1048575/52428800
+#   响应头：Content-Disposition: inline; filename*=UTF-8''...  +  Accept-Ranges: bytes
+#         + 强 ETag  +  Cache-Control: private, max-age=31536000, immutable
+#         +  X-Content-Type-Options: nosniff
+```
+
+- `filePath` 必填（query）；`originalName` 选填，只影响 viewer 里显示的文件名。
+- **可预览类型白名单**：`.pdf` / `.jpg` / `.jpeg` / `.png` / `.mp4`（= 各业务扩展名白名单中
+  浏览器能原生渲染的子集）。其余类型返回 body code **415**，前端回退下载。
+- 不带 `Range` 时返回 200 完整正文（小图等一次性加载场景）。
+
+#### 11.6.3 前端对接要点
+
+- **鉴权仍是 Bearer 头**（本组端点不做归属判权，与通用下载同一暴露面；敏感文件请走业务判权端点）：
+  - pdf.js：`pdfjsLib.getDocument({ url, httpHeaders: { Authorization: 'Bearer ' + token } })`，
+    它会自动用 Range 分段拉取 —— **这就是懒加载，无需前端自己分块**。
+  - `<img>` / `<video>` 标签无法带请求头：先 `fetch(url, { headers })` 拿 Blob 再
+    `URL.createObjectURL`；要保留视频拖动分段能力则用 fetch + MSE 或接受整载。
+- **限流**：预览与上传同走 `/api/file/**` 桶（600 次/分钟）。pdf.js 默认 64KB/段偏碎，
+  大 PDF 建议把 `rangeChunkSize` 调到 **1~2MB**（50MB PDF ≈ 25~50 段，远低于桶上限）。
+- **错误形态**与全站一致：HTTP 200 + body `code`（404 文件不存在 / 400 路径非法 / 415 不可预览）。
 
 ---
 

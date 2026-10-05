@@ -9,6 +9,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Locale;
+import java.util.Set;
 
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.FileSystemResource;
@@ -16,6 +17,8 @@ import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+
+import com.xrq.xxq.common.BusinessException;
 
 /**
  * 可续传下载响应构建工具（静态，对齐 EncryptUtils 先例）。
@@ -27,6 +30,16 @@ import org.springframework.http.ResponseEntity;
  * {@code FileStorageService#resolve} 拿到磁盘路径，再用本类构建响应直接返回。
  */
 public final class ResumableFileResponse {
+
+    /**
+     * 可内联预览的 Content-Type 白名单：{@code FileBizEnum} 各扩展名白名单中
+     * 「浏览器能原生渲染」的子集（pdf.js / {@code <img>} / {@code <video>}）。
+     * <p>docx/xlsx/pptx 等 Office 格式浏览器无法原生渲染，不在此列 —— 前端拿
+     * {@code previewable=false} 后回退下载。html/svg/js 永远不会出现
+     * （上传侧 {@code FileBizEnum} 扩展名白名单已拦截），故内联展示无 XSS 面。
+     */
+    private static final Set<String> PREVIEWABLE_TYPES = Set.of(
+            "application/pdf", "image/jpeg", "image/png", "video/mp4");
 
     private ResumableFileResponse() {
     }
@@ -79,6 +92,69 @@ public final class ResumableFileResponse {
                 .contentType(MediaType.parseMediaType(contentTypeFromName(name)))
                 .eTag("\"" + sha256Hex(data) + "\"")
                 .body(new ByteArrayResource(data));
+    }
+
+    /**
+     * 构建在线预览响应（{@code Content-Disposition: inline} + Range 懒加载 + 强缓存）。
+     * <p>与 {@link #buildDownload} 的差异：</p>
+     * <ul>
+     *   <li><b>inline 而非 attachment</b>：浏览器/pdf.js 直接渲染而非触发下载。</li>
+     *   <li><b>类型门禁</b>：仅放行 {@link #PREVIEWABLE_TYPES}，其余 415 —— 内联展示
+     *       docx/zip 没有意义（浏览器只会转下载），反而放大误用面。</li>
+     *   <li><b>{@code X-Content-Type-Options: nosniff}</b>：扩展名门禁只挡「文件名」，
+     *       挡不住「把 HTML 改名成 .pdf 上传」；nosniff 强制浏览器按声明类型渲染，
+     *       杜绝嗅探成 text/html 后的同源 XSS。</li>
+     *   <li><b>缓存</b>：内容寻址产物（{@code etagOrNull} 非空）路径即摘要、字节永不改变，
+     *       输出 {@code Cache-Control: private, max-age=1y, immutable} —— 二次打开零传输；
+     *       无摘要（legacy）退化为 {@code no-cache}（每次回源经 Last-Modified 协商，304 兜底）。</li>
+     * </ul>
+     * Range 处理与下载相同，由 Spring 对 {@code Resource} 返回值原生完成（命中即 206），
+     * pdf.js / {@code <video>} 的按需分段加载由此实现 —— 这就是「懒加载」的服务端侧。
+     *
+     * @param file         已解析的磁盘文件（经 {@code FileStorageService#resolve} 或同等防护）
+     * @param originalName 展示文件名；其扩展名优先用于类型判定（兼容 legacy 无扩展名 UUID 文件），
+     *                     判定不出时回退磁盘文件名（内容寻址产物的扩展名即真实类型）
+     * @param etagOrNull   内容摘要（sha256）；非空时输出强 ETag + immutable 缓存
+     * @throws BusinessException 415 —— 类型不可预览，前端应回退到下载
+     */
+    public static ResponseEntity<Resource> buildPreview(Path file, String originalName,
+                                                        String etagOrNull) {
+        String filename = (originalName == null || originalName.isBlank())
+                ? file.getFileName().toString() : originalName;
+        String contentType = previewContentType(filename);
+        if (contentType == null) {
+            contentType = previewContentType(file.getFileName().toString());
+        }
+        if (contentType == null) {
+            throw new BusinessException(415, "该文件类型不支持在线预览，请下载后查看");
+        }
+        String encoded = URLEncoder.encode(filename, StandardCharsets.UTF_8).replace("+", "%20");
+        ResponseEntity.BodyBuilder builder = ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename*=UTF-8''" + encoded)
+                .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+                .header("X-Content-Type-Options", "nosniff")
+                .contentType(MediaType.parseMediaType(contentType));
+        if (etagOrNull != null && !etagOrNull.isBlank()) {
+            builder.eTag("\"" + etagOrNull + "\"")
+                    .header(HttpHeaders.CACHE_CONTROL, "private, max-age=31536000, immutable");
+        } else {
+            builder.header(HttpHeaders.CACHE_CONTROL, "private, no-cache");
+        }
+        try {
+            builder.lastModified(Files.getLastModifiedTime(file).toMillis());
+        } catch (IOException ignored) {
+            // 取不到修改时间就不输出 Last-Modified，不影响预览
+        }
+        return builder.body(new FileSystemResource(file));
+    }
+
+    /**
+     * 预览类型门禁：按文件名扩展名映射，命中 {@link #PREVIEWABLE_TYPES} 返回对应
+     * Content-Type，否则返回 {@code null}（调用方据此 415 或向客户端报告 {@code previewable=false}）。
+     */
+    public static String previewContentType(String fileName) {
+        String mapped = contentTypeFromName(fileName);
+        return PREVIEWABLE_TYPES.contains(mapped) ? mapped : null;
     }
 
     /**

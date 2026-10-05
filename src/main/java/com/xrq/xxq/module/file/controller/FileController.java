@@ -1,6 +1,8 @@
 package com.xrq.xxq.module.file.controller;
 
+import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 
 import org.springframework.core.io.Resource;
@@ -18,9 +20,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.common.Result;
 import com.xrq.xxq.module.file.dto.ChunkSavedView;
 import com.xrq.xxq.module.file.dto.DownloadRequest;
+import com.xrq.xxq.module.file.dto.PreviewInfoView;
 import com.xrq.xxq.module.file.dto.StoredFileRef;
 import com.xrq.xxq.module.file.dto.UploadInitRequest;
 import com.xrq.xxq.module.file.dto.UploadSessionView;
@@ -35,14 +39,15 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 
 /**
- * 通用文件传输端点：分片上传四件套 + 整传 + 进度/校验 + 通用下载。
+ * 通用文件传输端点：分片上传四件套 + 整传 + 进度/校验 + 通用下载 + 在线预览。
  * <p>
  * 所有端点只要求「已登录」：<b>不做归属判权</b>。文件归属由各业务表自行存字段记录，
  * 敏感文件一律走业务自己的下载端点（业务层判权后返回）。本端点覆盖的是
  * 「上传者自己能看回刚传的东西」与「半公开资源」这类通用场景。
  * <p>
  * <b>限流</b>：整组走 {@code /api/file/**} 独立桶（默认 600/分钟）—— 2GB ÷ 5MB = 410 个分片请求
- * 会直接撞穿全局限流的 120/分钟。
+ * 会直接撞穿全局限流的 120/分钟。预览的 Range 分段请求同桶：pdf.js 默认 64KB/段偏碎，
+ * 前端应把 {@code rangeChunkSize} 调到 1-2MB（详见 README-API 11.6）。
  * <p>
  * <b>分片请求体是裸二进制</b>（{@code application/octet-stream}），不经 multipart 解析，
  * 因此不受 {@code spring.servlet.multipart.max-file-size}（25MB）约束 —— 这正是大文件能到 2GB 的原因。
@@ -134,5 +139,44 @@ public class FileController {
         Path file = fileStorage.resolve(body.getFilePath());
         return ResumableFileResponse.buildDownload(file, body.getOriginalName(),
                 ResumableFileResponse.sha256FromStoredPath(body.getFilePath()));
+    }
+
+    /**
+     * 在线预览（GET + inline + Range 懒加载）。
+     * <p><b>为什么是 GET 而下载是 POST</b>：浏览器原生 viewer（pdf.js / {@code <img>} /
+     * {@code <video>} / iframe）只能发 GET，且 pdf.js 的按需分段加载就是「GET + Range」。
+     * 路径暴露在 URL 的代价此处可接受：存储路径即内容摘要（非敏感），且本组端点本来就不做
+     * 归属判权（与 {@link #download} 同一暴露面）。敏感文件请走业务自己的判权端点。
+     * <p><b>懒加载</b>：客户端带 {@code Range: bytes=a-b} 时返回 206 只传该段 ——
+     * 大 PDF 由 pdf.js 按页拉取，视频拖动由 {@code <video>} 按需拉取，首屏不整传。
+     * 内容寻址产物附带 {@code immutable} 缓存，二次打开零传输。
+     * <p>不可原生渲染的类型（docx/xlsx/zip…）返回 415（body code），前端应回退到
+     * {@link #download}；可先调 {@link #previewInfo} 拿 {@code previewable} 再决定。
+     * <p>鉴权仍是 Bearer 头：pdf.js 用 {@code httpHeaders} 传入；{@code <img>} 等无法带头的
+     * 标签由前端 fetch 后转 objectURL。
+     */
+    @GetMapping("/preview")
+    public ResponseEntity<Resource> preview(@RequestParam String filePath,
+                                            @RequestParam(required = false) String originalName) {
+        Path file = fileStorage.resolve(filePath);
+        return ResumableFileResponse.buildPreview(file, originalName,
+                ResumableFileResponse.sha256FromStoredPath(filePath));
+    }
+
+    /**
+     * 预览元信息（零内容传输）：前端拉取内容前调用，按 {@code size} 做大文件提示、
+     * 按 {@code contentType} 选 viewer、按 {@code previewable=false} 直接回退下载。
+     */
+    @GetMapping("/preview/info")
+    public Result<PreviewInfoView> previewInfo(@RequestParam String filePath) {
+        Path file = fileStorage.resolve(filePath);
+        long size;
+        try {
+            size = Files.size(file);
+        } catch (IOException e) {
+            throw new BusinessException(500, "读取文件信息失败");
+        }
+        return Result.ok(new PreviewInfoView(size, ResumableFileResponse.contentType(file),
+                ResumableFileResponse.previewContentType(file.getFileName().toString()) != null));
     }
 }
