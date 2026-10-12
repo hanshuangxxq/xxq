@@ -23,9 +23,10 @@ import org.springframework.stereotype.Component;
  * 默认 LOWEST_PRECEDENCE）执行。被拒请求在 proceed() 之前抛出 {@link RateLimitException}，
  * 内层访问日志切面不会执行 —— 攻击流量不产生访问日志（先防抖再记日志）。
  * <p>
- * 三档规则（阈值见 application.yaml 的 rate-limit.*）：
+ * 规则阈值见 application.yaml 的 rate-limit.*，按类别分三条；其中全局限流的计数档位共四档：
  * 1. 全局限流：已登录按 userId 计数（硬性约定：校园网 NAT 下绝不对已登录请求用 IP 维度），
  *    未登录按 IP；/api/selection/** 走选课宽容档独立桶（选课高峰学生频繁刷新属正常行为）；
+ *    /api/file/** 走文件传输档；/api/front-logs 走日志上报档（免登录按 IP，阈值 rate-limit.log-per-minute）；
  * 2. 登录限流：POST /api/login 按复合客户端维度（公网 IP 即 X-Forwarded-For 第一跳
  *    + 前端上报的 X-Client-Private-IP 内网 IP，缺失时纯公网 IP）；
  * 3. 账号锁定：account 渠道连续失败 N 次锁 M 分钟（OAuth 渠道无账号概念，仅受登录限流）。

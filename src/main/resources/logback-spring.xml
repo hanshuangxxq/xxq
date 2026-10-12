@@ -102,6 +102,21 @@
         </encoder>
     </appender>
 
+    <!-- 前端日志：FrontendLogController 接收的前端错误/页面访问/手动埋点，单行格式 -->
+    <appender name="FRONTEND_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_PATH}/%d{yyyy/MM/dd}/frontend.%i.log</fileNamePattern>
+            <maxFileSize>50MB</maxFileSize>
+            <maxHistory>90</maxHistory>
+            <totalSizeCap>3GB</totalSizeCap>
+            <cleanHistoryOnStart>true</cleanHistoryOnStart>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${FILE_LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
     <!-- slow-api 专用 logger：additivity=false 不回传 root，慢请求只进 slow 文件（不重复进 warn 文件/控制台） -->
     <logger name="slow-api" level="INFO" additivity="false">
         <appender-ref ref="SLOW_FILE"/>
@@ -110,6 +125,11 @@
     <!-- rate-limit 专用 logger：additivity=false 不回传 root，限流事件只进 limit 文件 -->
     <logger name="rate-limit" level="INFO" additivity="false">
         <appender-ref ref="RATE_LIMIT_FILE"/>
+    </logger>
+
+    <!-- frontend-log 专用 logger：additivity=false 不回传 root，前端日志只进 frontend 文件 -->
+    <logger name="frontend-log" level="INFO" additivity="false">
+        <appender-ref ref="FRONTEND_FILE"/>
     </logger>
 
     <root level="INFO">
