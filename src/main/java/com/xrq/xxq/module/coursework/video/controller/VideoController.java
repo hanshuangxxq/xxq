@@ -1,7 +1,5 @@
 package com.xrq.xxq.module.coursework.video.controller;
 
-import java.util.List;
-
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -9,7 +7,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -27,7 +24,7 @@ import com.xrq.xxq.util.auth.UserType;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 
-/** 教学视频端点。播放在 /ws/video/{id}（WS），此处只做元数据管理。 */
+/** 教学视频端点。播放在 /ws/video/{id}（WS），列表由章节树 /api/coursework/chapters/tree 承担，此处只做元数据管理。 */
 @RestController
 @RequestMapping("/api/coursework/videos")
 @RequiredArgsConstructor
@@ -36,7 +33,7 @@ public class VideoController {
     private final VideoService videoService;
     private final AuthFacade authFacade;
 
-    /** 登记视频（文件先经 file 模块分片上传回传 filePath；小文件也可随请求整传）。 */
+    /** 登记视频（挂节：data.nodeId 必填；文件先经 file 模块分片上传回传 filePath，小文件也可随请求整传）。 */
     @PostMapping
     @RequireTeacher
     public Result<VideoView> register(HttpServletRequest request,
@@ -57,16 +54,6 @@ public class VideoController {
     public Result<Void> delete(HttpServletRequest request, @PathVariable Long id) {
         videoService.delete(authFacade.currentUserId(request), id);
         return Result.ok();
-    }
-
-    @GetMapping
-    @RequireAuth({UserType.TEACHER, UserType.STUDENT})
-    public Result<List<VideoView>> list(HttpServletRequest request, @RequestParam Long teachInfoId) {
-        Long userId = authFacade.currentUserId(request);
-        if (AuthFacade.USER_TYPE_TEACHER.equals(authFacade.currentUserType(request))) {
-            return Result.ok(videoService.listForTeacher(userId, teachInfoId));
-        }
-        return Result.ok(videoService.listForStudent(userId, teachInfoId));
     }
 
     /** 元数据（WS 播放前置：拿到 size/sha256 后再连 WS）。 */

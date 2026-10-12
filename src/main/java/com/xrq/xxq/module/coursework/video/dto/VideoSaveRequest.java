@@ -7,8 +7,9 @@ import org.jspecify.annotations.NonNull;
 @Data
 public class VideoSaveRequest {
 
+    /** 挂载的节节点 id（course_chapter_node 中 SECTION 类型节点；视频必须挂节，公共区只存存量）。 */
     @NonNull
-    private Long teachInfoId;
+    private Long nodeId;
 
     @NonNull
     private String title;
@@ -23,6 +24,4 @@ public class VideoSaveRequest {
 
     /** 时长秒：客户端解析 MP4 后回传，可空。 */
     private Integer durationSec;
-
-    private Integer sortNo;
 }

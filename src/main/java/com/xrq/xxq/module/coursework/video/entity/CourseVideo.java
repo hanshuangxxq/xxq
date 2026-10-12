@@ -9,7 +9,8 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 /**
- * 教学视频：挂在授课组锚点行上。文件为内容寻址 mp4，时长由客户端解析后回传（服务端不解析视频）。
+ * 教学视频：挂在授课组锚点行上，nodeId 指向章节树的节节点（NULL=公共区，不入树）。
+ * 文件为内容寻址 mp4，时长由客户端解析后回传（服务端不解析视频）。
  */
 @Data
 @TableName("course_video")
@@ -19,6 +20,7 @@ public class CourseVideo {
     private Long id;
 
     private Long teachInfoId;        // 授课组锚点行 teach_info.id
+    private Long nodeId;             // 挂载的节节点 course_chapter_node.id（SECTION；NULL=公共区）
     private String title;
     private String description;
     private String fileName;         // objects/course-video/{sha256}.mp4
@@ -26,7 +28,6 @@ public class CourseVideo {
     private String sha256;           // 内容摘要
     private Long sizeBytes;
     private Integer durationSec;     // 时长秒（客户端回传，可空）
-    private Integer sortNo;
     private Long teacherId;          // 上传人 user.id
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
