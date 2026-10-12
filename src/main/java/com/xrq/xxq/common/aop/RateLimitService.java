@@ -33,6 +33,7 @@ public class RateLimitService {
     private static final String GLOBAL_PREFIX = "ratelimit:global:";
     private static final String SELECTION_PREFIX = "ratelimit:selection:";
     private static final String FILE_PREFIX = "ratelimit:file:";
+    private static final String LOG_PREFIX = "ratelimit:log:";
     private static final String LOGIN_IP_PREFIX = "ratelimit:login:ip:";
     private static final String FAIL_PREFIX = "ratelimit:login:fail:";
     private static final String LOCK_PREFIX = "ratelimit:login:lock:";
@@ -65,6 +66,9 @@ public class RateLimitService {
     @Value("${rate-limit.file-per-minute:600}")
     private long filePerMinute;
 
+    @Value("${rate-limit.log-per-minute:300}")
+    private long logPerMinute;
+
     @Value("${rate-limit.login-ip-per-minute:20}")
     private long loginIpPerMinute;
 
@@ -83,7 +87,9 @@ public class RateLimitService {
         /** 选课宽容档（/api/selection/**）：选课高峰学生频繁刷新属正常行为。 */
         SELECTION,
         /** 文件传输档（/api/file/**）：2GB ÷ 5MB = 410 个分片请求，默认档必然误伤。 */
-        FILE
+        FILE,
+        /** 日志上报档（/api/front-logs/**）：免登录按公网 IP 计数，校园网 NAT 共享 IP 下批量上报需宽松。 */
+        LOG
     }
 
     /**
@@ -100,11 +106,13 @@ public class RateLimitService {
             case GLOBAL -> globalPerMinute;
             case SELECTION -> selectionPerMinute;
             case FILE -> filePerMinute;
+            case LOG -> logPerMinute;
         };
         String prefix = switch (tier) {
             case GLOBAL -> GLOBAL_PREFIX;
             case SELECTION -> SELECTION_PREFIX;
             case FILE -> FILE_PREFIX;
+            case LOG -> LOG_PREFIX;
         };
         Long count = incrWithExpire(prefix + bucket + ":" + minuteBucket(), BUCKET_TTL_SECONDS);
         if (count == null) {
@@ -125,6 +133,7 @@ public class RateLimitService {
             case GLOBAL -> "";
             case SELECTION -> "(选课宽容档)";
             case FILE -> "(文件传输档)";
+            case LOG -> "(日志上报档)";
         };
     }
 

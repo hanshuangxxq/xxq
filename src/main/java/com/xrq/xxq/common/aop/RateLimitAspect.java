@@ -44,6 +44,7 @@ public class RateLimitAspect {
 
     private static final String SELECTION_API_PREFIX = "/api/selection";
     private static final String FILE_API_PREFIX = "/api/file";
+    private static final String LOG_API_PREFIX = "/api/front-logs";
 
     private final RateLimitService rateLimitService;
     private final AuthFacade authFacade;
@@ -76,6 +77,9 @@ public class RateLimitAspect {
     private static RateLimitService.Tier tierOf(String uri) {
         if (uri.startsWith(FILE_API_PREFIX)) {
             return RateLimitService.Tier.FILE;
+        }
+        if (uri.startsWith(LOG_API_PREFIX)) {
+            return RateLimitService.Tier.LOG;
         }
         if (uri.startsWith(SELECTION_API_PREFIX)) {
             return RateLimitService.Tier.SELECTION;
