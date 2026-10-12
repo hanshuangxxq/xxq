@@ -199,10 +199,16 @@ accessToken 由登录接口返回，默认有效期 30 分钟。过期后调用�
 | GET | `/api/coursework/assignments/{id}/my-submission` | 我的提交 | 学生 | 12.2 |
 | GET | `/api/coursework/submissions/{id}` | 单份提交详情（含标准答案） | 教师 | 12.2 |
 | POST | `/api/coursework/submissions/{id}/grade` | 逐题批改（仅大题可改判） | 教师 | 12.2 |
-| POST | `/api/coursework/videos` | 登记教学视频 | 教师 | 12.3 |
-| PUT | `/api/coursework/videos/{id}` | 改视频元数据 | 教师 | 12.3 |
+| POST | `/api/coursework/chapters` | 建章 | 教师 | 12.3 |
+| PUT | `/api/coursework/chapters/{id}` | 改章名 | 教师 | 12.3 |
+| DELETE | `/api/coursework/chapters/{id}` | 删章（级联软删节+视频） | 教师 | 12.3 |
+| GET | `/api/coursework/chapters/tree` | 章节树+公共区 | 教师/学生 | 12.3 |
+| POST | `/api/coursework/sections` | 建节（挂章下） | 教师 | 12.3 |
+| PUT | `/api/coursework/sections/{id}` | 改节名 | 教师 | 12.3 |
+| DELETE | `/api/coursework/sections/{id}` | 删节（级联软删视频） | 教师 | 12.3 |
+| POST | `/api/coursework/videos` | 登记教学视频（挂节） | 教师 | 12.3 |
+| PUT | `/api/coursework/videos/{id}` | 改视频元数据/改挂节 | 教师 | 12.3 |
 | DELETE | `/api/coursework/videos/{id}` | 删除视频 | 教师 | 12.3 |
-| GET | `/api/coursework/videos` | 视频列表 | 教师/学生 | 12.3 |
 | GET | `/api/coursework/videos/{id}` | 视频元数据 | 教师/学生 | 12.3 |
 | WS | `/ws/video/{videoId}?token=` | 视频流式播放 | 教师/学生 | 12.3 |
 | POST | `/api/coursework/materials` | 上传课程资料 | 教师 | 12.4 |
@@ -3341,15 +3347,27 @@ curl "http://localhost:8080/api/file/preview?filePath=objects/course-material/<s
 **视图变化**：`AssignmentView` 增 `answerVisible`/`questionTypes`/`hasFileQuestion`/`questions`（仅详情）；
 提交视图去 `content`/`fileName`/`fileOriginal`，增 `autoScore`/`answers`（逐题：标准答案/得分/评语）。
 
-### 12.3 教学视频（WS 流式播放）
+### 12.3 教学视频（章节树 + WS 流式播放）
+
+视频按教科书式两级树组织：**章（CHAPTER）→ 节（SECTION）→ 视频**，章/节挂授课组锚点
+（同一授课组一套目录），视频必须挂节；未挂节的视频（存量）归入**公共区**。
+章/节/视频均无人工排序，一律按 id 升序（创建顺序）。详细字段与示例见 `docs/课程视频章节树协议.md`。
 
 | 方法 | 路径 | 权限 | 说明 |
 |------|------|------|------|
-| POST | `/api/coursework/videos` | 教师 | 登记视频（`data` + `file` 或 `filePath`，必填其一） |
-| PUT | `/api/coursework/videos/{id}` | 教师 | 改元数据（标题/描述/排序/时长；**文件不可换**） |
+| POST | `/api/coursework/chapters` | 教师 | 建章 `{teachInfoId, title}` |
+| PUT | `/api/coursework/chapters/{id}` | 教师 | 改章名 `{title}` |
+| DELETE | `/api/coursework/chapters/{id}` | 教师 | 删章：**级联软删**其下节与视频 |
+| GET | `/api/coursework/chapters/tree?teachInfoId=` | 教师/学生 | 整棵树 + `commonVideos` 公共区 |
+| POST | `/api/coursework/sections` | 教师 | 建节 `{chapterId, title}`（节不可换父章） |
+| PUT | `/api/coursework/sections/{id}` | 教师 | 改节名 `{title}` |
+| DELETE | `/api/coursework/sections/{id}` | 教师 | 删节：**级联软删**其下视频 |
+| POST | `/api/coursework/videos` | 教师 | 登记视频（`data.nodeId` 必填挂节 + `file` 或 `filePath` 必填其一） |
+| PUT | `/api/coursework/videos/{id}` | 教师 | 改元数据（标题/描述/时长/`nodeId` 改挂节，限同授课组；**文件不可换**） |
 | DELETE | `/api/coursework/videos/{id}` | 教师 | 软删（产物由回收任务对账清理） |
-| GET | `/api/coursework/videos?teachInfoId=` | 教师/学生 | 列表（按 `sortNo` 升序） |
 | GET | `/api/coursework/videos/{id}` | 教师/学生 | 元数据（WS 播放前置：拿 `size`/`sha256`/`durationSec`） |
+
+原 `GET /api/coursework/videos?teachInfoId=` 平铺列表已**移除**，由 tree 接口取代；`VideoView` 增 `nodeId`、去 `sortNo`。
 
 视频本体走**分片上传**（上限取全局 `file.max-file-size`），扩展名仅放行 `.mp4`。
 时长 `durationSec` 由**客户端解析 MP4 后回传**（服务端不解析视频，不转码）。
