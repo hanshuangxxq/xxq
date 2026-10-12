@@ -24,7 +24,9 @@ import com.xrq.xxq.module.coursework.assignment.entity.CourseAssignment;
 import com.xrq.xxq.module.coursework.assignment.mapper.CourseAssignmentMapper;
 import com.xrq.xxq.module.coursework.material.entity.CourseMaterial;
 import com.xrq.xxq.module.coursework.material.mapper.CourseMaterialMapper;
+import com.xrq.xxq.module.coursework.video.entity.CourseChapterNode;
 import com.xrq.xxq.module.coursework.video.entity.CourseVideo;
+import com.xrq.xxq.module.coursework.video.mapper.ChapterNodeMapper;
 import com.xrq.xxq.module.coursework.video.mapper.CourseVideoMapper;
 import com.xrq.xxq.module.exam.entity.Exam;
 import com.xrq.xxq.module.exam.mapper.ExamMapper;
@@ -92,6 +94,7 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
     private final CollegeMapper collegeMapper;
     private final CourseAssignmentMapper courseAssignmentMapper;
     private final CourseVideoMapper courseVideoMapper;
+    private final ChapterNodeMapper chapterNodeMapper;
     private final CourseMaterialMapper courseMaterialMapper;
     private final CourseAnnouncementMapper courseAnnouncementMapper;
 
@@ -241,6 +244,11 @@ public class TeachInfoServiceImpl extends ServiceImpl<TeachInfoMapper, TeachInfo
                 .eq(CourseVideo::getTeachInfoId, id));
         if (videoCount != null && videoCount > 0) {
             throw new BusinessException(409, "该授课安排已关联教学视频，无法删除");
+        }
+        Long chapterNodeCount = chapterNodeMapper.selectCount(new LambdaQueryWrapper<CourseChapterNode>()
+                .eq(CourseChapterNode::getTeachInfoId, id));
+        if (chapterNodeCount != null && chapterNodeCount > 0) {
+            throw new BusinessException(409, "该授课安排已关联章节树，无法删除");
         }
         Long materialCount = courseMaterialMapper.selectCount(new LambdaQueryWrapper<CourseMaterial>()
                 .eq(CourseMaterial::getTeachInfoId, id));

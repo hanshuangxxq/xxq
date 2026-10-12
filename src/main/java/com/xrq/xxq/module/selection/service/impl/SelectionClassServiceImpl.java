@@ -20,6 +20,10 @@ import com.xrq.xxq.module.course.entity.Course;
 import com.xrq.xxq.module.course.mapper.CourseMapper;
 import com.xrq.xxq.module.coursework.assignment.entity.CourseAssignment;
 import com.xrq.xxq.module.coursework.assignment.mapper.CourseAssignmentMapper;
+import com.xrq.xxq.module.coursework.video.entity.CourseChapterNode;
+import com.xrq.xxq.module.coursework.video.entity.CourseVideo;
+import com.xrq.xxq.module.coursework.video.mapper.ChapterNodeMapper;
+import com.xrq.xxq.module.coursework.video.mapper.CourseVideoMapper;
 import com.xrq.xxq.module.selection.dto.SelectionClassResponse;
 import com.xrq.xxq.module.selection.dto.StudentSelectionDto;
 import com.xrq.xxq.module.selection.entity.CampaignStatusEnum;
@@ -65,6 +69,8 @@ public class SelectionClassServiceImpl implements SelectionClassService {
     private final ClassScheduleCacheManager classScheduleCacheManager;
     private final ReferenceValidator referenceValidator;
     private final CourseAssignmentMapper courseAssignmentMapper;
+    private final CourseVideoMapper courseVideoMapper;
+    private final ChapterNodeMapper chapterNodeMapper;
 
     @Override
     @Transactional
@@ -184,6 +190,18 @@ public class SelectionClassServiceImpl implements SelectionClassService {
                             new LambdaQueryWrapper<CourseAssignment>()
                                     .eq(CourseAssignment::getTeachInfoId, sc.getTeachInfoId()));
                     if (courseworkCount != null && courseworkCount > 0) {
+                        throw new BusinessException(409, "该授课安排已关联课程内容，无法重建分班");
+                    }
+                    Long videoCount = courseVideoMapper.selectCount(
+                            new LambdaQueryWrapper<CourseVideo>()
+                                    .eq(CourseVideo::getTeachInfoId, sc.getTeachInfoId()));
+                    if (videoCount != null && videoCount > 0) {
+                        throw new BusinessException(409, "该授课安排已关联课程内容，无法重建分班");
+                    }
+                    Long chapterNodeCount = chapterNodeMapper.selectCount(
+                            new LambdaQueryWrapper<CourseChapterNode>()
+                                    .eq(CourseChapterNode::getTeachInfoId, sc.getTeachInfoId()));
+                    if (chapterNodeCount != null && chapterNodeCount > 0) {
                         throw new BusinessException(409, "该授课安排已关联课程内容，无法重建分班");
                     }
                     TeachInfo oldTi = existingTiMap.get(sc.getTeachInfoId());
