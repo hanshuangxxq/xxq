@@ -7,7 +7,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import java.util.regex.Pattern;
 
 /** AOP 层共享的 Web 请求工具：当前请求获取与客户端 IP 解析。 */
-final class WebRequestUtils {
+public final class WebRequestUtils {
 
     /** 前端上报内网 IP 头的合法字符集（IPv4/IPv6，最长 45）。 */
     private static final Pattern PRIVATE_IP_PATTERN = Pattern.compile("[0-9a-fA-F.:]{1,45}");
@@ -24,7 +24,7 @@ final class WebRequestUtils {
     }
 
     /** 客户端 IP：反向代理场景优先取转发头，X-Forwarded-For 多级时取第一个（真实客户端）。 */
-    static String clientIp(HttpServletRequest request) {
+    public static String clientIp(HttpServletRequest request) {
         if (request == null) {
             return "-";
         }
