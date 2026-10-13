@@ -1,7 +1,5 @@
 package com.xrq.xxq.module.coursework.material.controller;
 
-import java.util.List;
-
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -15,6 +13,8 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.xrq.xxq.common.Result;
+import com.xrq.xxq.module.coursework.material.dto.MaterialBrowseView;
+import com.xrq.xxq.module.coursework.material.dto.MaterialMoveRequest;
 import com.xrq.xxq.module.coursework.material.dto.MaterialSaveRequest;
 import com.xrq.xxq.module.coursework.material.dto.MaterialUpdateRequest;
 import com.xrq.xxq.module.coursework.material.dto.MaterialView;
@@ -51,6 +51,14 @@ public class MaterialController {
         return Result.ok(materialService.update(authFacade.currentUserId(request), id, body));
     }
 
+    /** 移动资料(body.folderId 可空 = 根目录;目标文件夹不属本组 404)。 */
+    @PutMapping("/{id}/folder")
+    @RequireTeacher
+    public Result<MaterialView> move(HttpServletRequest request, @PathVariable Long id,
+                                     @RequestBody MaterialMoveRequest body) {
+        return Result.ok(materialService.move(authFacade.currentUserId(request), id, body.getFolderId()));
+    }
+
     @DeleteMapping("/{id}")
     @RequireTeacher
     public Result<Void> delete(HttpServletRequest request, @PathVariable Long id) {
@@ -58,13 +66,12 @@ public class MaterialController {
         return Result.ok();
     }
 
-    @GetMapping
+    /** 逐层浏览(文件夹+资料;根层附未挂节视频数;教师查归属/学生查可见)。 */
+    @GetMapping("/browse")
     @RequireAuth({UserType.TEACHER, UserType.STUDENT})
-    public Result<List<MaterialView>> list(HttpServletRequest request, @RequestParam Long teachInfoId) {
-        Long userId = authFacade.currentUserId(request);
-        if (AuthFacade.USER_TYPE_TEACHER.equals(authFacade.currentUserType(request))) {
-            return Result.ok(materialService.listForTeacher(userId, teachInfoId));
-        }
-        return Result.ok(materialService.listForStudent(userId, teachInfoId));
+    public Result<MaterialBrowseView> browse(HttpServletRequest request, @RequestParam Long teachInfoId,
+                                             @RequestParam(required = false) Long folderId) {
+        return Result.ok(materialService.browse(authFacade.currentUserId(request),
+                authFacade.currentUserType(request), teachInfoId, folderId));
     }
 }

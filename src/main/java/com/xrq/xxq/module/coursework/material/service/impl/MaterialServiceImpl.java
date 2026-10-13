@@ -13,18 +13,26 @@ import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.module.coursework.common.CourseGroupResolver;
 import com.xrq.xxq.module.coursework.common.CourseworkFileSupport;
+import com.xrq.xxq.module.coursework.material.dto.MaterialBrowseView;
+import com.xrq.xxq.module.coursework.material.dto.MaterialFolderView;
 import com.xrq.xxq.module.coursework.material.dto.MaterialSaveRequest;
 import com.xrq.xxq.module.coursework.material.dto.MaterialUpdateRequest;
 import com.xrq.xxq.module.coursework.material.dto.MaterialView;
 import com.xrq.xxq.module.coursework.material.entity.CourseMaterial;
+import com.xrq.xxq.module.coursework.material.entity.CourseMaterialFolder;
+import com.xrq.xxq.module.coursework.material.mapper.CourseMaterialFolderMapper;
 import com.xrq.xxq.module.coursework.material.mapper.CourseMaterialMapper;
+import com.xrq.xxq.module.coursework.material.service.MaterialFolderService;
 import com.xrq.xxq.module.coursework.material.service.MaterialService;
+import com.xrq.xxq.module.coursework.video.service.VideoService;
 import com.xrq.xxq.module.file.dto.StoredFileRef;
 import com.xrq.xxq.module.file.entity.FileBizEnum;
 import com.xrq.xxq.module.teachinfo.entity.TeachInfo;
+import com.xrq.xxq.util.auth.AuthFacade;
 
 import lombok.RequiredArgsConstructor;
 
+/** 课程资料服务实现:平铺列表已下线,读走逐层 browse。 */
 @Service
 @RequiredArgsConstructor
 public class MaterialServiceImpl extends ServiceImpl<CourseMaterialMapper, CourseMaterial>
@@ -32,6 +40,9 @@ public class MaterialServiceImpl extends ServiceImpl<CourseMaterialMapper, Cours
 
     private final CourseGroupResolver groupResolver;
     private final CourseworkFileSupport fileSupport;
+    private final MaterialFolderService materialFolderService;
+    private final CourseMaterialFolderMapper folderMapper;
+    private final VideoService videoService;
 
     /** 从存储路径提取扩展名（含点，小写）；无扩展名返回空串。包级可见供单测。 */
     static String extOf(String storedPath) {
@@ -52,10 +63,15 @@ public class MaterialServiceImpl extends ServiceImpl<CourseMaterialMapper, Cours
         if (req.getTitle() == null || req.getTitle().isBlank()) {
             throw new BusinessException(400, "资料标题不能为空");
         }
+        Long folderId = null;
+        if (req.getFolderId() != null) {
+            folderId = materialFolderService.requireInAnchor(req.getFolderId(), anchor.getId()).getId();
+        }
         StoredFileRef ref = fileSupport.resolveSubmit(req.getFilePath(), file, FileBizEnum.COURSE_MATERIAL, true);
 
         CourseMaterial m = new CourseMaterial();
         m.setTeachInfoId(anchor.getId());
+        m.setFolderId(folderId);
         m.setTitle(req.getTitle().trim());
         m.setDescription(req.getDescription());
         m.setFileName(ref.storedPath());
@@ -88,30 +104,73 @@ public class MaterialServiceImpl extends ServiceImpl<CourseMaterialMapper, Cours
 
     @Override
     @Transactional
+    public MaterialView move(Long teacherUserId, Long id, Long folderId) {
+        CourseMaterial m = requireOwnedMaterial(id, teacherUserId);
+        if (folderId != null) {
+            materialFolderService.requireInAnchor(folderId, m.getTeachInfoId());
+        }
+        m.setFolderId(folderId);
+        baseMapper.updateById(m);
+        return toView(m);
+    }
+
+    @Override
+    @Transactional
     public void delete(Long teacherUserId, Long id) {
         CourseMaterial m = requireOwnedMaterial(id, teacherUserId);
         baseMapper.deleteById(m.getId());
     }
 
     @Override
-    public List<MaterialView> listForTeacher(Long teacherUserId, Long teachInfoId) {
-        TeachInfo anchor = groupResolver.requireOwnedAnchor(teachInfoId, teacherUserId);
-        return listByAnchor(anchor.getId());
+    public MaterialBrowseView browse(Long userId, String userType, Long teachInfoId, Long folderId) {
+        Long anchorId = resolveReadableAnchor(userId, userType, teachInfoId);
+        if (folderId != null) {
+            materialFolderService.requireInAnchor(folderId, anchorId);
+        }
+        MaterialBrowseView v = new MaterialBrowseView();
+        v.setTeachInfoId(anchorId);
+        v.setPath(folderId == null
+                ? List.of()
+                : MaterialFolderServiceImpl.buildPath(allFoldersOfAnchor(anchorId), folderId));
+
+        LambdaQueryWrapper<CourseMaterialFolder> fq = new LambdaQueryWrapper<CourseMaterialFolder>()
+                .eq(CourseMaterialFolder::getTeachInfoId, anchorId)
+                .orderByAsc(CourseMaterialFolder::getId);
+        if (folderId == null) {
+            fq.isNull(CourseMaterialFolder::getParentId);
+        } else {
+            fq.eq(CourseMaterialFolder::getParentId, folderId);
+        }
+        v.setFolders(folderMapper.selectList(fq).stream().map(MaterialFolderView::of).toList());
+
+        LambdaQueryWrapper<CourseMaterial> mq = new LambdaQueryWrapper<CourseMaterial>()
+                .eq(CourseMaterial::getTeachInfoId, anchorId)
+                .orderByDesc(CourseMaterial::getCreateTime)
+                .orderByDesc(CourseMaterial::getId);
+        if (folderId == null) {
+            mq.isNull(CourseMaterial::getFolderId);
+        } else {
+            mq.eq(CourseMaterial::getFolderId, folderId);
+        }
+        v.setMaterials(baseMapper.selectList(mq).stream().map(this::toView).toList());
+        v.setCommonVideoCount(folderId == null ? videoService.countCommon(anchorId) : null);
+        return v;
     }
 
-    @Override
-    public List<MaterialView> listForStudent(Long studentUserId, Long teachInfoId) {
-        groupResolver.assertVisibleToStudent(teachInfoId, studentUserId);
-        TeachInfo anchor = groupResolver.requireAnchor(teachInfoId);
-        return listByAnchor(anchor.getId());
+    /** 读接口的双视角锚点解析:教师查归属 / 学生查可见(与 ChapterNodeServiceImpl.tree 同口径)。 */
+    private Long resolveReadableAnchor(Long userId, String userType, Long teachInfoId) {
+        if (AuthFacade.USER_TYPE_TEACHER.equals(userType)) {
+            return groupResolver.requireOwnedAnchor(teachInfoId, userId).getId();
+        }
+        groupResolver.assertVisibleToStudent(teachInfoId, userId);
+        return groupResolver.requireAnchor(teachInfoId).getId();
     }
 
-    private List<MaterialView> listByAnchor(Long anchorId) {
-        return baseMapper.selectList(new LambdaQueryWrapper<CourseMaterial>()
-                        .eq(CourseMaterial::getTeachInfoId, anchorId)
-                        .orderByDesc(CourseMaterial::getCreateTime)
-                        .orderByDesc(CourseMaterial::getId)).stream()
-                .map(this::toView).toList();
+    /** 锚点下全部未删文件夹(id 升序);文件夹是元数据,量小,面包屑计算基于它。 */
+    private List<CourseMaterialFolder> allFoldersOfAnchor(Long anchorId) {
+        return folderMapper.selectList(new LambdaQueryWrapper<CourseMaterialFolder>()
+                .eq(CourseMaterialFolder::getTeachInfoId, anchorId)
+                .orderByAsc(CourseMaterialFolder::getId));
     }
 
     private CourseMaterial requireOwnedMaterial(Long id, Long teacherUserId) {
@@ -127,6 +186,7 @@ public class MaterialServiceImpl extends ServiceImpl<CourseMaterialMapper, Cours
         MaterialView v = new MaterialView();
         v.setId(m.getId());
         v.setTeachInfoId(m.getTeachInfoId());
+        v.setFolderId(m.getFolderId());
         v.setTitle(m.getTitle());
         v.setDescription(m.getDescription());
         v.setFileName(m.getFileName());

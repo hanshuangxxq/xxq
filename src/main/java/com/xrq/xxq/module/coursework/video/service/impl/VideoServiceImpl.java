@@ -1,11 +1,15 @@
 package com.xrq.xxq.module.coursework.video.service.impl;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.xrq.xxq.common.BusinessException;
 import com.xrq.xxq.module.coursework.common.CourseGroupResolver;
@@ -13,8 +17,10 @@ import com.xrq.xxq.module.coursework.common.CourseworkFileSupport;
 import com.xrq.xxq.module.coursework.video.dto.VideoSaveRequest;
 import com.xrq.xxq.module.coursework.video.dto.VideoUpdateRequest;
 import com.xrq.xxq.module.coursework.video.dto.VideoView;
+import com.xrq.xxq.module.coursework.video.entity.ChapterNodeTypeEnum;
 import com.xrq.xxq.module.coursework.video.entity.CourseChapterNode;
 import com.xrq.xxq.module.coursework.video.entity.CourseVideo;
+import com.xrq.xxq.module.coursework.video.mapper.ChapterNodeMapper;
 import com.xrq.xxq.module.coursework.video.mapper.CourseVideoMapper;
 import com.xrq.xxq.module.coursework.video.service.ChapterNodeService;
 import com.xrq.xxq.module.coursework.video.service.VideoService;
@@ -31,6 +37,7 @@ public class VideoServiceImpl extends ServiceImpl<CourseVideoMapper, CourseVideo
     private final CourseGroupResolver groupResolver;
     private final CourseworkFileSupport fileSupport;
     private final ChapterNodeService chapterNodeService;
+    private final ChapterNodeMapper chapterNodeMapper;
 
     @Override
     @Transactional
@@ -108,6 +115,40 @@ public class VideoServiceImpl extends ServiceImpl<CourseVideoMapper, CourseVideo
             groupResolver.assertVisibleToStudent(v.getTeachInfoId(), userId);
         }
         return VideoView.of(v);
+    }
+
+    @Override
+    public List<VideoView> listCommon(Long userId, String userType, Long teachInfoId) {
+        Long anchorId;
+        if (AuthFacade.USER_TYPE_TEACHER.equals(userType)) {
+            anchorId = groupResolver.requireOwnedAnchor(teachInfoId, userId).getId();
+        } else {
+            groupResolver.assertVisibleToStudent(teachInfoId, userId);
+            anchorId = groupResolver.requireAnchor(teachInfoId).getId();
+        }
+        return listCommonOfAnchor(anchorId).stream().map(VideoView::of).toList();
+    }
+
+    @Override
+    public long countCommon(Long anchorId) {
+        return listCommonOfAnchor(anchorId).size();
+    }
+
+    /**
+     * 公共区 = 未挂节(nodeId 为 null)或挂在已删/不存在节上的孤儿视频。
+     * 与旧章节树 assemble 的兜底语义一致:视频不因章节结构异常而静默消失。
+     * 「公共区」是授课组内部"未挂节"的分组 —— 每个视频仍属于且仅属于某一授课组。
+     */
+    private List<CourseVideo> listCommonOfAnchor(Long anchorId) {
+        Set<Long> liveSectionIds = chapterNodeMapper.selectList(new LambdaQueryWrapper<CourseChapterNode>()
+                        .eq(CourseChapterNode::getTeachInfoId, anchorId)
+                        .eq(CourseChapterNode::getNodeType, ChapterNodeTypeEnum.SECTION)).stream()
+                .map(CourseChapterNode::getId).collect(Collectors.toSet());
+        return baseMapper.selectList(new LambdaQueryWrapper<CourseVideo>()
+                        .eq(CourseVideo::getTeachInfoId, anchorId)
+                        .orderByAsc(CourseVideo::getId)).stream()
+                .filter(v -> v.getNodeId() == null || !liveSectionIds.contains(v.getNodeId()))
+                .toList();
     }
 
     private CourseVideo requireOwnedVideo(Long id, Long teacherUserId) {
