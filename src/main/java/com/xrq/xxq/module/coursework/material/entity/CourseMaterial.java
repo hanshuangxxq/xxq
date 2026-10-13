@@ -2,7 +2,9 @@ package com.xrq.xxq.module.coursework.material.entity;
 
 import java.time.LocalDateTime;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -17,6 +19,7 @@ public class CourseMaterial {
     private Long id;
 
     private Long teachInfoId;
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)   // 移动资料允许把文件夹改回 null(根目录)
     private Long folderId;           // 所在文件夹 course_material_folder.id(NULL=根目录)
     private String title;
     private String description;
