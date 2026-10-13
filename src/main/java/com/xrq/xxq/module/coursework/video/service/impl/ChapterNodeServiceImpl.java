@@ -159,7 +159,8 @@ public class ChapterNodeServiceImpl extends ServiceImpl<ChapterNodeMapper, Cours
 
     /**
      * 树组装（纯函数，供单测）：nodes/videos 需已按 id 升序。
-     * 容错：父章缺失的孤儿节不挂树；挂在缺失节点上的视频与未挂节视频一律落入公共区，不静默消失。
+     * 容错：父章缺失的孤儿节不挂树;挂在缺失节点上的视频与未挂节视频**不进树** ——
+     * 它们由 GET /coursework/videos/common 兜底展示(「课程资料 -> 教学视频」)。
      */
     static ChapterTreeView assemble(List<CourseChapterNode> nodes, List<CourseVideo> videos) {
         Map<Long, ChapterView> chapters = new LinkedHashMap<>();
@@ -177,18 +178,14 @@ public class ChapterNodeServiceImpl extends ServiceImpl<ChapterNodeMapper, Cours
                 chapters.get(n.getParentId()).getSections().add(sv);
             }
         }
-        List<VideoView> common = new ArrayList<>();
         for (CourseVideo v : videos) {
             SectionView bucket = v.getNodeId() == null ? null : sections.get(v.getNodeId());
-            if (bucket == null) {
-                common.add(VideoView.of(v));
-            } else {
+            if (bucket != null) {
                 bucket.getVideos().add(VideoView.of(v));
             }
         }
         ChapterTreeView tree = new ChapterTreeView();
         tree.setChapters(new ArrayList<>(chapters.values()));
-        tree.setCommonVideos(common);
         return tree;
     }
 

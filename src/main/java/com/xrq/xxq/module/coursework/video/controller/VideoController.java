@@ -1,5 +1,7 @@
 package com.xrq.xxq.module.coursework.video.controller;
 
+import java.util.List;
+
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -7,6 +9,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -24,7 +27,7 @@ import com.xrq.xxq.util.auth.UserType;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 
-/** 教学视频端点。播放在 /ws/video/{id}（WS），列表由章节树 /api/coursework/chapters/tree 承担，此处只做元数据管理。 */
+/** 教学视频端点。播放在 /ws/video/{id}（WS），挂节视频列表由章节树承担，未挂节视频见 /common。 */
 @RestController
 @RequestMapping("/api/coursework/videos")
 @RequiredArgsConstructor
@@ -62,5 +65,13 @@ public class VideoController {
     public Result<VideoView> detail(HttpServletRequest request, @PathVariable Long id) {
         return Result.ok(videoService.detail(authFacade.currentUserId(request),
                 authFacade.currentUserType(request), id));
+    }
+
+    /** 未挂节视频列表(「课程资料 -> 教学视频」节点数据源;含孤儿兜底)。 */
+    @GetMapping("/common")
+    @RequireAuth({UserType.TEACHER, UserType.STUDENT})
+    public Result<List<VideoView>> common(HttpServletRequest request, @RequestParam Long teachInfoId) {
+        return Result.ok(videoService.listCommon(authFacade.currentUserId(request),
+                authFacade.currentUserType(request), teachInfoId));
     }
 }

@@ -4,10 +4,9 @@ import java.util.List;
 
 import lombok.Data;
 
-/** 章节树视图：整棵树 + 公共区（未挂节的视频，含存量与孤儿兜底）。 */
+/** 章节树视图:章 -> 节 -> 视频。未挂节视频(公共区)已迁至 GET /coursework/videos/common。 */
 @Data
 public class ChapterTreeView {
 
     private List<ChapterView> chapters;
-    private List<VideoView> commonVideos;
 }

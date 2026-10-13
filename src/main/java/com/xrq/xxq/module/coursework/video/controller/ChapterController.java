@@ -55,7 +55,7 @@ public class ChapterController {
         return Result.ok();
     }
 
-    /** 整棵树 + 公共区视频（教师查归属 / 学生查可见）。 */
+    /** 整棵树（章/节/视频;教师查归属 / 学生查可见）。 */
     @GetMapping("/tree")
     @RequireAuth({UserType.TEACHER, UserType.STUDENT})
     public Result<ChapterTreeView> tree(HttpServletRequest request, @RequestParam Long teachInfoId) {
