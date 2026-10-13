@@ -123,7 +123,10 @@ public class MaterialFolderServiceImpl
         return chain;
     }
 
-    /** 子树全部 id 含 rootId(BFS,纯函数,供单测)。 */
+    /**
+     * 子树全部 id 含 rootId(BFS,纯函数,供单测)。
+     * 防环:脏数据(手工改库)自环/互环时跳过已见节点,不死循环、不重复收集。
+     */
     static List<Long> collectSubtreeIds(List<CourseMaterialFolder> all, Long rootId) {
         Map<Long, List<Long>> childrenOf = new HashMap<>();
         for (CourseMaterialFolder f : all) {
@@ -132,10 +135,14 @@ public class MaterialFolderServiceImpl
             }
         }
         List<Long> ids = new ArrayList<>();
+        Set<Long> seen = new HashSet<>();
         Deque<Long> frontier = new ArrayDeque<>();
         frontier.add(rootId);
         while (!frontier.isEmpty()) {
             Long cur = frontier.poll();
+            if (!seen.add(cur)) {
+                continue;
+            }
             ids.add(cur);
             frontier.addAll(childrenOf.getOrDefault(cur, List.of()));
         }
