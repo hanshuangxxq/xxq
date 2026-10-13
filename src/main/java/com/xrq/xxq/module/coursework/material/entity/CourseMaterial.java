@@ -17,6 +17,7 @@ public class CourseMaterial {
     private Long id;
 
     private Long teachInfoId;
+    private Long folderId;           // 所在文件夹 course_material_folder.id(NULL=根目录)
     private String title;
     private String description;
     private String fileName;         // objects/ 相对路径

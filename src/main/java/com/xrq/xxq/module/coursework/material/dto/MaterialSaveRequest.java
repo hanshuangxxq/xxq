@@ -10,6 +10,9 @@ public class MaterialSaveRequest {
     @NonNull
     private Long teachInfoId;
 
+    /** 所在文件夹 id;空 = 根目录 */
+    private Long folderId;
+
     @NonNull
     private String title;
 
