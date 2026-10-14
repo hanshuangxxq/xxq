@@ -20,7 +20,7 @@ public class CourseMaterial {
 
     private Long teachInfoId;
     @TableField(updateStrategy = FieldStrategy.ALWAYS)   // 移动资料允许把文件夹改回 null(根目录)
-    private Long folderId;           // 所在文件夹 course_material_folder.id(NULL=根目录)
+    private Long folderId;           // 所在文件夹 course_material_folder.id（NULL=根目录）
     private String title;
     private String description;
     private String fileName;         // objects/ 相对路径
