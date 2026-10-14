@@ -140,9 +140,15 @@ public class VideoServiceImpl extends ServiceImpl<CourseVideoMapper, CourseVideo
      * 「公共区」是授课组内部"未挂节"的分组 —— 每个视频仍属于且仅属于某一授课组。
      */
     private List<CourseVideo> listCommonOfAnchor(Long anchorId) {
-        Set<Long> liveSectionIds = chapterNodeMapper.selectList(new LambdaQueryWrapper<CourseChapterNode>()
-                        .eq(CourseChapterNode::getTeachInfoId, anchorId)
-                        .eq(CourseChapterNode::getNodeType, ChapterNodeTypeEnum.SECTION)).stream()
+        // 与 assemble 严格互补:树只挂「父章存活」的节,公共区收其余全部 —— 两者合成视频全集
+        List<CourseChapterNode> nodes = chapterNodeMapper.selectList(new LambdaQueryWrapper<CourseChapterNode>()
+                .eq(CourseChapterNode::getTeachInfoId, anchorId));
+        Set<Long> liveChapterIds = nodes.stream()
+                .filter(n -> n.getNodeType() == ChapterNodeTypeEnum.CHAPTER)
+                .map(CourseChapterNode::getId).collect(Collectors.toSet());
+        Set<Long> liveSectionIds = nodes.stream()
+                .filter(n -> n.getNodeType() == ChapterNodeTypeEnum.SECTION
+                        && n.getParentId() != null && liveChapterIds.contains(n.getParentId()))
                 .map(CourseChapterNode::getId).collect(Collectors.toSet());
         return baseMapper.selectList(new LambdaQueryWrapper<CourseVideo>()
                         .eq(CourseVideo::getTeachInfoId, anchorId)
