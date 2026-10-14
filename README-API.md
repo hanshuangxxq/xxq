@@ -202,7 +202,7 @@ accessToken 由登录接口返回，默认有效期 30 分钟。过期后调用�
 | POST | `/api/coursework/chapters` | 建章 | 教师 | 12.3 |
 | PUT | `/api/coursework/chapters/{id}` | 改章名 | 教师 | 12.3 |
 | DELETE | `/api/coursework/chapters/{id}` | 删章（级联软删节+视频） | 教师 | 12.3 |
-| GET | `/api/coursework/chapters/tree` | 章节树+公共区 | 教师/学生 | 12.3 |
+| GET | `/api/coursework/chapters/tree` | 章节树（挂节视频） | 教师/学生 | 12.3 |
 | POST | `/api/coursework/sections` | 建节（挂章下） | 教师 | 12.3 |
 | PUT | `/api/coursework/sections/{id}` | 改节名 | 教师 | 12.3 |
 | DELETE | `/api/coursework/sections/{id}` | 删节（级联软删视频） | 教师 | 12.3 |
@@ -210,11 +210,17 @@ accessToken 由登录接口返回，默认有效期 30 分钟。过期后调用�
 | PUT | `/api/coursework/videos/{id}` | 改视频元数据/改挂节 | 教师 | 12.3 |
 | DELETE | `/api/coursework/videos/{id}` | 删除视频 | 教师 | 12.3 |
 | GET | `/api/coursework/videos/{id}` | 视频元数据 | 教师/学生 | 12.3 |
+| GET | `/api/coursework/videos/common` | 未挂节视频（公共区） | 教师/学生 | 12.3 |
 | WS | `/ws/video/{videoId}?token=` | 视频流式播放 | 教师/学生 | 12.3 |
-| POST | `/api/coursework/materials` | 上传课程资料 | 教师 | 12.4 |
+| GET | `/api/coursework/materials/browse` | 资料逐层浏览（文件夹+资料） | 教师/学生 | 12.4 |
+| GET | `/api/coursework/material-folders` | 单层子文件夹（移动选择器懒展开） | 教师/学生 | 12.4 |
+| POST | `/api/coursework/material-folders` | 建文件夹 | 教师 | 12.4 |
+| PUT | `/api/coursework/material-folders/{id}` | 改文件夹名（不可换父级） | 教师 | 12.4 |
+| DELETE | `/api/coursework/material-folders/{id}` | 删文件夹（级联软删子树） | 教师 | 12.4 |
+| POST | `/api/coursework/materials` | 上传课程资料（可挂 folderId） | 教师 | 12.4 |
 | PUT | `/api/coursework/materials/{id}` | 改资料元数据 | 教师 | 12.4 |
+| PUT | `/api/coursework/materials/{id}/folder` | 移动资料（null=根目录） | 教师 | 12.4 |
 | DELETE | `/api/coursework/materials/{id}` | 删除资料 | 教师 | 12.4 |
-| GET | `/api/coursework/materials` | 资料列表 | 教师/学生 | 12.4 |
 | POST | `/api/coursework/announcements` | 发布课程公告 | 教师 | 12.5 |
 | PUT | `/api/coursework/announcements/{id}` | 编辑公告（不重复通知） | 教师 | 12.5 |
 | DELETE | `/api/coursework/announcements/{id}` | 删除公告 | 教师 | 12.5 |
@@ -3350,7 +3356,8 @@ curl "http://localhost:8080/api/file/preview?filePath=objects/course-material/<s
 ### 12.3 教学视频（章节树 + WS 流式播放）
 
 视频按教科书式两级树组织：**章（CHAPTER）→ 节（SECTION）→ 视频**，章/节挂授课组锚点
-（同一授课组一套目录），视频必须挂节；未挂节的视频（存量）归入**公共区**。
+（同一授课组一套目录），视频必须挂节；未挂节的视频（存量）归入**公共区**，由
+`GET /api/coursework/videos/common` 承载，展示在前端「课程资料 → 教学视频」节点。
 章/节/视频均无人工排序，一律按 id 升序（创建顺序）。详细字段与示例见 `docs/课程视频章节树协议.md`。
 
 | 方法 | 路径 | 权限 | 说明 |
@@ -3358,7 +3365,7 @@ curl "http://localhost:8080/api/file/preview?filePath=objects/course-material/<s
 | POST | `/api/coursework/chapters` | 教师 | 建章 `{teachInfoId, title}` |
 | PUT | `/api/coursework/chapters/{id}` | 教师 | 改章名 `{title}` |
 | DELETE | `/api/coursework/chapters/{id}` | 教师 | 删章：**级联软删**其下节与视频 |
-| GET | `/api/coursework/chapters/tree?teachInfoId=` | 教师/学生 | 整棵树 + `commonVideos` 公共区 |
+| GET | `/api/coursework/chapters/tree?teachInfoId=` | 教师/学生 | 整棵树（仅挂节视频，不再带 `commonVideos`） |
 | POST | `/api/coursework/sections` | 教师 | 建节 `{chapterId, title}`（节不可换父章） |
 | PUT | `/api/coursework/sections/{id}` | 教师 | 改节名 `{title}` |
 | DELETE | `/api/coursework/sections/{id}` | 教师 | 删节：**级联软删**其下视频 |
@@ -3366,8 +3373,11 @@ curl "http://localhost:8080/api/file/preview?filePath=objects/course-material/<s
 | PUT | `/api/coursework/videos/{id}` | 教师 | 改元数据（标题/描述/时长/`nodeId` 改挂节，限同授课组；**文件不可换**） |
 | DELETE | `/api/coursework/videos/{id}` | 教师 | 软删（产物由回收任务对账清理） |
 | GET | `/api/coursework/videos/{id}` | 教师/学生 | 元数据（WS 播放前置：拿 `size`/`sha256`/`durationSec`） |
+| GET | `/api/coursework/videos/common?teachInfoId=` | 教师/学生 | 未挂节视频（公共区，id 升序，含孤儿兜底） |
 
 原 `GET /api/coursework/videos?teachInfoId=` 平铺列表已**移除**，由 tree 接口取代；`VideoView` 增 `nodeId`、去 `sortNo`。
+tree 响应不再带 `commonVideos`：tree 与公共区**严格互补**——树只挂「父章存活」的节，
+`/videos/common` 收其余全部（未挂节，以及挂在已删/不存在节、父章缺失的节上的孤儿视频），两者合成视频全集。
 
 视频本体走**分片上传**（上限取全局 `file.max-file-size`），扩展名仅放行 `.mp4`。
 时长 `durationSec` 由**客户端解析 MP4 后回传**（服务端不解析视频，不转码）。
@@ -3380,14 +3390,35 @@ curl "http://localhost:8080/api/file/preview?filePath=objects/course-material/<s
 - 一次 `read` 恰好回一帧；尾部短读的帧长小于请求 `length` 属正常；`offset` 越界回 12 字节空头帧
 - 在途 `read` 上限 8，超出回 429 error 帧（减速信号）；单连接限速 32MB/s
 
-### 12.4 课程资料
+### 12.4 课程资料（文件夹树）
+
+资料按**自引用文件夹树**组织：文件夹挂授课组锚点（同一授课组一棵树），`parentId` 空 = 根层，
+任意深度，**不可换父级**（只能改名 / 删除 / 建子级）；资料挂在某层文件夹下（`folderId` 空 = 根目录）。
+文件夹一律按 id 升序（创建顺序），当前层资料按 `createTime` 倒序。
 
 | 方法 | 路径 | 权限 | 说明 |
 |------|------|------|------|
-| POST | `/api/coursework/materials` | 教师 | 上传资料（`data` + `file` 或 `filePath`，必填其一） |
+| GET | `/api/coursework/materials/browse?teachInfoId=&folderId=` | 教师/学生 | 逐层浏览：`path` 面包屑 + 当前层 `folders`/`materials`；根层附 `commonVideoCount` |
+| GET | `/api/coursework/material-folders?teachInfoId=&parentId=` | 教师/学生 | 仅文件夹单层（`parentId` 缺省 = 根层），移动选择器逐层懒展开用 |
+| POST | `/api/coursework/material-folders` | 教师 | 建文件夹 `{teachInfoId, parentId?, title}`（parentId 空 = 根层） |
+| PUT | `/api/coursework/material-folders/{id}` | 教师 | 改名 `{title}`（**仅改名，不可换父级**） |
+| DELETE | `/api/coursework/material-folders/{id}` | 教师 | **级联软删**整棵子树（后代文件夹 + 其中资料行；文件本体交回收任务） |
+| POST | `/api/coursework/materials` | 教师 | 上传资料（`data.folderId?` 缺省/null = 根目录 + `file` 或 `filePath`，必填其一） |
 | PUT | `/api/coursework/materials/{id}` | 教师 | 改元数据（标题/描述） |
+| PUT | `/api/coursework/materials/{id}/folder` | 教师 | 移动 `{folderId}`（null/缺失 = 移回根目录；目标不存在或不属本组 404） |
 | DELETE | `/api/coursework/materials/{id}` | 教师 | 删除（逻辑删） |
-| GET | `/api/coursework/materials?teachInfoId=` | 教师/学生 | 列表 |
+
+原 `GET /api/coursework/materials?teachInfoId=` 平铺列表已**下线**，由 browse 接口取代。
+
+`MaterialBrowseView`：`teachInfoId`（归一后的锚点行 id，前端采纳锚点用）、`path`（根 → 当前层
+面包屑链，根层为空表）、`folders`（当前层子文件夹，id 升序）、`materials`（当前层资料，
+`createTime` 倒序）、`commonVideoCount`（**仅根层非 null**：未挂节视频数，前端据此决定
+「教学视频」虚拟节点显隐，不预拉视频列表）。browse 的 `folderId` 不存在或不属于该授课组 → 404。
+`MaterialView` 增 `folderId`（null = 根目录）。
+
+**表结构**：新增 `course_material_folder`（自引用单表，任意深度，所有层级冗余同一锚点行 id；
+`@TableLogic` 软删）；`course_material` 增 `folder_id`（NULL = 根目录，
+`updateStrategy = ALWAYS`，移动资料允许把文件夹改回 null）。
 
 资料 ≤20MB，放行文档 / PPT / 表格 / PDF / 压缩包 / 图片。**下载走文件模块的
 `POST /api/file/download`**，请求体带列表返回的 `fileName` 作为 `filePath`。
