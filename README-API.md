@@ -1,6 +1,10 @@
 # xxq API 文档
 
+<a id="sec-1"></a>
+
 ## 1. 概述
+
+<a id="sec-1-1"></a>
 
 ### 1.1 统一响应格式
 
@@ -23,6 +27,8 @@
 | 404  | 资源不存在 |
 | 409  | 冲突（重复注册等） |
 | 500  | 服务端错误 |
+
+<a id="sec-1-2"></a>
 
 ### 1.2 认证机制
 
@@ -75,374 +81,376 @@ accessToken 由登录接口返回，默认有效期 30 分钟。过期后调用�
 
 ---
 
+<a id="sec-2"></a>
+
 ## 2. 接口总览
 
 | 方法 | 路径 | 说明 | 认证 | 章节 |
 |------|------|------|------|------|
-| POST | `/api/register` | 账号注册（需已登录） | 是 | 3.1 |
-| POST | `/api/login` | 登录（账号 / 微信 / QQ / 支付宝） | 否 | 3.2 |
-| POST | `/api/login/refresh` | 刷新 accessToken | 否 | 3.3 |
-| POST | `/api/login/logout` | 登出 | 是 | 3.4 |
-| POST | `/api/password/change` | 修改密码 | 是 | 3.5 |
-| GET | `/api/user/profile` | 查询个人信息 | 是 | 4.1 |
-| PUT | `/api/user/profile` | 修改个人信息 | 是 | 4.2 |
-| POST | `/api/user/avatar/upload` | 上传头像 | 是 | 4.3 |
-| GET | `/api/avatar/{filename}` | 获取头像图片 | 是 | 4.4 |
-| WS | `/ws/avatar` | 头像 WebSocket 拉取（可选） | 否 | 4.4.1 |
-| GET | `/api/teachers` | 查询全部教师 | 是 | 4.8 |
-| GET | `/api/colleges` | 查询全部院系 | 是 | 4.9 |
-| POST | `/api/colleges` | 新增院系 | 是 | 4.9 |
-| PUT | `/api/colleges/{id}` | 修改院系 | 是 | 4.9 |
-| DELETE | `/api/colleges/{id}` | 删除院系 | 是 | 4.9 |
-| GET | `/api/grades` | 查询全部年级 | 是 | 4.10 |
-| GET | `/api/grades/{id}` | 查询单个年级 | 是 | 4.10 |
-| POST | `/api/grades` | 新增年级 | 是 | 4.10 |
-| PUT | `/api/grades/{id}` | 修改年级 | 是 | 4.10 |
-| DELETE | `/api/grades/{id}` | 删除年级 | 是 | 4.10 |
-| GET | `/api/courses` | 查询全部课程 | 是 | 5.5 |
-| GET | `/api/courses/{id}` | 查询单个课程 | 是 | 5.5 |
-| POST | `/api/courses` | 新增课程 | 是 | 5.5 |
-| PUT | `/api/courses/{id}` | 修改课程 | 是 | 5.5 |
-| DELETE | `/api/courses/{id}` | 删除课程 | 是 | 5.5 |
-| GET | `/api/class-names` | 查询全部班级 | 是 | 5.6 |
-| GET | `/api/class-names/{id}` | 查询单个班级 | 是 | 5.6 |
-| GET | `/api/class-names/department` | 查询本院系班级 | 是 | 5.6 |
-| POST | `/api/class-names` | 新增班级 | 是 | 5.6 |
-| PUT | `/api/class-names/{id}` | 修改班级 | 是 | 5.6 |
-| DELETE | `/api/class-names/{id}` | 删除班级 | 是 | 5.6 |
-| GET | `/api/locals` | 查询全部上课地点 | 是 | 5.7 |
-| GET | `/api/locals/{id}` | 查询单个上课地点 | 是 | 5.7 |
-| POST | `/api/locals` | 新增上课地点 | 是 | 5.7 |
-| PUT | `/api/locals/{id}` | 修改上课地点 | 是 | 5.7 |
-| DELETE | `/api/locals/{id}` | 删除上课地点 | 是 | 5.7 |
-| GET | `/api/teach-info` | 查询教学信息列表（脱敏） | 是 | 5.1 |
-| GET | `/api/teach-info/{id}` | 查询单条教学信息（脱敏） | 是 | 5.2 |
-| GET | `/api/teach-info/class-courses` | 查询本班课程速览 | 是 | 5.3 |
-| GET | `/api/teach-info/week-schedule` | 学生查询指定周次课表（Redis缓存） | 是 | 5.9 |
-| POST | `/api/teach-info` | 新增授课安排 | 是 | 5.4 |
-| PUT | `/api/teach-info/{id}` | 修改授课安排 | 是 | 5.4 |
-| DELETE | `/api/teach-info/{id}` | 删除授课安排 | 是 | 5.4 |
-| POST | `/api/teach-info/draft` | 批量提交授课草稿到缓存 | 是 | 5.8 |
-| GET | `/api/teach-info/draft` | 查看缓存中的草稿（按角色过滤） | 是 | 5.8 |
-| GET | `/api/teach-info/draft/classes` | 查看草稿班级汇总（按角色过滤） | 是 | 5.8 |
-| DELETE | `/api/teach-info/draft` | 清空全部草稿 | 是 | 5.8 |
-| DELETE | `/api/teach-info/draft/item` | 按唯一键删除单条草稿 | 是 | 5.8 |
-| DELETE | `/api/teach-info/draft/{className}` | 按班级移除草稿 | 是 | 5.8 |
-| GET | `/api/time` | 查询全部时间段 | 是 | 6.1 |
-| GET | `/api/time/{id}` | 查询单个时间段 | 是 | 6.2 |
-| GET | `/api/time-restrictions` | 查询全部时段限制 | 是 | 7.2 |
-| GET | `/api/time-restrictions/{id}` | 查询单条时段限制 | 是 | 7.3 |
-| POST | `/api/time-restrictions` | 新增时段限制 | 是 | 7.4 |
-| PUT | `/api/time-restrictions/{id}` | 修改时段限制 | 是 | 7.5 |
-| DELETE | `/api/time-restrictions/{id}` | 删除时段限制 | 是 | 7.6 |
-| POST | `/api/academic/batch-import` | 批量导入学生和教师 | 是 | 4.5 |
-| POST | `/api/academic/batch-import/file` | Excel 批量导入（.xlsx，列序见模板） | 是 | 4.5 |
-| GET | `/api/academic/batch-import/template` | 下载导入模板 | 是 | 4.5 |
-| GET | `/api/majors` | 查询全部专业 | 是 | 4.7 |
-| POST | `/api/majors` | 新增专业 | 是 | 4.7 |
-| PUT | `/api/majors/{id}` | 修改专业 | 是 | 4.7 |
-| DELETE | `/api/majors/{id}` | 删除专业 | 是 | 4.7 |
-| GET | `/api/students` | 查询学生列表（支持筛选） | 是 | 4.6 |
-| PUT | `/api/students/{id}` | 修改学生信息 | 是 | 4.6 |
-| POST | `/api/scheduling/solve` | 触发自动排课 | 是 | 8.1 |
-| GET | `/api/scheduling/solution/{scheduleId}` | 查询排课方案 | 是 | 8.2 |
-| POST | `/api/scheduling/stop/{scheduleId}` | 停止排课 | 是 | 8.3 |
-| GET | `/api/semester` | 查询全部学期 | 是 | 9 |
-| GET | `/api/semester/current` | 查询当前学期 | 是 | 9 |
-| POST | `/api/semester` | 新增学期 | 是 | 9 |
-| PUT | `/api/semester/{id}` | 修改学期 | 是 | 9 |
-| DELETE | `/api/semester/{id}` | 删除学期 | 是 | 9 |
-| POST | `/api/selection/campaigns` | 新建选课活动（含课程字段） | 是 | 10.2.1 |
-| GET | `/api/selection/campaigns` | 查询全部选课活动 | 是 | 10.2.2 |
-| GET | `/api/selection/campaigns/{id}` | 查询选课活动详情 | 是 | 10.2.3 |
-| PUT | `/api/selection/campaigns/{id}` | 修改选课活动（含课程字段） | 是 | 10.2.4 |
-| DELETE | `/api/selection/campaigns/{id}` | 删除选课活动 | 是 | 10.2.5 |
-| POST | `/api/selection/campaigns/{id}/open` | 开启选课 | 是 | 10.2.6 |
-| POST | `/api/selection/campaigns/{id}/close` | 关闭选课 | 是 | 10.2.7 |
-| POST | `/api/selection/campaigns/{id}/finalize` | 分班 | 是 | 10.2.8 |
-| POST | `/api/selection/groups` | 新建选课组 | 是 | 10.3.1 |
-| GET | `/api/selection/groups` | 查询全部选课组 | 是 | 10.3.2 |
-| GET | `/api/selection/groups/{groupId}` | 查询选课组详情 | 是 | 10.3.3 |
-| PUT | `/api/selection/groups/{groupId}` | 修改选课组 | 是 | 10.3.4 |
-| DELETE | `/api/selection/groups/{groupId}` | 删除选课组 | 是 | 10.3.5 |
-| GET | `/api/selection/groups/{groupId}/bindable-campaigns` | 查询可绑定到本组的活动 | 是 | 10.3.6 |
-| GET | `/api/selection/campaigns/{campaignId}/classes` | 查询分班结果 | 是 | 10.4 |
-| PUT | `/api/selection/campaigns/{campaignId}/classes/{classId}/teacher` | 为选课班分配 / 取消教师 | 是 | 10.4.1 |
-| GET | `/api/selection/student/campaigns` | 学生查询可选课活动 | 是 | 10.5.1 |
-| GET | `/api/selection/student/campaigns/{campaignId}` | 学生查询活动详情 | 是 | 10.5.2 |
-| POST | `/api/selection/student/records` | 选课 | 是 | 10.5.3 |
-| DELETE | `/api/selection/student/records/{recordId}` | 退选 | 是 | 10.5.4 |
-| GET | `/api/selection/student/records` | 查询我的选课记录 | 是 | 10.5.5 |
-| POST | `/api/file/uploads` | 初始化 / 恢复分片上传会话（幂等，可秒传） | 是 | 11.1 |
-| PUT | `/api/file/uploads/{uploadId}/parts/{index}` | 上传一个分片（裸二进制 + X-Chunk-SHA256 头） | 是 | 11.1 |
-| POST | `/api/file/uploads/{uploadId}/complete` | 合并分片为成品（幂等） | 是 | 11.1 |
-| GET | `/api/file/uploads/{uploadId}` | 查询上传进度 | 是 | 11.1 |
-| POST | `/api/file/uploads/{uploadId}/verify` | 校验已收分片，返回缺失 / 损坏清单 | 是 | 11.1 |
-| DELETE | `/api/file/uploads/{uploadId}` | 取消上传 | 是 | 11.1 |
-| POST | `/api/file/whole` | 小文件整传（multipart：biz + file） | 是 | 11.1 |
-| POST | `/api/file/download` | 通用下载（POST 传路径，支持 Range → 206） | 是 | 11.1 |
-| GET | `/api/file/preview` | 在线预览（inline + Range 懒加载 → 206，类型白名单） | 是 | 11.6 |
-| GET | `/api/file/preview/info` | 预览元信息（大小 / 类型 / 可预览性） | 是 | 11.6 |
-| POST | `/api/practice/graduation/theses/duplicate-checks` | 登记查重结果（multipart，可附查重报告） | 是 | 11.5 |
-| GET | `/api/practice/graduation/theses/duplicate-checks/{checkId}/download` | 查重报告下载 | 是 | 11.5 |
-| POST | `/api/practice/graduation/campaigns/{id}/materials` | 上传活动资料 | 是 | 11.5 |
-| GET | `/api/practice/graduation/campaigns/{id}/materials` | 活动资料列表 | 是 | 11.5 |
-| GET | `/api/practice/graduation/campaigns/{id}/materials/{mid}/download` | 活动资料下载 | 是 | 11.5 |
-| DELETE | `/api/practice/graduation/campaigns/{id}/materials/{mid}` | 删除活动资料 | 是 | 11.5 |
-| POST | `/api/practice/graduation/defense/{id}/material` | 上传 / 替换答辩材料 | 是 | 11.5 |
-| GET | `/api/practice/graduation/defense/{id}/material/download` | 答辩材料下载 | 是 | 11.5 |
-| POST | `/api/practice/competitions/results/{id}/certificate` | 上传 / 替换获奖证书 | 是 | 11.5 |
-| GET | `/api/practice/competitions/results/{id}/certificate/download` | 获奖证书下载 | 是 | 11.5 |
-| POST | `/api/coursework/question-bank` | 题库录入 | 教师 | 12.2 |
-| GET | `/api/coursework/question-bank` | 题库分页（courseId/campaignId/type/keyword 筛选） | 教师 | 12.2 |
-| PUT | `/api/coursework/question-bank/{id}` | 题库修改 | 教师 | 12.2 |
-| DELETE | `/api/coursework/question-bank/{id}` | 题库软删 | 教师 | 12.2 |
-| POST | `/api/coursework/assignments` | 新建作业 | 教师 | 12.2 |
-| PUT | `/api/coursework/assignments/{id}` | 修改作业（JSON） | 教师 | 12.2 |
-| POST | `/api/coursework/assignments/{id}/attachment` | 替换作业附件 | 教师 | 12.2 |
-| POST | `/api/coursework/assignments/{id}/clone` | 克隆到其它授课组 `{teachInfoId, deadline}` | 教师 | 12.2 |
-| DELETE | `/api/coursework/assignments/{id}` | 删除作业（仅草稿） | 教师 | 12.2 |
-| POST | `/api/coursework/assignments/{id}/publish` | 发布作业 | 教师 | 12.2 |
-| POST | `/api/coursework/assignments/{id}/close` | 关闭作业 | 教师 | 12.2 |
-| GET | `/api/coursework/assignments` | 作业列表（教师/学生双视角） | 教师/学生 | 12.2 |
-| GET | `/api/coursework/assignments/{id}` | 作业详情 | 教师/学生 | 12.2 |
-| GET | `/api/coursework/assignments/{id}/submissions` | 提交名单（含未交，五态 state） | 教师 | 12.2 |
-| POST | `/api/coursework/assignments/{id}/submit` | 提交 / 重交作业（纯 JSON 逐题作答） | 学生 | 12.2 |
-| PUT | `/api/coursework/assignments/{id}/draft` | 暂存作答草稿（仅 Redis） | 学生 | 12.2 |
-| GET | `/api/coursework/assignments/{id}/my-submission` | 我的提交 | 学生 | 12.2 |
-| GET | `/api/coursework/submissions/{id}` | 单份提交详情（含标准答案） | 教师 | 12.2 |
-| POST | `/api/coursework/submissions/{id}/grade` | 逐题批改（仅大题可改判） | 教师 | 12.2 |
-| POST | `/api/coursework/chapters` | 建章 | 教师 | 12.3 |
-| PUT | `/api/coursework/chapters/{id}` | 改章名 | 教师 | 12.3 |
-| DELETE | `/api/coursework/chapters/{id}` | 删章（级联软删节+视频） | 教师 | 12.3 |
-| GET | `/api/coursework/chapters/tree` | 章节树（挂节视频） | 教师/学生 | 12.3 |
-| POST | `/api/coursework/sections` | 建节（挂章下） | 教师 | 12.3 |
-| PUT | `/api/coursework/sections/{id}` | 改节名 | 教师 | 12.3 |
-| DELETE | `/api/coursework/sections/{id}` | 删节（级联软删视频） | 教师 | 12.3 |
-| POST | `/api/coursework/videos` | 登记教学视频（挂节） | 教师 | 12.3 |
-| PUT | `/api/coursework/videos/{id}` | 改视频元数据/改挂节 | 教师 | 12.3 |
-| DELETE | `/api/coursework/videos/{id}` | 删除视频 | 教师 | 12.3 |
-| GET | `/api/coursework/videos/{id}` | 视频元数据 | 教师/学生 | 12.3 |
-| GET | `/api/coursework/videos/common` | 未挂节视频（公共区） | 教师/学生 | 12.3 |
-| WS | `/ws/video/{videoId}?token=` | 视频流式播放 | 教师/学生 | 12.3 |
-| GET | `/api/coursework/materials/browse` | 资料逐层浏览（文件夹+资料） | 教师/学生 | 12.4 |
-| GET | `/api/coursework/material-folders` | 单层子文件夹（移动选择器懒展开） | 教师/学生 | 12.4 |
-| POST | `/api/coursework/material-folders` | 建文件夹 | 教师 | 12.4 |
-| PUT | `/api/coursework/material-folders/{id}` | 改文件夹名（不可换父级） | 教师 | 12.4 |
-| DELETE | `/api/coursework/material-folders/{id}` | 删文件夹（级联软删子树） | 教师 | 12.4 |
-| POST | `/api/coursework/materials` | 上传课程资料（可挂 folderId） | 教师 | 12.4 |
-| PUT | `/api/coursework/materials/{id}` | 改资料元数据 | 教师 | 12.4 |
-| PUT | `/api/coursework/materials/{id}/folder` | 移动资料（null=根目录） | 教师 | 12.4 |
-| DELETE | `/api/coursework/materials/{id}` | 删除资料 | 教师 | 12.4 |
-| POST | `/api/coursework/announcements` | 发布课程公告 | 教师 | 12.5 |
-| PUT | `/api/coursework/announcements/{id}` | 编辑公告（不重复通知） | 教师 | 12.5 |
-| DELETE | `/api/coursework/announcements/{id}` | 删除公告 | 教师 | 12.5 |
-| GET | `/api/coursework/announcements` | 公告列表 | 教师/学生 | 12.5 |
-| POST | `/api/coursework/teach-infos/{id}/regular-score/sync` | 作业成绩合成平时分 | 教师 | 12.6 |
-| PUT | `/api/scores/config/{teachInfoId}` | 设置平时分占比 | 是 | 13.4 |
-| GET | `/api/scores/config/{teachInfoId}` | 查询平时分占比 | 是 | 13.4 |
-| GET | `/api/scores/roster/{teachInfoId}` | 查询成绩录入名单 | 是 | 13.5 |
-| POST | `/api/scores` | 批量录入成绩 | 是 | 13.6 |
-| PUT | `/api/scores/{id}` | 修改单条成绩 | 是 | 13.6 |
-| GET | `/api/scores` | 按授课安排查询成绩 | 是 | 13.7 |
-| GET | `/api/scores/my` | 查询我的成绩 | 学生 | 13.7 |
-| GET | `/api/scores/my/semesters` | 查询我有成绩的学期 | 学生 | 13.7 |
-| GET | `/api/scores/statistics` | 成绩分布统计 | 是 | 13.8 |
-| GET | `/api/scores/export` | 导出成绩单（Excel / PDF） | 是 | 13.9 |
-| POST | `/api/scores/reviews` | 提交成绩复核申请 | 学生 | 13.10 |
-| GET | `/api/scores/reviews/my` | 查询我的复核申请 | 学生 | 13.10 |
-| GET | `/api/scores/reviews` | 复核待办列表 | 教师/教务 | 13.10 |
-| POST | `/api/scores/reviews/{id}/reply` | 教师回复复核 | 教师 | 13.10 |
-| POST | `/api/scores/reviews/{id}/escalate` | 复核升级到教务 | 学生 | 13.10 |
-| POST | `/api/scores/reviews/{id}/resolve` | 教务终审复核 | 教务 | 13.10 |
-| POST | `/api/exams` | 安排期末 / 期中考试 | 教务 | 14.3 |
-| PUT | `/api/exams/{id}` | 修改考试 | 教务 | 14.3 |
-| DELETE | `/api/exams/{id}` | 删除考试 | 教务 | 14.3 |
-| GET | `/api/exams` | 考试分页列表 | 教务 | 14.4 |
-| GET | `/api/exams/class-courses` | 按班级查可排考课程 | 教务 | 14.4 |
-| GET | `/api/exams/teacher` | 教师查询相关考试 | 教师 | 14.5 |
-| GET | `/api/exams/my` | 学生查询我的考试 | 学生 | 14.5 |
-| GET | `/api/exams/makeup/candidates` | 补考候选（不及格）名单 | 教务 | 14.6 |
-| POST | `/api/exams/makeup` | 建补考 / 重修考试 | 教务 | 14.6 |
-| GET | `/api/exams/makeup` | 补考 / 重修考试列表 | 教务 | 14.6 |
-| POST | `/api/exams/{examId}/grades` | 录入补考 / 重修成绩 | 教师/教务 | 14.7 |
-| GET | `/api/analysis/scores/distribution` | 成绩分数段分布 | 教师/院系/教务 | 15.1 |
-| GET | `/api/analysis/scores/trend` | 课程跨学期成绩趋势 | 教师/院系/教务 | 15.1 |
-| GET | `/api/analysis/scores/comparison` | 同课程班级横向对比 | 教师/院系/教务 | 15.1 |
-| GET | `/api/analysis/warnings/config` | 查询预警阈值配置 | 教务 | 15.2 |
-| PUT | `/api/analysis/warnings/config` | 更新预警阈值配置 | 教务 | 15.2 |
-| POST | `/api/analysis/warnings/scan` | 触发学业预警扫描 | 教务 | 15.2 |
-| GET | `/api/analysis/warnings` | 学业预警看板 | 教务/院系 | 15.2 |
-| GET | `/api/analysis/warnings/me` | 我的学业预警 | 学生 | 15.2 |
-| POST | `/api/analysis/evaluation-items` | 新建评教指标 | 教务 | 15.3 |
-| GET | `/api/analysis/evaluation-items` | 评教指标列表 | 教务 | 15.3 |
-| PUT | `/api/analysis/evaluation-items/{id}` | 修改评教指标 | 教务 | 15.3 |
-| DELETE | `/api/analysis/evaluation-items/{id}` | 删除评教指标 | 教务 | 15.3 |
-| POST | `/api/analysis/evaluation-templates` | 创建评教模板 | 教务 | 15.4 |
-| GET | `/api/analysis/evaluation-templates` | 评教模板列表 | 教务 | 15.4 |
-| GET | `/api/analysis/evaluation-templates/{id}` | 评教模板详情 | 教务 | 15.4 |
-| PUT | `/api/analysis/evaluation-templates/{id}` | 修改评教模板 | 教务 | 15.4 |
-| DELETE | `/api/analysis/evaluation-templates/{id}` | 删除评教模板 | 教务 | 15.4 |
-| PUT | `/api/analysis/evaluation-templates/{id}/default` | 设为全局默认模板 | 教务 | 15.4 |
-| PUT | `/api/analysis/evaluation-templates/{id}/status` | 启用 / 停用评教模板 | 教务 | 15.4 |
-| PUT | `/api/analysis/evaluation-templates/override/{teachInfoId}` | 设置 / 清除课程级模板覆盖 | 教务 | 15.4 |
-| GET | `/api/analysis/evaluation-templates/override/{teachInfoId}` | 查询课程级模板覆盖 | 教务 | 15.4 |
-| GET | `/api/analysis/evaluations/form` | 获取评教表单 | 是 | 15.5 |
-| POST | `/api/analysis/evaluations` | 提交评教 | 学生 | 15.5 |
-| GET | `/api/analysis/evaluations/my` | 我的评教 | 学生 | 15.5 |
-| POST | `/api/analysis/evaluations/period/open` | 开启评教周期 | 教务 | 15.5 |
-| POST | `/api/analysis/evaluations/period/close` | 关闭评教周期 | 教务 | 15.5 |
-| GET | `/api/analysis/evaluations/period` | 查询评教周期状态 | 是 | 15.5 |
-| GET | `/api/analysis/teacher-quality/me` | 我的教学质量 | 教师 | 15.6 |
-| GET | `/api/analysis/teacher-quality/{teacherId}` | 指定教师教学质量 | 教务/院系/教师 | 15.6 |
-| GET | `/api/analysis/teacher-quality` | 教师质量列表 / 对比 | 教务/院系 | 15.6 |
-| GET | `/api/analysis/progress/me` | 我的学习进度 | 学生 | 15.7 |
-| GET | `/api/analysis/progress/{studentUserId}` | 指定学生学习进度 | 教务/院系 | 15.7 |
-| GET | `/api/analysis/profile/me` | 我的学生画像 | 学生 | 15.8 |
-| GET | `/api/analysis/profile/{studentUserId}` | 指定学生画像 | 教务/院系 | 15.8 |
-| GET | `/api/analysis/class-analysis` | 班级 / 专业成绩聚合 | 教务/院系 | 15.8 |
-| GET | `/api/analysis/class-analysis/trend` | 单组跨学期趋势 | 教务/院系 | 15.8 |
-| GET | `/api/notification/unread-count` | 未读消息数 | 是 | 16.2 |
-| GET | `/api/notification/list` | 消息列表 | 是 | 16.3 |
-| PUT | `/api/notification/{id}/read` | 标记单点消息已读 | 是 | 16.4 |
-| PUT | `/api/notification/broadcast/{id}/read` | 标记广播消息已读 | 是 | 16.5 |
-| PUT | `/api/notification/read-all` | 全部已读 | 是 | 16.6 |
-| DELETE | `/api/notification/{id}` | 删除单点消息 | 是 | 16.7 |
-| POST | `/api/notification/send` | 发送单点消息 | 教务/院系 | 16.8 |
-| WS | `/ws/notification?token=` | 站内消息实时推送 | 是 | 16.9 |
-| POST | `/api/practice/graduation/campaigns` | 创建毕设活动 | 教务 | 17.2.2 |
-| PUT | `/api/practice/graduation/campaigns/{id}` | 更新毕设活动 | 教务 | 17.2.2 |
-| PUT | `/api/practice/graduation/campaigns/{id}/status` | 变更毕设活动状态 | 教务 | 17.2.2 |
-| GET | `/api/practice/graduation/campaigns` | 毕设活动分页列表 | 教务 | 17.2.2 |
-| GET | `/api/practice/graduation/campaigns/{id}` | 毕设活动详情 | 四角色 | 17.2.2 |
-| GET | `/api/practice/graduation/campaigns/available` | 我可参与的毕设活动 | 学生 | 17.2.2 |
-| GET | `/api/practice/graduation/campaigns/selector` | 毕设活动选择器 | 教师/院系 | 17.2.2 |
-| GET | `/api/practice/graduation/campaigns/{id}/detail` | 毕设活动教务详情 | 教务 | 17.2.2 |
-| POST | `/api/practice/graduation/campaigns/{id}/materials` | 上传毕设活动资料 | 教务 | 17.2.3 |
-| GET | `/api/practice/graduation/campaigns/{id}/materials` | 毕设活动资料列表 | 四角色 | 17.2.3 |
-| GET | `/api/practice/graduation/campaigns/{id}/materials/{mid}/download` | 毕设活动资料下载 | 四角色 | 17.2.3 |
-| DELETE | `/api/practice/graduation/campaigns/{id}/materials/{mid}` | 删除毕设活动资料 | 教务 | 17.2.3 |
-| POST | `/api/practice/graduation/proposals` | 提交 / 重提选题申请 | 学生 | 17.2.4 |
-| PUT | `/api/practice/graduation/proposals/{id}/review/dept` | 选题院系初审 | 院系 | 17.2.4 |
-| PUT | `/api/practice/graduation/proposals/{id}/review/academic` | 选题教务终审 | 教务 | 17.2.4 |
-| GET | `/api/practice/graduation/proposals/my` | 我的选题申请 | 学生 | 17.2.4 |
-| GET | `/api/practice/graduation/proposals/pending/dept` | 院系待初审队列 | 院系 | 17.2.4 |
-| GET | `/api/practice/graduation/proposals/pending/academic` | 教务待终审队列 | 教务 | 17.2.4 |
-| POST | `/api/practice/graduation/assignments/picks` | 教师自选学生 | 教师 | 17.2.5 |
-| DELETE | `/api/practice/graduation/assignments/picks/{id}` | 教师放弃自选 | 教师 | 17.2.5 |
-| POST | `/api/practice/graduation/assignments/allocations` | 院系指定分配 | 院系 | 17.2.5 |
-| POST | `/api/practice/graduation/assignments/reassigns` | 院系改派 | 院系 | 17.2.5 |
-| GET | `/api/practice/graduation/assignments/teacher/pool` | 教师自选池 | 教师 | 17.2.5 |
-| GET | `/api/practice/graduation/assignments/my` | 我的师生匹配 | 学生/教师 | 17.2.5 |
-| GET | `/api/practice/graduation/assignments/overview` | 分配总览 | 教务 | 17.2.5 |
-| GET | `/api/practice/graduation/assignments/unassigned` | 未分配学生清单 | 教务/院系 | 17.2.5 |
-| POST | `/api/practice/graduation/process/opening-reports` | 提交 / 重提开题报告 | 学生 | 17.2.6 |
-| PUT | `/api/practice/graduation/process/opening-reports/{id}/review` | 审核开题报告 | 教师 | 17.2.6 |
-| GET | `/api/practice/graduation/process/opening-reports/my` | 我的开题报告 | 学生 | 17.2.6 |
-| GET | `/api/practice/graduation/process/opening-reports/teacher` | 名下学生开题报告 | 教师 | 17.2.6 |
-| GET | `/api/practice/graduation/process/opening-reports/{id}/download` | 开题报告下载 | 四角色 | 17.2.6 |
-| POST | `/api/practice/graduation/process/midterms` | 提交 / 重提中期检查 | 学生 | 17.2.6 |
-| PUT | `/api/practice/graduation/process/midterms/{id}/review` | 评审中期检查 | 教师 | 17.2.6 |
-| GET | `/api/practice/graduation/process/midterms/my` | 我的中期检查 | 学生 | 17.2.6 |
-| GET | `/api/practice/graduation/process/midterms/teacher` | 名下学生中期检查 | 教师 | 17.2.6 |
-| GET | `/api/practice/graduation/process/midterms/{id}/download` | 中期检查下载 | 四角色 | 17.2.6 |
-| POST | `/api/practice/graduation/process/guidance-logs` | 记录指导日志 | 教师 | 17.2.6 |
-| GET | `/api/practice/graduation/process/guidance-logs` | 指导记录查询 | 教师/院系/教务 | 17.2.6 |
-| POST | `/api/practice/graduation/theses` | 提交 / 重提论文 | 学生 | 17.2.7 |
-| PUT | `/api/practice/graduation/theses/{id}/review` | 论文形式审查 | 教师 | 17.2.7 |
-| GET | `/api/practice/graduation/theses/my` | 我的论文（全部版本） | 学生 | 17.2.7 |
-| GET | `/api/practice/graduation/theses/teacher` | 名下学生论文 | 教师 | 17.2.7 |
-| GET | `/api/practice/graduation/theses/campaign` | 活动内论文 | 教务 | 17.2.7 |
-| GET | `/api/practice/graduation/theses/export-package` | 导出查重数据包 | 教务 | 17.2.7 |
-| GET | `/api/practice/graduation/theses/{id}/download` | 论文下载 | 四角色 | 17.2.7 |
-| POST | `/api/practice/graduation/theses/duplicate-checks` | 登记查重结果 | 教务 | 17.2.8 |
-| GET | `/api/practice/graduation/theses/{id}/duplicate-checks` | 论文查重记录 | 四角色 | 17.2.8 |
-| GET | `/api/practice/graduation/theses/duplicate-checks/{checkId}/download` | 查重报告下载 | 四角色 | 17.2.8 |
-| POST | `/api/practice/graduation/defense/arrange` | 安排 / 更新答辩 | 院系 | 17.2.9 |
-| GET | `/api/practice/graduation/defense/list` | 答辩安排列表 | 教务/院系/学生 | 17.2.9 |
-| POST | `/api/practice/graduation/defense/{id}/material` | 上传 / 替换答辩材料 | 教务/院系 | 17.2.9 |
-| GET | `/api/practice/graduation/defense/{id}/material/download` | 答辩材料下载 | 学生/院系/教务 | 17.2.9 |
-| POST | `/api/practice/graduation/defense/scores/advisor` | 录入指导分 | 教师 | 17.2.10 |
-| GET | `/api/practice/graduation/defense/scores/advisor` | 指导分录入列表 | 教师 | 17.2.10 |
-| POST | `/api/practice/graduation/defense/scores/reviewer` | 录入评阅分 | 教师 | 17.2.10 |
-| GET | `/api/practice/graduation/defense/scores/reviewer` | 评阅分录入列表 | 教师 | 17.2.10 |
-| POST | `/api/practice/graduation/defense/scores/defense` | 录入答辩分 | 教务/院系 | 17.2.10 |
-| POST | `/api/practice/graduation/defense/scores/confirm` | 确认并发布总评 | 院系 | 17.2.10 |
-| GET | `/api/practice/graduation/defense/scores` | 毕设成绩列表 | 四角色 | 17.2.10 |
-| GET | `/api/practice/graduation/defense/scores/my` | 我的毕设成绩 | 学生 | 17.2.10 |
-| GET | `/api/practice/graduation/defense/scores/export` | 导出成绩总表 | 教务 | 17.2.10 |
-| GET | `/api/practice/graduation/dashboard/{campaignId}` | 毕设看板 | 教务/院系 | 17.2.11 |
-| GET | `/api/practice/graduation/dashboard/{campaignId}/export` | 毕设看板导出 | 教务/院系 | 17.2.11 |
-| GET | `/api/practice/graduation/dashboard/{campaignId}/logs` | 操作日志分页 | 教务 | 17.2.11 |
-| POST | `/api/practice/internships` | 发布实习项目 | 院系 | 17.3.1 |
-| PUT | `/api/practice/internships/{id}` | 更新实习项目 | 院系/教务 | 17.3.1 |
-| PUT | `/api/practice/internships/{id}/status` | 变更实习状态 | 院系/教务 | 17.3.1 |
-| GET | `/api/practice/internships` | 实习项目分页列表 | 院系/教务 | 17.3.1 |
-| GET | `/api/practice/internships/{id}` | 实习项目详情 | 是 | 17.3.1 |
-| GET | `/api/practice/internships/available` | 可选实习列表 | 学生 | 17.3.1 |
-| DELETE | `/api/practice/internships/{id}` | 删除实习项目 | 院系/教务 | 17.3.1 |
-| POST | `/api/practice/internships/applications` | 报名实习 | 学生 | 17.3.2 |
-| DELETE | `/api/practice/internships/applications/{id}` | 撤销实习报名 | 学生 | 17.3.2 |
-| POST | `/api/practice/internships/applications/{id}/review` | 审核实习报名 | 院系/教务 | 17.3.2 |
-| GET | `/api/practice/internships/applications/my` | 我的实习报名 | 学生 | 17.3.2 |
-| GET | `/api/practice/internships/{internshipId}/applications` | 某实习的报名列表 | 院系/教务 | 17.3.2 |
-| POST | `/api/practice/internship-reports` | 提交 / 重传实习报告 | 学生 | 17.3.3 |
-| GET | `/api/practice/internship-reports/my` | 我的实习报告 | 学生 | 17.3.3 |
-| GET | `/api/practice/internship-reports` | 实习报告分页列表 | 院系/教务 | 17.3.3 |
-| POST | `/api/practice/internship-reports/{id}/review` | 评审实习报告 | 院系/教务 | 17.3.3 |
-| DELETE | `/api/practice/internship-reports/{id}` | 删除实习报告 | 学生/院系/教务 | 17.3.3 |
-| GET | `/api/practice/internship-reports/{id}/download` | 实习报告下载 | 学生/院系/教务 | 17.3.3 |
-| POST | `/api/practice/trainings` | 发布培训课程 | 院系 | 17.3.4 |
-| PUT | `/api/practice/trainings/{id}` | 更新培训课程 | 院系/教务 | 17.3.4 |
-| PUT | `/api/practice/trainings/{id}/status` | 变更培训状态 | 院系/教务 | 17.3.4 |
-| GET | `/api/practice/trainings` | 培训课程分页列表 | 院系/教务 | 17.3.4 |
-| GET | `/api/practice/trainings/{id}` | 培训课程详情 | 是 | 17.3.4 |
-| GET | `/api/practice/trainings/available` | 可选培训列表 | 学生 | 17.3.4 |
-| DELETE | `/api/practice/trainings/{id}` | 删除培训课程 | 院系/教务 | 17.3.4 |
-| POST | `/api/practice/trainings/{courseId}/enrollments` | 报名培训 | 学生 | 17.3.5 |
-| DELETE | `/api/practice/trainings/enrollments/{id}` | 退课 | 学生 | 17.3.5 |
-| GET | `/api/practice/trainings/enrollments/my` | 我的培训报名 | 学生 | 17.3.5 |
-| GET | `/api/practice/trainings/{courseId}/enrollments` | 某课程的报名列表 | 院系/教务 | 17.3.5 |
-| POST | `/api/practice/competitions` | 发布竞赛 | 教务 | 17.4.1 |
-| PUT | `/api/practice/competitions/{id}` | 更新竞赛 | 教务 | 17.4.1 |
-| PUT | `/api/practice/competitions/{id}/status` | 变更竞赛状态 | 教务 | 17.4.1 |
-| GET | `/api/practice/competitions` | 竞赛分页列表 | 教务 | 17.4.1 |
-| GET | `/api/practice/competitions/{id}` | 竞赛详情 | 是 | 17.4.1 |
-| GET | `/api/practice/competitions/available` | 可选竞赛列表 | 学生 | 17.4.1 |
-| DELETE | `/api/practice/competitions/{id}` | 删除竞赛 | 教务 | 17.4.1 |
-| POST | `/api/practice/competitions/registrations` | 报名竞赛（个人 / 团队） | 学生 | 17.4.2 |
-| DELETE | `/api/practice/competitions/registrations/{id}` | 撤销竞赛报名 | 学生 | 17.4.2 |
-| POST | `/api/practice/competitions/registrations/{id}/review` | 审核竞赛报名 | 教务 | 17.4.2 |
-| GET | `/api/practice/competitions/registrations/my` | 我的竞赛报名 | 学生 | 17.4.2 |
-| GET | `/api/practice/competitions/{competitionId}/registrations` | 某竞赛的报名列表 | 教务 | 17.4.2 |
-| POST | `/api/practice/competitions/results` | 录入 / 更新获奖结果 | 教务 | 17.4.3 |
-| DELETE | `/api/practice/competitions/results/{id}` | 删除获奖结果 | 教务 | 17.4.3 |
-| POST | `/api/practice/competitions/results/{id}/certificate` | 上传 / 替换获奖证书 | 教务 | 17.4.3 |
-| GET | `/api/practice/competitions/results/{id}/certificate/download` | 获奖证书下载 | 教务/学生 | 17.4.3 |
-| GET | `/api/practice/competitions/{competitionId}/results` | 某竞赛的结果列表 | 是 | 17.4.3 |
-| GET | `/api/practice/competitions/{competitionId}/results/my` | 我的竞赛结果 | 学生 | 17.4.3 |
-| POST | `/api/practice/social-practices` | 发布实践项目 | 教务 | 17.5.1 |
-| PUT | `/api/practice/social-practices/{id}` | 更新实践项目 | 教务 | 17.5.1 |
-| PUT | `/api/practice/social-practices/{id}/status` | 变更实践状态 | 教务 | 17.5.1 |
-| GET | `/api/practice/social-practices` | 实践项目分页列表 | 教务 | 17.5.1 |
-| GET | `/api/practice/social-practices/{id}` | 实践项目详情 | 是 | 17.5.1 |
-| GET | `/api/practice/social-practices/available` | 可选实践项目 | 学生 | 17.5.1 |
-| DELETE | `/api/practice/social-practices/{id}` | 删除实践项目 | 教务 | 17.5.1 |
-| POST | `/api/practice/social-practices/applications` | 申报实践项目（个人 / 团队） | 学生 | 17.5.2 |
-| DELETE | `/api/practice/social-practices/applications/{id}` | 撤销实践申报 | 学生 | 17.5.2 |
-| POST | `/api/practice/social-practices/applications/{id}/review` | 审核实践申报 | 教务 | 17.5.2 |
-| GET | `/api/practice/social-practices/applications/my` | 我的实践申报 | 学生 | 17.5.2 |
-| GET | `/api/practice/social-practices/{practiceId}/applications` | 某项目的申报列表 | 教务 | 17.5.2 |
-| POST | `/api/practice/social-practice-reports` | 提交 / 重传实践报告 | 学生 | 17.5.3 |
-| GET | `/api/practice/social-practice-reports/my` | 我的实践报告 | 学生 | 17.5.3 |
-| GET | `/api/practice/social-practice-reports` | 实践报告分页列表 | 教务 | 17.5.3 |
-| POST | `/api/practice/social-practice-reports/{id}/review` | 评审实践报告 | 教务 | 17.5.3 |
-| DELETE | `/api/practice/social-practice-reports/{id}` | 删除实践报告 | 学生/教务 | 17.5.3 |
-| GET | `/api/practice/social-practice-reports/{id}/download` | 实践报告下载 | 学生/教务 | 17.5.3 |
-| GET | `/api/preferences/me` | 读取本人偏好 | 是 | 18.1 |
-| PUT | `/api/preferences/me` | 浅合并本人偏好 | 是 | 18.1 |
-| DELETE | `/api/preferences/me` | 重置本人偏好 | 是 | 18.1 |
-| POST | `/api/front-logs` | 前端日志上报 | 否 | 18.2 |
+| POST | `/api/register` | 账号注册（需已登录） | 是 | [3.1](#sec-3-1) |
+| POST | `/api/login` | 登录（账号 / 微信 / QQ / 支付宝） | 否 | [3.2](#sec-3-2) |
+| POST | `/api/login/refresh` | 刷新 accessToken | 否 | [3.3](#sec-3-3) |
+| POST | `/api/login/logout` | 登出 | 是 | [3.4](#sec-3-4) |
+| POST | `/api/password/change` | 修改密码 | 是 | [3.5](#sec-3-5) |
+| GET | `/api/user/profile` | 查询个人信息 | 是 | [4.1](#sec-4-1) |
+| PUT | `/api/user/profile` | 修改个人信息 | 是 | [4.2](#sec-4-2) |
+| POST | `/api/user/avatar/upload` | 上传头像 | 是 | [4.3](#sec-4-3) |
+| GET | `/api/avatar/{filename}` | 获取头像图片 | 是 | [4.4](#sec-4-4) |
+| WS | `/ws/avatar` | 头像 WebSocket 拉取（可选） | 否 | [4.4.1](#sec-4-4-1) |
+| GET | `/api/teachers` | 查询全部教师 | 是 | [4.8](#sec-4-8) |
+| GET | `/api/colleges` | 查询全部院系 | 是 | [4.9](#sec-4-9) |
+| POST | `/api/colleges` | 新增院系 | 是 | [4.9](#sec-4-9) |
+| PUT | `/api/colleges/{id}` | 修改院系 | 是 | [4.9](#sec-4-9) |
+| DELETE | `/api/colleges/{id}` | 删除院系 | 是 | [4.9](#sec-4-9) |
+| GET | `/api/grades` | 查询全部年级 | 是 | [4.10](#sec-4-10) |
+| GET | `/api/grades/{id}` | 查询单个年级 | 是 | [4.10](#sec-4-10) |
+| POST | `/api/grades` | 新增年级 | 是 | [4.10](#sec-4-10) |
+| PUT | `/api/grades/{id}` | 修改年级 | 是 | [4.10](#sec-4-10) |
+| DELETE | `/api/grades/{id}` | 删除年级 | 是 | [4.10](#sec-4-10) |
+| GET | `/api/courses` | 查询全部课程 | 是 | [5.5](#sec-5-5) |
+| GET | `/api/courses/{id}` | 查询单个课程 | 是 | [5.5](#sec-5-5) |
+| POST | `/api/courses` | 新增课程 | 是 | [5.5](#sec-5-5) |
+| PUT | `/api/courses/{id}` | 修改课程 | 是 | [5.5](#sec-5-5) |
+| DELETE | `/api/courses/{id}` | 删除课程 | 是 | [5.5](#sec-5-5) |
+| GET | `/api/class-names` | 查询全部班级 | 是 | [5.6](#sec-5-6) |
+| GET | `/api/class-names/{id}` | 查询单个班级 | 是 | [5.6](#sec-5-6) |
+| GET | `/api/class-names/department` | 查询本院系班级 | 是 | [5.6](#sec-5-6) |
+| POST | `/api/class-names` | 新增班级 | 是 | [5.6](#sec-5-6) |
+| PUT | `/api/class-names/{id}` | 修改班级 | 是 | [5.6](#sec-5-6) |
+| DELETE | `/api/class-names/{id}` | 删除班级 | 是 | [5.6](#sec-5-6) |
+| GET | `/api/locals` | 查询全部上课地点 | 是 | [5.7](#sec-5-7) |
+| GET | `/api/locals/{id}` | 查询单个上课地点 | 是 | [5.7](#sec-5-7) |
+| POST | `/api/locals` | 新增上课地点 | 是 | [5.7](#sec-5-7) |
+| PUT | `/api/locals/{id}` | 修改上课地点 | 是 | [5.7](#sec-5-7) |
+| DELETE | `/api/locals/{id}` | 删除上课地点 | 是 | [5.7](#sec-5-7) |
+| GET | `/api/teach-info` | 查询教学信息列表（脱敏） | 是 | [5.1](#sec-5-1) |
+| GET | `/api/teach-info/{id}` | 查询单条教学信息（脱敏） | 是 | [5.2](#sec-5-2) |
+| GET | `/api/teach-info/class-courses` | 查询本班课程速览 | 是 | [5.3](#sec-5-3) |
+| GET | `/api/teach-info/week-schedule` | 学生查询指定周次课表（Redis缓存） | 是 | [5.9](#sec-5-9) |
+| POST | `/api/teach-info` | 新增授课安排 | 是 | [5.4](#sec-5-4) |
+| PUT | `/api/teach-info/{id}` | 修改授课安排 | 是 | [5.4](#sec-5-4) |
+| DELETE | `/api/teach-info/{id}` | 删除授课安排 | 是 | [5.4](#sec-5-4) |
+| POST | `/api/teach-info/draft` | 批量提交授课草稿到缓存 | 是 | [5.8](#sec-5-8) |
+| GET | `/api/teach-info/draft` | 查看缓存中的草稿（按角色过滤） | 是 | [5.8](#sec-5-8) |
+| GET | `/api/teach-info/draft/classes` | 查看草稿班级汇总（按角色过滤） | 是 | [5.8](#sec-5-8) |
+| DELETE | `/api/teach-info/draft` | 清空全部草稿 | 是 | [5.8](#sec-5-8) |
+| DELETE | `/api/teach-info/draft/item` | 按唯一键删除单条草稿 | 是 | [5.8](#sec-5-8) |
+| DELETE | `/api/teach-info/draft/{className}` | 按班级移除草稿 | 是 | [5.8](#sec-5-8) |
+| GET | `/api/time` | 查询全部时间段 | 是 | [6.1](#sec-6-1) |
+| GET | `/api/time/{id}` | 查询单个时间段 | 是 | [6.2](#sec-6-2) |
+| GET | `/api/time-restrictions` | 查询全部时段限制 | 是 | [7.2](#sec-7-2) |
+| GET | `/api/time-restrictions/{id}` | 查询单条时段限制 | 是 | [7.3](#sec-7-3) |
+| POST | `/api/time-restrictions` | 新增时段限制 | 是 | [7.4](#sec-7-4) |
+| PUT | `/api/time-restrictions/{id}` | 修改时段限制 | 是 | [7.5](#sec-7-5) |
+| DELETE | `/api/time-restrictions/{id}` | 删除时段限制 | 是 | [7.6](#sec-7-6) |
+| POST | `/api/academic/batch-import` | 批量导入学生和教师 | 是 | [4.5](#sec-4-5) |
+| POST | `/api/academic/batch-import/file` | Excel 批量导入（.xlsx，列序见模板） | 是 | [4.5](#sec-4-5) |
+| GET | `/api/academic/batch-import/template` | 下载导入模板 | 是 | [4.5](#sec-4-5) |
+| GET | `/api/majors` | 查询全部专业 | 是 | [4.7](#sec-4-7) |
+| POST | `/api/majors` | 新增专业 | 是 | [4.7](#sec-4-7) |
+| PUT | `/api/majors/{id}` | 修改专业 | 是 | [4.7](#sec-4-7) |
+| DELETE | `/api/majors/{id}` | 删除专业 | 是 | [4.7](#sec-4-7) |
+| GET | `/api/students` | 查询学生列表（支持筛选） | 是 | [4.6](#sec-4-6) |
+| PUT | `/api/students/{id}` | 修改学生信息 | 是 | [4.6](#sec-4-6) |
+| POST | `/api/scheduling/solve` | 触发自动排课 | 是 | [8.1](#sec-8-1) |
+| GET | `/api/scheduling/solution/{scheduleId}` | 查询排课方案 | 是 | [8.2](#sec-8-2) |
+| POST | `/api/scheduling/stop/{scheduleId}` | 停止排课 | 是 | [8.3](#sec-8-3) |
+| GET | `/api/semester` | 查询全部学期 | 是 | [9](#sec-9) |
+| GET | `/api/semester/current` | 查询当前学期 | 是 | [9](#sec-9) |
+| POST | `/api/semester` | 新增学期 | 是 | [9](#sec-9) |
+| PUT | `/api/semester/{id}` | 修改学期 | 是 | [9](#sec-9) |
+| DELETE | `/api/semester/{id}` | 删除学期 | 是 | [9](#sec-9) |
+| POST | `/api/selection/campaigns` | 新建选课活动（含课程字段） | 是 | [10.2.1](#sec-10-2-1) |
+| GET | `/api/selection/campaigns` | 查询全部选课活动 | 是 | [10.2.2](#sec-10-2-2) |
+| GET | `/api/selection/campaigns/{id}` | 查询选课活动详情 | 是 | [10.2.3](#sec-10-2-3) |
+| PUT | `/api/selection/campaigns/{id}` | 修改选课活动（含课程字段） | 是 | [10.2.4](#sec-10-2-4) |
+| DELETE | `/api/selection/campaigns/{id}` | 删除选课活动 | 是 | [10.2.5](#sec-10-2-5) |
+| POST | `/api/selection/campaigns/{id}/open` | 开启选课 | 是 | [10.2.6](#sec-10-2-6) |
+| POST | `/api/selection/campaigns/{id}/close` | 关闭选课 | 是 | [10.2.7](#sec-10-2-7) |
+| POST | `/api/selection/campaigns/{id}/finalize` | 分班 | 是 | [10.2.8](#sec-10-2-8) |
+| POST | `/api/selection/groups` | 新建选课组 | 是 | [10.3.1](#sec-10-3-1) |
+| GET | `/api/selection/groups` | 查询全部选课组 | 是 | [10.3.2](#sec-10-3-2) |
+| GET | `/api/selection/groups/{groupId}` | 查询选课组详情 | 是 | [10.3.3](#sec-10-3-3) |
+| PUT | `/api/selection/groups/{groupId}` | 修改选课组 | 是 | [10.3.4](#sec-10-3-4) |
+| DELETE | `/api/selection/groups/{groupId}` | 删除选课组 | 是 | [10.3.5](#sec-10-3-5) |
+| GET | `/api/selection/groups/{groupId}/bindable-campaigns` | 查询可绑定到本组的活动 | 是 | [10.3.6](#sec-10-3-6) |
+| GET | `/api/selection/campaigns/{campaignId}/classes` | 查询分班结果 | 是 | [10.4](#sec-10-4) |
+| PUT | `/api/selection/campaigns/{campaignId}/classes/{classId}/teacher` | 为选课班分配 / 取消教师 | 是 | [10.4.1](#sec-10-4-1) |
+| GET | `/api/selection/student/campaigns` | 学生查询可选课活动 | 是 | [10.5.1](#sec-10-5-1) |
+| GET | `/api/selection/student/campaigns/{campaignId}` | 学生查询活动详情 | 是 | [10.5.2](#sec-10-5-2) |
+| POST | `/api/selection/student/records` | 选课 | 是 | [10.5.3](#sec-10-5-3) |
+| DELETE | `/api/selection/student/records/{recordId}` | 退选 | 是 | [10.5.4](#sec-10-5-4) |
+| GET | `/api/selection/student/records` | 查询我的选课记录 | 是 | [10.5.5](#sec-10-5-5) |
+| POST | `/api/file/uploads` | 初始化 / 恢复分片上传会话（幂等，可秒传） | 是 | [11.1](#sec-11-1) |
+| PUT | `/api/file/uploads/{uploadId}/parts/{index}` | 上传一个分片（裸二进制 + X-Chunk-SHA256 头） | 是 | [11.1](#sec-11-1) |
+| POST | `/api/file/uploads/{uploadId}/complete` | 合并分片为成品（幂等） | 是 | [11.1](#sec-11-1) |
+| GET | `/api/file/uploads/{uploadId}` | 查询上传进度 | 是 | [11.1](#sec-11-1) |
+| POST | `/api/file/uploads/{uploadId}/verify` | 校验已收分片，返回缺失 / 损坏清单 | 是 | [11.1](#sec-11-1) |
+| DELETE | `/api/file/uploads/{uploadId}` | 取消上传 | 是 | [11.1](#sec-11-1) |
+| POST | `/api/file/whole` | 小文件整传（multipart：biz + file） | 是 | [11.1](#sec-11-1) |
+| POST | `/api/file/download` | 通用下载（POST 传路径，支持 Range → 206） | 是 | [11.1](#sec-11-1) |
+| GET | `/api/file/preview` | 在线预览（inline + Range 懒加载 → 206，类型白名单） | 是 | [11.6](#sec-11-6) |
+| GET | `/api/file/preview/info` | 预览元信息（大小 / 类型 / 可预览性） | 是 | [11.6](#sec-11-6) |
+| POST | `/api/practice/graduation/theses/duplicate-checks` | 登记查重结果（multipart，可附查重报告） | 是 | [11.5](#sec-11-5) |
+| GET | `/api/practice/graduation/theses/duplicate-checks/{checkId}/download` | 查重报告下载 | 是 | [11.5](#sec-11-5) |
+| POST | `/api/practice/graduation/campaigns/{id}/materials` | 上传活动资料 | 是 | [11.5](#sec-11-5) |
+| GET | `/api/practice/graduation/campaigns/{id}/materials` | 活动资料列表 | 是 | [11.5](#sec-11-5) |
+| GET | `/api/practice/graduation/campaigns/{id}/materials/{mid}/download` | 活动资料下载 | 是 | [11.5](#sec-11-5) |
+| DELETE | `/api/practice/graduation/campaigns/{id}/materials/{mid}` | 删除活动资料 | 是 | [11.5](#sec-11-5) |
+| POST | `/api/practice/graduation/defense/{id}/material` | 上传 / 替换答辩材料 | 是 | [11.5](#sec-11-5) |
+| GET | `/api/practice/graduation/defense/{id}/material/download` | 答辩材料下载 | 是 | [11.5](#sec-11-5) |
+| POST | `/api/practice/competitions/results/{id}/certificate` | 上传 / 替换获奖证书 | 是 | [11.5](#sec-11-5) |
+| GET | `/api/practice/competitions/results/{id}/certificate/download` | 获奖证书下载 | 是 | [11.5](#sec-11-5) |
+| POST | `/api/coursework/question-bank` | 题库录入 | 教师 | [12.2](#sec-12-2) |
+| GET | `/api/coursework/question-bank` | 题库分页（courseId/campaignId/type/keyword 筛选） | 教师 | [12.2](#sec-12-2) |
+| PUT | `/api/coursework/question-bank/{id}` | 题库修改 | 教师 | [12.2](#sec-12-2) |
+| DELETE | `/api/coursework/question-bank/{id}` | 题库软删 | 教师 | [12.2](#sec-12-2) |
+| POST | `/api/coursework/assignments` | 新建作业 | 教师 | [12.2](#sec-12-2) |
+| PUT | `/api/coursework/assignments/{id}` | 修改作业（JSON） | 教师 | [12.2](#sec-12-2) |
+| POST | `/api/coursework/assignments/{id}/attachment` | 替换作业附件 | 教师 | [12.2](#sec-12-2) |
+| POST | `/api/coursework/assignments/{id}/clone` | 克隆到其它授课组 `{teachInfoId, deadline}` | 教师 | [12.2](#sec-12-2) |
+| DELETE | `/api/coursework/assignments/{id}` | 删除作业（仅草稿） | 教师 | [12.2](#sec-12-2) |
+| POST | `/api/coursework/assignments/{id}/publish` | 发布作业 | 教师 | [12.2](#sec-12-2) |
+| POST | `/api/coursework/assignments/{id}/close` | 关闭作业 | 教师 | [12.2](#sec-12-2) |
+| GET | `/api/coursework/assignments` | 作业列表（教师/学生双视角） | 教师/学生 | [12.2](#sec-12-2) |
+| GET | `/api/coursework/assignments/{id}` | 作业详情 | 教师/学生 | [12.2](#sec-12-2) |
+| GET | `/api/coursework/assignments/{id}/submissions` | 提交名单（含未交，五态 state） | 教师 | [12.2](#sec-12-2) |
+| POST | `/api/coursework/assignments/{id}/submit` | 提交 / 重交作业（纯 JSON 逐题作答） | 学生 | [12.2](#sec-12-2) |
+| PUT | `/api/coursework/assignments/{id}/draft` | 暂存作答草稿（仅 Redis） | 学生 | [12.2](#sec-12-2) |
+| GET | `/api/coursework/assignments/{id}/my-submission` | 我的提交 | 学生 | [12.2](#sec-12-2) |
+| GET | `/api/coursework/submissions/{id}` | 单份提交详情（含标准答案） | 教师 | [12.2](#sec-12-2) |
+| POST | `/api/coursework/submissions/{id}/grade` | 逐题批改（仅大题可改判） | 教师 | [12.2](#sec-12-2) |
+| POST | `/api/coursework/chapters` | 建章 | 教师 | [12.3](#sec-12-3) |
+| PUT | `/api/coursework/chapters/{id}` | 改章名 | 教师 | [12.3](#sec-12-3) |
+| DELETE | `/api/coursework/chapters/{id}` | 删章（级联软删节+视频） | 教师 | [12.3](#sec-12-3) |
+| GET | `/api/coursework/chapters/tree` | 章节树（挂节视频） | 教师/学生 | [12.3](#sec-12-3) |
+| POST | `/api/coursework/sections` | 建节（挂章下） | 教师 | [12.3](#sec-12-3) |
+| PUT | `/api/coursework/sections/{id}` | 改节名 | 教师 | [12.3](#sec-12-3) |
+| DELETE | `/api/coursework/sections/{id}` | 删节（级联软删视频） | 教师 | [12.3](#sec-12-3) |
+| POST | `/api/coursework/videos` | 登记教学视频（挂节） | 教师 | [12.3](#sec-12-3) |
+| PUT | `/api/coursework/videos/{id}` | 改视频元数据/改挂节 | 教师 | [12.3](#sec-12-3) |
+| DELETE | `/api/coursework/videos/{id}` | 删除视频 | 教师 | [12.3](#sec-12-3) |
+| GET | `/api/coursework/videos/{id}` | 视频元数据 | 教师/学生 | [12.3](#sec-12-3) |
+| GET | `/api/coursework/videos/common` | 未挂节视频（公共区） | 教师/学生 | [12.3](#sec-12-3) |
+| WS | `/ws/video/{videoId}?token=` | 视频流式播放 | 教师/学生 | [12.3](#sec-12-3) |
+| GET | `/api/coursework/materials/browse` | 资料逐层浏览（文件夹+资料） | 教师/学生 | [12.4](#sec-12-4) |
+| GET | `/api/coursework/material-folders` | 单层子文件夹（移动选择器懒展开） | 教师/学生 | [12.4](#sec-12-4) |
+| POST | `/api/coursework/material-folders` | 建文件夹 | 教师 | [12.4](#sec-12-4) |
+| PUT | `/api/coursework/material-folders/{id}` | 改文件夹名（不可换父级） | 教师 | [12.4](#sec-12-4) |
+| DELETE | `/api/coursework/material-folders/{id}` | 删文件夹（级联软删子树） | 教师 | [12.4](#sec-12-4) |
+| POST | `/api/coursework/materials` | 上传课程资料（可挂 folderId） | 教师 | [12.4](#sec-12-4) |
+| PUT | `/api/coursework/materials/{id}` | 改资料元数据 | 教师 | [12.4](#sec-12-4) |
+| PUT | `/api/coursework/materials/{id}/folder` | 移动资料（null=根目录） | 教师 | [12.4](#sec-12-4) |
+| DELETE | `/api/coursework/materials/{id}` | 删除资料 | 教师 | [12.4](#sec-12-4) |
+| POST | `/api/coursework/announcements` | 发布课程公告 | 教师 | [12.5](#sec-12-5) |
+| PUT | `/api/coursework/announcements/{id}` | 编辑公告（不重复通知） | 教师 | [12.5](#sec-12-5) |
+| DELETE | `/api/coursework/announcements/{id}` | 删除公告 | 教师 | [12.5](#sec-12-5) |
+| GET | `/api/coursework/announcements` | 公告列表 | 教师/学生 | [12.5](#sec-12-5) |
+| POST | `/api/coursework/teach-infos/{id}/regular-score/sync` | 作业成绩合成平时分 | 教师 | [12.6](#sec-12-6) |
+| PUT | `/api/scores/config/{teachInfoId}` | 设置平时分占比 | 是 | [13.4](#sec-13-4) |
+| GET | `/api/scores/config/{teachInfoId}` | 查询平时分占比 | 是 | [13.4](#sec-13-4) |
+| GET | `/api/scores/roster/{teachInfoId}` | 查询成绩录入名单 | 是 | [13.5](#sec-13-5) |
+| POST | `/api/scores` | 批量录入成绩 | 是 | [13.6](#sec-13-6) |
+| PUT | `/api/scores/{id}` | 修改单条成绩 | 是 | [13.6](#sec-13-6) |
+| GET | `/api/scores` | 按授课安排查询成绩 | 是 | [13.7](#sec-13-7) |
+| GET | `/api/scores/my` | 查询我的成绩 | 学生 | [13.7](#sec-13-7) |
+| GET | `/api/scores/my/semesters` | 查询我有成绩的学期 | 学生 | [13.7](#sec-13-7) |
+| GET | `/api/scores/statistics` | 成绩分布统计 | 是 | [13.8](#sec-13-8) |
+| GET | `/api/scores/export` | 导出成绩单（Excel / PDF） | 是 | [13.9](#sec-13-9) |
+| POST | `/api/scores/reviews` | 提交成绩复核申请 | 学生 | [13.10](#sec-13-10) |
+| GET | `/api/scores/reviews/my` | 查询我的复核申请 | 学生 | [13.10](#sec-13-10) |
+| GET | `/api/scores/reviews` | 复核待办列表 | 教师/教务 | [13.10](#sec-13-10) |
+| POST | `/api/scores/reviews/{id}/reply` | 教师回复复核 | 教师 | [13.10](#sec-13-10) |
+| POST | `/api/scores/reviews/{id}/escalate` | 复核升级到教务 | 学生 | [13.10](#sec-13-10) |
+| POST | `/api/scores/reviews/{id}/resolve` | 教务终审复核 | 教务 | [13.10](#sec-13-10) |
+| POST | `/api/exams` | 安排期末 / 期中考试 | 教务 | [14.3](#sec-14-3) |
+| PUT | `/api/exams/{id}` | 修改考试 | 教务 | [14.3](#sec-14-3) |
+| DELETE | `/api/exams/{id}` | 删除考试 | 教务 | [14.3](#sec-14-3) |
+| GET | `/api/exams` | 考试分页列表 | 教务 | [14.4](#sec-14-4) |
+| GET | `/api/exams/class-courses` | 按班级查可排考课程 | 教务 | [14.4](#sec-14-4) |
+| GET | `/api/exams/teacher` | 教师查询相关考试 | 教师 | [14.5](#sec-14-5) |
+| GET | `/api/exams/my` | 学生查询我的考试 | 学生 | [14.5](#sec-14-5) |
+| GET | `/api/exams/makeup/candidates` | 补考候选（不及格）名单 | 教务 | [14.6](#sec-14-6) |
+| POST | `/api/exams/makeup` | 建补考 / 重修考试 | 教务 | [14.6](#sec-14-6) |
+| GET | `/api/exams/makeup` | 补考 / 重修考试列表 | 教务 | [14.6](#sec-14-6) |
+| POST | `/api/exams/{examId}/grades` | 录入补考 / 重修成绩 | 教师/教务 | [14.7](#sec-14-7) |
+| GET | `/api/analysis/scores/distribution` | 成绩分数段分布 | 教师/院系/教务 | [15.1](#sec-15-1) |
+| GET | `/api/analysis/scores/trend` | 课程跨学期成绩趋势 | 教师/院系/教务 | [15.1](#sec-15-1) |
+| GET | `/api/analysis/scores/comparison` | 同课程班级横向对比 | 教师/院系/教务 | [15.1](#sec-15-1) |
+| GET | `/api/analysis/warnings/config` | 查询预警阈值配置 | 教务 | [15.2](#sec-15-2) |
+| PUT | `/api/analysis/warnings/config` | 更新预警阈值配置 | 教务 | [15.2](#sec-15-2) |
+| POST | `/api/analysis/warnings/scan` | 触发学业预警扫描 | 教务 | [15.2](#sec-15-2) |
+| GET | `/api/analysis/warnings` | 学业预警看板 | 教务/院系 | [15.2](#sec-15-2) |
+| GET | `/api/analysis/warnings/me` | 我的学业预警 | 学生 | [15.2](#sec-15-2) |
+| POST | `/api/analysis/evaluation-items` | 新建评教指标 | 教务 | [15.3](#sec-15-3) |
+| GET | `/api/analysis/evaluation-items` | 评教指标列表 | 教务 | [15.3](#sec-15-3) |
+| PUT | `/api/analysis/evaluation-items/{id}` | 修改评教指标 | 教务 | [15.3](#sec-15-3) |
+| DELETE | `/api/analysis/evaluation-items/{id}` | 删除评教指标 | 教务 | [15.3](#sec-15-3) |
+| POST | `/api/analysis/evaluation-templates` | 创建评教模板 | 教务 | [15.4](#sec-15-4) |
+| GET | `/api/analysis/evaluation-templates` | 评教模板列表 | 教务 | [15.4](#sec-15-4) |
+| GET | `/api/analysis/evaluation-templates/{id}` | 评教模板详情 | 教务 | [15.4](#sec-15-4) |
+| PUT | `/api/analysis/evaluation-templates/{id}` | 修改评教模板 | 教务 | [15.4](#sec-15-4) |
+| DELETE | `/api/analysis/evaluation-templates/{id}` | 删除评教模板 | 教务 | [15.4](#sec-15-4) |
+| PUT | `/api/analysis/evaluation-templates/{id}/default` | 设为全局默认模板 | 教务 | [15.4](#sec-15-4) |
+| PUT | `/api/analysis/evaluation-templates/{id}/status` | 启用 / 停用评教模板 | 教务 | [15.4](#sec-15-4) |
+| PUT | `/api/analysis/evaluation-templates/override/{teachInfoId}` | 设置 / 清除课程级模板覆盖 | 教务 | [15.4](#sec-15-4) |
+| GET | `/api/analysis/evaluation-templates/override/{teachInfoId}` | 查询课程级模板覆盖 | 教务 | [15.4](#sec-15-4) |
+| GET | `/api/analysis/evaluations/form` | 获取评教表单 | 是 | [15.5](#sec-15-5) |
+| POST | `/api/analysis/evaluations` | 提交评教 | 学生 | [15.5](#sec-15-5) |
+| GET | `/api/analysis/evaluations/my` | 我的评教 | 学生 | [15.5](#sec-15-5) |
+| POST | `/api/analysis/evaluations/period/open` | 开启评教周期 | 教务 | [15.5](#sec-15-5) |
+| POST | `/api/analysis/evaluations/period/close` | 关闭评教周期 | 教务 | [15.5](#sec-15-5) |
+| GET | `/api/analysis/evaluations/period` | 查询评教周期状态 | 是 | [15.5](#sec-15-5) |
+| GET | `/api/analysis/teacher-quality/me` | 我的教学质量 | 教师 | [15.6](#sec-15-6) |
+| GET | `/api/analysis/teacher-quality/{teacherId}` | 指定教师教学质量 | 教务/院系/教师 | [15.6](#sec-15-6) |
+| GET | `/api/analysis/teacher-quality` | 教师质量列表 / 对比 | 教务/院系 | [15.6](#sec-15-6) |
+| GET | `/api/analysis/progress/me` | 我的学习进度 | 学生 | [15.7](#sec-15-7) |
+| GET | `/api/analysis/progress/{studentUserId}` | 指定学生学习进度 | 教务/院系 | [15.7](#sec-15-7) |
+| GET | `/api/analysis/profile/me` | 我的学生画像 | 学生 | [15.8](#sec-15-8) |
+| GET | `/api/analysis/profile/{studentUserId}` | 指定学生画像 | 教务/院系 | [15.8](#sec-15-8) |
+| GET | `/api/analysis/class-analysis` | 班级 / 专业成绩聚合 | 教务/院系 | [15.8](#sec-15-8) |
+| GET | `/api/analysis/class-analysis/trend` | 单组跨学期趋势 | 教务/院系 | [15.8](#sec-15-8) |
+| GET | `/api/notification/unread-count` | 未读消息数 | 是 | [16.2](#sec-16-2) |
+| GET | `/api/notification/list` | 消息列表 | 是 | [16.3](#sec-16-3) |
+| PUT | `/api/notification/{id}/read` | 标记单点消息已读 | 是 | [16.4](#sec-16-4) |
+| PUT | `/api/notification/broadcast/{id}/read` | 标记广播消息已读 | 是 | [16.5](#sec-16-5) |
+| PUT | `/api/notification/read-all` | 全部已读 | 是 | [16.6](#sec-16-6) |
+| DELETE | `/api/notification/{id}` | 删除单点消息 | 是 | [16.7](#sec-16-7) |
+| POST | `/api/notification/send` | 发送单点消息 | 教务/院系 | [16.8](#sec-16-8) |
+| WS | `/ws/notification?token=` | 站内消息实时推送 | 是 | [16.9](#sec-16-9) |
+| POST | `/api/practice/graduation/campaigns` | 创建毕设活动 | 教务 | [17.2.2](#sec-17-2-2) |
+| PUT | `/api/practice/graduation/campaigns/{id}` | 更新毕设活动 | 教务 | [17.2.2](#sec-17-2-2) |
+| PUT | `/api/practice/graduation/campaigns/{id}/status` | 变更毕设活动状态 | 教务 | [17.2.2](#sec-17-2-2) |
+| GET | `/api/practice/graduation/campaigns` | 毕设活动分页列表 | 教务 | [17.2.2](#sec-17-2-2) |
+| GET | `/api/practice/graduation/campaigns/{id}` | 毕设活动详情 | 四角色 | [17.2.2](#sec-17-2-2) |
+| GET | `/api/practice/graduation/campaigns/available` | 我可参与的毕设活动 | 学生 | [17.2.2](#sec-17-2-2) |
+| GET | `/api/practice/graduation/campaigns/selector` | 毕设活动选择器 | 教师/院系 | [17.2.2](#sec-17-2-2) |
+| GET | `/api/practice/graduation/campaigns/{id}/detail` | 毕设活动教务详情 | 教务 | [17.2.2](#sec-17-2-2) |
+| POST | `/api/practice/graduation/campaigns/{id}/materials` | 上传毕设活动资料 | 教务 | [17.2.3](#sec-17-2-3) |
+| GET | `/api/practice/graduation/campaigns/{id}/materials` | 毕设活动资料列表 | 四角色 | [17.2.3](#sec-17-2-3) |
+| GET | `/api/practice/graduation/campaigns/{id}/materials/{mid}/download` | 毕设活动资料下载 | 四角色 | [17.2.3](#sec-17-2-3) |
+| DELETE | `/api/practice/graduation/campaigns/{id}/materials/{mid}` | 删除毕设活动资料 | 教务 | [17.2.3](#sec-17-2-3) |
+| POST | `/api/practice/graduation/proposals` | 提交 / 重提选题申请 | 学生 | [17.2.4](#sec-17-2-4) |
+| PUT | `/api/practice/graduation/proposals/{id}/review/dept` | 选题院系初审 | 院系 | [17.2.4](#sec-17-2-4) |
+| PUT | `/api/practice/graduation/proposals/{id}/review/academic` | 选题教务终审 | 教务 | [17.2.4](#sec-17-2-4) |
+| GET | `/api/practice/graduation/proposals/my` | 我的选题申请 | 学生 | [17.2.4](#sec-17-2-4) |
+| GET | `/api/practice/graduation/proposals/pending/dept` | 院系待初审队列 | 院系 | [17.2.4](#sec-17-2-4) |
+| GET | `/api/practice/graduation/proposals/pending/academic` | 教务待终审队列 | 教务 | [17.2.4](#sec-17-2-4) |
+| POST | `/api/practice/graduation/assignments/picks` | 教师自选学生 | 教师 | [17.2.5](#sec-17-2-5) |
+| DELETE | `/api/practice/graduation/assignments/picks/{id}` | 教师放弃自选 | 教师 | [17.2.5](#sec-17-2-5) |
+| POST | `/api/practice/graduation/assignments/allocations` | 院系指定分配 | 院系 | [17.2.5](#sec-17-2-5) |
+| POST | `/api/practice/graduation/assignments/reassigns` | 院系改派 | 院系 | [17.2.5](#sec-17-2-5) |
+| GET | `/api/practice/graduation/assignments/teacher/pool` | 教师自选池 | 教师 | [17.2.5](#sec-17-2-5) |
+| GET | `/api/practice/graduation/assignments/my` | 我的师生匹配 | 学生/教师 | [17.2.5](#sec-17-2-5) |
+| GET | `/api/practice/graduation/assignments/overview` | 分配总览 | 教务 | [17.2.5](#sec-17-2-5) |
+| GET | `/api/practice/graduation/assignments/unassigned` | 未分配学生清单 | 教务/院系 | [17.2.5](#sec-17-2-5) |
+| POST | `/api/practice/graduation/process/opening-reports` | 提交 / 重提开题报告 | 学生 | [17.2.6](#sec-17-2-6) |
+| PUT | `/api/practice/graduation/process/opening-reports/{id}/review` | 审核开题报告 | 教师 | [17.2.6](#sec-17-2-6) |
+| GET | `/api/practice/graduation/process/opening-reports/my` | 我的开题报告 | 学生 | [17.2.6](#sec-17-2-6) |
+| GET | `/api/practice/graduation/process/opening-reports/teacher` | 名下学生开题报告 | 教师 | [17.2.6](#sec-17-2-6) |
+| GET | `/api/practice/graduation/process/opening-reports/{id}/download` | 开题报告下载 | 四角色 | [17.2.6](#sec-17-2-6) |
+| POST | `/api/practice/graduation/process/midterms` | 提交 / 重提中期检查 | 学生 | [17.2.6](#sec-17-2-6) |
+| PUT | `/api/practice/graduation/process/midterms/{id}/review` | 评审中期检查 | 教师 | [17.2.6](#sec-17-2-6) |
+| GET | `/api/practice/graduation/process/midterms/my` | 我的中期检查 | 学生 | [17.2.6](#sec-17-2-6) |
+| GET | `/api/practice/graduation/process/midterms/teacher` | 名下学生中期检查 | 教师 | [17.2.6](#sec-17-2-6) |
+| GET | `/api/practice/graduation/process/midterms/{id}/download` | 中期检查下载 | 四角色 | [17.2.6](#sec-17-2-6) |
+| POST | `/api/practice/graduation/process/guidance-logs` | 记录指导日志 | 教师 | [17.2.6](#sec-17-2-6) |
+| GET | `/api/practice/graduation/process/guidance-logs` | 指导记录查询 | 教师/院系/教务 | [17.2.6](#sec-17-2-6) |
+| POST | `/api/practice/graduation/theses` | 提交 / 重提论文 | 学生 | [17.2.7](#sec-17-2-7) |
+| PUT | `/api/practice/graduation/theses/{id}/review` | 论文形式审查 | 教师 | [17.2.7](#sec-17-2-7) |
+| GET | `/api/practice/graduation/theses/my` | 我的论文（全部版本） | 学生 | [17.2.7](#sec-17-2-7) |
+| GET | `/api/practice/graduation/theses/teacher` | 名下学生论文 | 教师 | [17.2.7](#sec-17-2-7) |
+| GET | `/api/practice/graduation/theses/campaign` | 活动内论文 | 教务 | [17.2.7](#sec-17-2-7) |
+| GET | `/api/practice/graduation/theses/export-package` | 导出查重数据包 | 教务 | [17.2.7](#sec-17-2-7) |
+| GET | `/api/practice/graduation/theses/{id}/download` | 论文下载 | 四角色 | [17.2.7](#sec-17-2-7) |
+| POST | `/api/practice/graduation/theses/duplicate-checks` | 登记查重结果 | 教务 | [17.2.8](#sec-17-2-8) |
+| GET | `/api/practice/graduation/theses/{id}/duplicate-checks` | 论文查重记录 | 四角色 | [17.2.8](#sec-17-2-8) |
+| GET | `/api/practice/graduation/theses/duplicate-checks/{checkId}/download` | 查重报告下载 | 四角色 | [17.2.8](#sec-17-2-8) |
+| POST | `/api/practice/graduation/defense/arrange` | 安排 / 更新答辩 | 院系 | [17.2.9](#sec-17-2-9) |
+| GET | `/api/practice/graduation/defense/list` | 答辩安排列表 | 教务/院系/学生 | [17.2.9](#sec-17-2-9) |
+| POST | `/api/practice/graduation/defense/{id}/material` | 上传 / 替换答辩材料 | 教务/院系 | [17.2.9](#sec-17-2-9) |
+| GET | `/api/practice/graduation/defense/{id}/material/download` | 答辩材料下载 | 学生/院系/教务 | [17.2.9](#sec-17-2-9) |
+| POST | `/api/practice/graduation/defense/scores/advisor` | 录入指导分 | 教师 | [17.2.10](#sec-17-2-10) |
+| GET | `/api/practice/graduation/defense/scores/advisor` | 指导分录入列表 | 教师 | [17.2.10](#sec-17-2-10) |
+| POST | `/api/practice/graduation/defense/scores/reviewer` | 录入评阅分 | 教师 | [17.2.10](#sec-17-2-10) |
+| GET | `/api/practice/graduation/defense/scores/reviewer` | 评阅分录入列表 | 教师 | [17.2.10](#sec-17-2-10) |
+| POST | `/api/practice/graduation/defense/scores/defense` | 录入答辩分 | 教务/院系 | [17.2.10](#sec-17-2-10) |
+| POST | `/api/practice/graduation/defense/scores/confirm` | 确认并发布总评 | 院系 | [17.2.10](#sec-17-2-10) |
+| GET | `/api/practice/graduation/defense/scores` | 毕设成绩列表 | 四角色 | [17.2.10](#sec-17-2-10) |
+| GET | `/api/practice/graduation/defense/scores/my` | 我的毕设成绩 | 学生 | [17.2.10](#sec-17-2-10) |
+| GET | `/api/practice/graduation/defense/scores/export` | 导出成绩总表 | 教务 | [17.2.10](#sec-17-2-10) |
+| GET | `/api/practice/graduation/dashboard/{campaignId}` | 毕设看板 | 教务/院系 | [17.2.11](#sec-17-2-11) |
+| GET | `/api/practice/graduation/dashboard/{campaignId}/export` | 毕设看板导出 | 教务/院系 | [17.2.11](#sec-17-2-11) |
+| GET | `/api/practice/graduation/dashboard/{campaignId}/logs` | 操作日志分页 | 教务 | [17.2.11](#sec-17-2-11) |
+| POST | `/api/practice/internships` | 发布实习项目 | 院系 | [17.3.1](#sec-17-3-1) |
+| PUT | `/api/practice/internships/{id}` | 更新实习项目 | 院系/教务 | [17.3.1](#sec-17-3-1) |
+| PUT | `/api/practice/internships/{id}/status` | 变更实习状态 | 院系/教务 | [17.3.1](#sec-17-3-1) |
+| GET | `/api/practice/internships` | 实习项目分页列表 | 院系/教务 | [17.3.1](#sec-17-3-1) |
+| GET | `/api/practice/internships/{id}` | 实习项目详情 | 是 | [17.3.1](#sec-17-3-1) |
+| GET | `/api/practice/internships/available` | 可选实习列表 | 学生 | [17.3.1](#sec-17-3-1) |
+| DELETE | `/api/practice/internships/{id}` | 删除实习项目 | 院系/教务 | [17.3.1](#sec-17-3-1) |
+| POST | `/api/practice/internships/applications` | 报名实习 | 学生 | [17.3.2](#sec-17-3-2) |
+| DELETE | `/api/practice/internships/applications/{id}` | 撤销实习报名 | 学生 | [17.3.2](#sec-17-3-2) |
+| POST | `/api/practice/internships/applications/{id}/review` | 审核实习报名 | 院系/教务 | [17.3.2](#sec-17-3-2) |
+| GET | `/api/practice/internships/applications/my` | 我的实习报名 | 学生 | [17.3.2](#sec-17-3-2) |
+| GET | `/api/practice/internships/{internshipId}/applications` | 某实习的报名列表 | 院系/教务 | [17.3.2](#sec-17-3-2) |
+| POST | `/api/practice/internship-reports` | 提交 / 重传实习报告 | 学生 | [17.3.3](#sec-17-3-3) |
+| GET | `/api/practice/internship-reports/my` | 我的实习报告 | 学生 | [17.3.3](#sec-17-3-3) |
+| GET | `/api/practice/internship-reports` | 实习报告分页列表 | 院系/教务 | [17.3.3](#sec-17-3-3) |
+| POST | `/api/practice/internship-reports/{id}/review` | 评审实习报告 | 院系/教务 | [17.3.3](#sec-17-3-3) |
+| DELETE | `/api/practice/internship-reports/{id}` | 删除实习报告 | 学生/院系/教务 | [17.3.3](#sec-17-3-3) |
+| GET | `/api/practice/internship-reports/{id}/download` | 实习报告下载 | 学生/院系/教务 | [17.3.3](#sec-17-3-3) |
+| POST | `/api/practice/trainings` | 发布培训课程 | 院系 | [17.3.4](#sec-17-3-4) |
+| PUT | `/api/practice/trainings/{id}` | 更新培训课程 | 院系/教务 | [17.3.4](#sec-17-3-4) |
+| PUT | `/api/practice/trainings/{id}/status` | 变更培训状态 | 院系/教务 | [17.3.4](#sec-17-3-4) |
+| GET | `/api/practice/trainings` | 培训课程分页列表 | 院系/教务 | [17.3.4](#sec-17-3-4) |
+| GET | `/api/practice/trainings/{id}` | 培训课程详情 | 是 | [17.3.4](#sec-17-3-4) |
+| GET | `/api/practice/trainings/available` | 可选培训列表 | 学生 | [17.3.4](#sec-17-3-4) |
+| DELETE | `/api/practice/trainings/{id}` | 删除培训课程 | 院系/教务 | [17.3.4](#sec-17-3-4) |
+| POST | `/api/practice/trainings/{courseId}/enrollments` | 报名培训 | 学生 | [17.3.5](#sec-17-3-5) |
+| DELETE | `/api/practice/trainings/enrollments/{id}` | 退课 | 学生 | [17.3.5](#sec-17-3-5) |
+| GET | `/api/practice/trainings/enrollments/my` | 我的培训报名 | 学生 | [17.3.5](#sec-17-3-5) |
+| GET | `/api/practice/trainings/{courseId}/enrollments` | 某课程的报名列表 | 院系/教务 | [17.3.5](#sec-17-3-5) |
+| POST | `/api/practice/competitions` | 发布竞赛 | 教务 | [17.4.1](#sec-17-4-1) |
+| PUT | `/api/practice/competitions/{id}` | 更新竞赛 | 教务 | [17.4.1](#sec-17-4-1) |
+| PUT | `/api/practice/competitions/{id}/status` | 变更竞赛状态 | 教务 | [17.4.1](#sec-17-4-1) |
+| GET | `/api/practice/competitions` | 竞赛分页列表 | 教务 | [17.4.1](#sec-17-4-1) |
+| GET | `/api/practice/competitions/{id}` | 竞赛详情 | 是 | [17.4.1](#sec-17-4-1) |
+| GET | `/api/practice/competitions/available` | 可选竞赛列表 | 学生 | [17.4.1](#sec-17-4-1) |
+| DELETE | `/api/practice/competitions/{id}` | 删除竞赛 | 教务 | [17.4.1](#sec-17-4-1) |
+| POST | `/api/practice/competitions/registrations` | 报名竞赛（个人 / 团队） | 学生 | [17.4.2](#sec-17-4-2) |
+| DELETE | `/api/practice/competitions/registrations/{id}` | 撤销竞赛报名 | 学生 | [17.4.2](#sec-17-4-2) |
+| POST | `/api/practice/competitions/registrations/{id}/review` | 审核竞赛报名 | 教务 | [17.4.2](#sec-17-4-2) |
+| GET | `/api/practice/competitions/registrations/my` | 我的竞赛报名 | 学生 | [17.4.2](#sec-17-4-2) |
+| GET | `/api/practice/competitions/{competitionId}/registrations` | 某竞赛的报名列表 | 教务 | [17.4.2](#sec-17-4-2) |
+| POST | `/api/practice/competitions/results` | 录入 / 更新获奖结果 | 教务 | [17.4.3](#sec-17-4-3) |
+| DELETE | `/api/practice/competitions/results/{id}` | 删除获奖结果 | 教务 | [17.4.3](#sec-17-4-3) |
+| POST | `/api/practice/competitions/results/{id}/certificate` | 上传 / 替换获奖证书 | 教务 | [17.4.3](#sec-17-4-3) |
+| GET | `/api/practice/competitions/results/{id}/certificate/download` | 获奖证书下载 | 教务/学生 | [17.4.3](#sec-17-4-3) |
+| GET | `/api/practice/competitions/{competitionId}/results` | 某竞赛的结果列表 | 是 | [17.4.3](#sec-17-4-3) |
+| GET | `/api/practice/competitions/{competitionId}/results/my` | 我的竞赛结果 | 学生 | [17.4.3](#sec-17-4-3) |
+| POST | `/api/practice/social-practices` | 发布实践项目 | 教务 | [17.5.1](#sec-17-5-1) |
+| PUT | `/api/practice/social-practices/{id}` | 更新实践项目 | 教务 | [17.5.1](#sec-17-5-1) |
+| PUT | `/api/practice/social-practices/{id}/status` | 变更实践状态 | 教务 | [17.5.1](#sec-17-5-1) |
+| GET | `/api/practice/social-practices` | 实践项目分页列表 | 教务 | [17.5.1](#sec-17-5-1) |
+| GET | `/api/practice/social-practices/{id}` | 实践项目详情 | 是 | [17.5.1](#sec-17-5-1) |
+| GET | `/api/practice/social-practices/available` | 可选实践项目 | 学生 | [17.5.1](#sec-17-5-1) |
+| DELETE | `/api/practice/social-practices/{id}` | 删除实践项目 | 教务 | [17.5.1](#sec-17-5-1) |
+| POST | `/api/practice/social-practices/applications` | 申报实践项目（个人 / 团队） | 学生 | [17.5.2](#sec-17-5-2) |
+| DELETE | `/api/practice/social-practices/applications/{id}` | 撤销实践申报 | 学生 | [17.5.2](#sec-17-5-2) |
+| POST | `/api/practice/social-practices/applications/{id}/review` | 审核实践申报 | 教务 | [17.5.2](#sec-17-5-2) |
+| GET | `/api/practice/social-practices/applications/my` | 我的实践申报 | 学生 | [17.5.2](#sec-17-5-2) |
+| GET | `/api/practice/social-practices/{practiceId}/applications` | 某项目的申报列表 | 教务 | [17.5.2](#sec-17-5-2) |
+| POST | `/api/practice/social-practice-reports` | 提交 / 重传实践报告 | 学生 | [17.5.3](#sec-17-5-3) |
+| GET | `/api/practice/social-practice-reports/my` | 我的实践报告 | 学生 | [17.5.3](#sec-17-5-3) |
+| GET | `/api/practice/social-practice-reports` | 实践报告分页列表 | 教务 | [17.5.3](#sec-17-5-3) |
+| POST | `/api/practice/social-practice-reports/{id}/review` | 评审实践报告 | 教务 | [17.5.3](#sec-17-5-3) |
+| DELETE | `/api/practice/social-practice-reports/{id}` | 删除实践报告 | 学生/教务 | [17.5.3](#sec-17-5-3) |
+| GET | `/api/practice/social-practice-reports/{id}/download` | 实践报告下载 | 学生/教务 | [17.5.3](#sec-17-5-3) |
+| GET | `/api/preferences/me` | 读取本人偏好 | 是 | [18.1](#sec-18-1) |
+| PUT | `/api/preferences/me` | 浅合并本人偏好 | 是 | [18.1](#sec-18-1) |
+| DELETE | `/api/preferences/me` | 重置本人偏好 | 是 | [18.1](#sec-18-1) |
+| POST | `/api/front-logs` | 前端日志上报 | 否 | [18.2](#sec-18-2) |
 
 > **文件上传 / 下载**：通用端点 10 个见第 11 节；业务上传端点（头像 / practice 提交系 5 个 /
 > 查重登记 / 活动资料 / 答辩材料 / 获奖证书 / Excel 导入）与业务下载端点（practice 系 5 个 +
@@ -452,7 +460,11 @@ accessToken 由登录接口返回，默认有效期 30 分钟。过期后调用�
 
 ---
 
+<a id="sec-3"></a>
+
 ## 3. 认证模块
+
+<a id="sec-3-1"></a>
 
 ### 3.1 账号注册
 
@@ -508,6 +520,8 @@ Content-Type: application/json
 > `account` 命中任意子表（用户名 / 工号 / 学号 / 部门编号）即视为已存在。
 > 注册只写 `user` 基表与对应子表，**不会**补全班级、专业、院系归属——需要完整学籍信息请走 4.5 批量导入或 4.6 学生管理。
 
+<a id="sec-3-2"></a>
+
 ### 3.2 登录
 
 ```
@@ -516,6 +530,8 @@ Content-Type: application/json
 ```
 
 通过 `type` 字段区分登录渠道，`data` 中携带各渠道所需参数。
+
+<a id="sec-3-2-1"></a>
 
 #### 3.2.1 账号密码登录 (type=account)
 
@@ -530,6 +546,8 @@ Content-Type: application/json
   }
 }
 ```
+
+<a id="sec-3-2-2"></a>
 
 #### 3.2.2 第三方登录 (type=wechat / qq / alipay)
 
@@ -549,6 +567,8 @@ Content-Type: application/json
 | wechat | code | wx_user | wx_openid |
 | qq | code | qq_user | qq_openid |
 | alipay | code | alipay_user | alipay_userid |
+
+<a id="sec-3-2-3"></a>
 
 #### 3.2.3 登录响应
 
@@ -594,6 +614,8 @@ Content-Type: application/json
 | 密码错误 |
 | 登录失败（第三方未绑定） |
 
+<a id="sec-3-3"></a>
+
 ### 3.3 刷新令牌
 
 accessToken 过期后，用 refreshToken 获取新的 accessToken。
@@ -626,6 +648,8 @@ POST /api/login/refresh?refreshToken=<refreshToken>
 |---------|
 | refreshToken 无效或已过期 |
 
+<a id="sec-3-4"></a>
+
 ### 3.4 登出
 
 清除 Redis 中的 session，accessToken 随之失效。
@@ -648,6 +672,8 @@ Authorization: Bearer <accessToken>
 ```
 
 ---
+
+<a id="sec-3-5"></a>
 
 ### 3.5 修改密码
 
@@ -696,7 +722,11 @@ Content-Type: application/json
 
 ---
 
+<a id="sec-4"></a>
+
 ## 4. 用户模块
+
+<a id="sec-4-1"></a>
 
 ### 4.1 查询个人信息
 
@@ -781,6 +811,8 @@ Authorization: Bearer <accessToken>
 | department | | ✓ | | ✓ | 所属院系名称（`college.name`） |
 | position | | | ✓ | ✓ | `academic_admin` 固定为「教务管理员」，`department` 固定为「院系管理员」 |
 
+<a id="sec-4-2"></a>
+
 ### 4.2 修改个人信息
 
 支持部分更新，未传字段保持原值。
@@ -829,6 +861,8 @@ Content-Type: application/json
 
 > 不可修改字段：`name`、`password`、`userType`、`status`。
 
+<a id="sec-4-3"></a>
+
 ### 4.3 头像上传
 
 ```
@@ -868,6 +902,8 @@ curl -X POST "http://localhost:8080/api/user/avatar/upload?userId=1" \
 >
 > **归属校验**：`userId` 是历史遗留参数，传了就必须等于当前登录用户，否则返回 body `code=403`「权限不足」——防止任意登录用户覆盖他人头像。
 
+<a id="sec-4-4"></a>
+
 ### 4.4 获取头像图片
 
 ```
@@ -891,6 +927,8 @@ const blob = await resp.blob();
 img.src = URL.createObjectURL(blob);
 ```
 
+<a id="sec-4-4-1"></a>
+
 #### 4.4.1 头像 WebSocket 拉取（可选）
 
 适合需要一次连接批量取多张头像的场景。**该通道无握手鉴权**（与头像 REST 端点同一暴露面），连接后按 `userId` 请求：
@@ -906,6 +944,8 @@ ws://<host>/ws/avatar
 | 缺少 `userId` | `{"error":"缺少 userId 参数"}` |
 
 > 每次请求恰好回一帧，连接可复用；`contentType` 由存储文件扩展名推断（图片类型）。
+
+<a id="sec-4-5"></a>
 
 ### 4.5 批量导入学生和教师
 
@@ -1047,6 +1087,8 @@ Content-Type: application/json
 }
 ```
 
+<a id="sec-4-5-1"></a>
+
 #### 4.5.1 Excel 文件导入
 
 与 JSON 导入等价的文件形式：上传 `.xlsx`，服务端解析后**原样复用**同一套逐行独立事务导入逻辑，
@@ -1088,6 +1130,8 @@ Content-Type: multipart/form-data
 | 400 | 表头不符合模板（首列应为「用户名」），请下载导入模板 |
 | 400 | 文件中没有数据行 |
 
+<a id="sec-4-5-2"></a>
+
 #### 4.5.2 导入模板下载
 
 生成并下载导入模板：Sheet1「导入数据」仅表头（防止示例行被误导入），Sheet2「填写说明」
@@ -1101,6 +1145,8 @@ Authorization: Bearer <accessToken>
 **权限要求**：仅 `academic_admin`。响应为 `用户批量导入模板.xlsx`
 （`Accept-Ranges: bytes` + 内容 SHA-256 强 ETag）。
 
+<a id="sec-4-6"></a>
+
 ### 4.6 学生管理（教务管理员）
 
 仅教务管理员（`academic_admin`）可操作。用于查询和修改全校学生的学号、班级、年级、入学年份等信息。
@@ -1111,6 +1157,8 @@ Authorization: Bearer <accessToken>
 > - 班级下拉列表 → `GET /api/class-names`（见 [5.6 班级 CRUD](#56-班级-crud)），返回 `[{id, className, majorId}, ...]`
 > - 专业下拉列表 → `GET /api/majors`（见 [4.7 专业管理](#47-专业管理)），返回 `[{id, majorName}, ...]`
 > - 学生侧只传班级名称字符串即可，后端自动解析为 `classId`；专业为只读派生值
+
+<a id="sec-4-6-1"></a>
 
 #### 4.6.1 查询学生列表
 
@@ -1238,6 +1286,8 @@ curl -X GET "http://localhost:8080/api/students?gradeId=1&unassigned=true" \
 |-------------|---------|
 | 403 | 仅教务管理员可操作学生数据 |
 
+<a id="sec-4-6-2"></a>
+
 #### 4.6.2 修改学生信息
 
 支持部分更新，未传字段保持原值。
@@ -1311,6 +1361,8 @@ Content-Type: application/json
 
 ---
 
+<a id="sec-4-7"></a>
+
 ### 4.7 专业管理
 
 专业表（`major`）挂在院系下（`college_id`），班级再挂到专业上（`class_name.major_id`）；学生的专业由其班级推导，不单独存。仅教务管理员可增删改，所有登录用户可查看。
@@ -1370,6 +1422,8 @@ DELETE /api/majors/{id}   # 删除专业（仅 academic_admin）
 
 ---
 
+<a id="sec-4-8"></a>
+
 ### 4.8 教师查询
 
 查询全部教师列表，用于排课时下拉选择教师。
@@ -1404,6 +1458,8 @@ Authorization: Bearer <accessToken>
 
 ---
 
+<a id="sec-4-9"></a>
+
 ### 4.9 院系管理
 
 院系（`college`）是学籍归属链的顶端标准主实体：`major`（专业）、`teacher`（教师）、`department`（院系管理员）通过 `college_id` 引用本表；班级与学生再经「专业」两跳间接归属（`student → class_name.major_id → major.college_id → college.id`）。`college_name` 的全局唯一性由应用层保证（数据库仅保留普通索引）。
@@ -1432,6 +1488,8 @@ Authorization: Bearer <accessToken>
 | collegeNo | String | 院系编号（可空；数据库上限 32 字符） |
 | createTime | LocalDateTime | 创建时间（数据库 `DEFAULT CURRENT_TIMESTAMP`） |
 | updateTime | LocalDateTime | 更新时间（数据库 `ON UPDATE CURRENT_TIMESTAMP`） |
+
+<a id="sec-4-9-1"></a>
 
 #### 4.9.1 查询院系列表
 
@@ -1475,6 +1533,8 @@ Authorization: Bearer <accessToken>
 |------|---------|
 | 401 | 请先登录 / token已过期，请刷新 / token无效（真实 HTTP 401） |
 | 403 | 权限不足（学生或其它不匹配类型，真实 HTTP 403） |
+
+<a id="sec-4-9-2"></a>
 
 #### 4.9.2 新建院系
 
@@ -1530,6 +1590,8 @@ Content-Type: application/json
 | 400 | 院系名称不能为空 |
 | 409 | 院系名称已存在 |
 | 403 | 权限不足（非教务管理员，真实 HTTP 403） |
+
+<a id="sec-4-9-3"></a>
 
 #### 4.9.3 更新院系
 
@@ -1592,6 +1654,8 @@ Content-Type: application/json
 | 409 | 院系名称已存在（排除自身后仍有重名） |
 | 403 | 权限不足（非教务管理员，真实 HTTP 403） |
 
+<a id="sec-4-9-4"></a>
+
 #### 4.9.4 删除院系
 
 ```
@@ -1630,6 +1694,8 @@ Authorization: Bearer <accessToken>
 
 ---
 
+<a id="sec-4-10"></a>
+
 ### 4.10 年级管理
 
 年级（`grade`）是学生「当前学业年级」的字典表，`student.grade_id` 引用本表。`grade_id`（当前学业年级）与 `student.enrollment_year`（学籍入学年份）并存且不可互推——留级场景下二者不对等。
@@ -1653,6 +1719,8 @@ Authorization: Bearer <accessToken>
 | description | String | 年级描述（可空；数据库上限 128 字符） |
 | createTime | LocalDateTime | 创建时间（数据库默认值） |
 | updateTime | LocalDateTime | 更新时间（数据库 `ON UPDATE CURRENT_TIMESTAMP`） |
+
+<a id="sec-4-10-1"></a>
 
 #### 4.10.1 查询年级列表
 
@@ -1694,6 +1762,8 @@ Authorization: Bearer <accessToken>
 |------|---------|
 | 403 | 权限不足（非教务管理员，真实 HTTP 403） |
 
+<a id="sec-4-10-2"></a>
+
 #### 4.10.2 查询单个年级
 
 ```
@@ -1729,6 +1799,8 @@ Authorization: Bearer <accessToken>
 |------|---------|
 | 404 | 年级不存在 |
 | 403 | 权限不足（非教务管理员，真实 HTTP 403） |
+
+<a id="sec-4-10-3"></a>
 
 #### 4.10.3 新增年级
 
@@ -1783,6 +1855,8 @@ Content-Type: application/json
 | 400 | 年级名称不能为空 |
 | 409 | 年级名称已存在 |
 | 403 | 权限不足（非教务管理员，真实 HTTP 403） |
+
+<a id="sec-4-10-4"></a>
 
 #### 4.10.4 修改年级
 
@@ -1844,6 +1918,8 @@ Content-Type: application/json
 | 409 | 年级名称已存在（改成了其它年级的名称） |
 | 403 | 权限不足（非教务管理员，真实 HTTP 403） |
 
+<a id="sec-4-10-5"></a>
+
 #### 4.10.5 删除年级
 
 ```
@@ -1883,11 +1959,15 @@ Authorization: Bearer <accessToken>
 
 ---
 
+<a id="sec-5"></a>
+
 ## 5. 教学信息模块
 
 授课安排（`teach_info`）是「教师 + 课程 + 班级 + 时段 + 教室 + 周次」的排课记录。课表查询、授课草稿（5.8）、自动排课（第 8 节）与课程课业（第 12 节）都以它为锚点。
 
 > **同一授课组可能有多行**：同一「学期 + 课程/活动 + 教师 + 班级名」在 `teach_info` 中可能对应多条记录（每行一个上课时段）。课业内容只挂在组内最小 id 的**锚点行**上，所有接收 `teachInfoId` 的接口都接受组内任意一行，服务端自动归一（见 12.1）。
+
+<a id="sec-5-1"></a>
 
 ### 5.1 查询教学信息列表
 
@@ -1895,6 +1975,8 @@ Authorization: Bearer <accessToken>
 GET /api/teach-info?teacherId=<teacherId>&courseId=<courseId>&week=<week>
 Authorization: Bearer <accessToken>
 ```
+
+<a id="sec-5-1-1"></a>
 
 #### 5.1.1 数据范围（按角色自动限定）
 
@@ -1904,6 +1986,8 @@ Authorization: Bearer <accessToken>
 | teacher | 本人授课 | `userId → Teacher.id → TeachInfo.teacherId` |
 | department | 本院系 | `userId → Department.collegeId → major.college_id → class_name.major_id` 解析出院系下全部班级名（任一跳缺失即不可见，fail-closed） |
 | academic_admin | 全校 | 无过滤 |
+
+<a id="sec-5-1-2"></a>
 
 #### 5.1.2 请求参数（Query，均为可选）
 
@@ -1991,6 +2075,8 @@ Authorization: Bearer <accessToken>
 | selectedCount | Integer | 该选课班已分班人数（`selection_class.student_count`） |
 | classNo | Integer | 选课班号（从 1 开始） |
 
+<a id="sec-5-2"></a>
+
 ### 5.2 查询单条教学信息
 
 ```
@@ -2043,6 +2129,8 @@ Authorization: Bearer <accessToken>
 |---------|
 | 教学信息不存在 |
 
+<a id="sec-5-3"></a>
+
 ### 5.3 查询本班课程速览
 
 ```
@@ -2072,6 +2160,8 @@ Authorization: Bearer <accessToken>
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | courseName | String | 课程名称（该班去重后的全部课程） |
+
+<a id="sec-5-4"></a>
 
 ### 5.4 新增 / 修改 / 删除授课安排
 
@@ -2129,6 +2219,8 @@ Authorization: Bearer <accessToken>
 
 ---
 
+<a id="sec-5-5"></a>
+
 ### 5.5 课程 CRUD
 
 ```
@@ -2167,6 +2259,8 @@ Authorization: Bearer <accessToken>
 > **`courseType` 请求必须传中文描述字符串**（如 `"courseType": "必修"`）。该枚举未加 `@JsonCreator`，Jackson 按 `@JsonValue` 的描述串反序列化；传数字会落到**枚举序号**（0→必修、1→选修……），与「1=必修」的直觉错位，传枚举名 `REQUIRE` 同样失败。响应恒为中文描述串。
 >
 > `GET /api/courses/{id}` 查询单个课程，课程不存在时返回 404「课程不存在」；`?source=SELECTION_CAMPAIGN` 时 id 为 `campaign.id`。删除同理：`DELETE /api/courses/{id}?source=SELECTION_CAMPAIGN` 删除的是对应**选课活动**（须为 DRAFT），而不是同 id 的常规课。
+
+<a id="sec-5-6"></a>
 
 ### 5.6 班级 CRUD
 
@@ -2208,6 +2302,8 @@ Authorization: Bearer <accessToken>
 >
 > PUT 时 `majorId` 传 `null` 表示保持原专业不变（MyBatis Plus `NOT_NULL` 策略），传了值则必须存在。
 
+<a id="sec-5-7"></a>
+
 ### 5.7 上课地点 CRUD
 
 ```
@@ -2248,9 +2344,13 @@ Authorization: Bearer <accessToken>
 
 ---
 
+<a id="sec-5-8"></a>
+
 ### 5.8 授课草稿缓存
 
 排课采用**草稿缓存 → 批量入库 → 自动排课**的工作流，减少编排阶段的数据库读写压力。
+
+<a id="sec-5-8-1"></a>
 
 #### 5.8.1 工作流
 
@@ -2263,6 +2363,8 @@ Authorization: Bearer <accessToken>
                   → 后端消费缓存，批量入库，启动 Timefold 求解
                   → 结果写回 teach_info 表
 ```
+
+<a id="sec-5-8-2"></a>
 
 #### 5.8.2 批量提交授课草稿
 
@@ -2309,6 +2411,8 @@ Content-Type: application/json
 ```
 
 > `data` 返回当前缓存中草稿总数。
+
+<a id="sec-5-8-3"></a>
 
 #### 5.8.3 查看缓存草稿
 
@@ -2371,6 +2475,8 @@ Authorization: Bearer <accessToken>
 | endWeek | Integer | 结束教学周 |
 | semesterId | Long | 学期 ID（排课时自动设为当前学期） |
 
+<a id="sec-5-8-4"></a>
+
 #### 5.8.4 清空全部草稿
 
 ```
@@ -2380,6 +2486,8 @@ Authorization: Bearer <accessToken>
 
 **权限**：仅 `academic_admin`（`@RequireAcademicAdmin`）。
 
+<a id="sec-5-8-5"></a>
+
 #### 5.8.5 按班级移除草稿
 
 ```
@@ -2388,6 +2496,8 @@ Authorization: Bearer <accessToken>
 ```
 
 用于重新配置某个班级的课程——先移除旧草稿，再重新 POST。
+
+<a id="sec-5-8-6"></a>
 
 #### 5.8.6 按唯一键删除单条草稿
 
@@ -2414,6 +2524,8 @@ Authorization: Bearer <accessToken>
 |---------|
 | 无权删除其他院系的草稿 |
 | 草稿记录不存在 |
+
+<a id="sec-5-8-7"></a>
 
 #### 5.8.7 查看草稿班级汇总
 
@@ -2456,6 +2568,8 @@ Authorization: Bearer <accessToken>
 > 触发排课前若缓存为空，求解接口会返回 500 错误并提示先提交草稿。
 
 ---
+
+<a id="sec-5-9"></a>
 
 ### 5.9 学生周课表查询（Redis 缓存）
 
@@ -2552,9 +2666,13 @@ Authorization: Bearer <accessToken>
 
 ---
 
+<a id="sec-6"></a>
+
 ## 6. 时间段模块
 
 时间段表（`time`）与教学信息解耦，仅存储起止时间模板，供前端下拉选择。
+
+<a id="sec-6-1"></a>
 
 ### 6.1 查询全部时间段
 
@@ -2576,6 +2694,8 @@ Authorization: Bearer <accessToken>
   ]
 }
 ```
+
+<a id="sec-6-2"></a>
 
 ### 6.2 查询单个时间段
 
@@ -2616,9 +2736,13 @@ Authorization: Bearer <accessToken>
 
 ---
 
+<a id="sec-7"></a>
+
 ## 7. 时段限制模块
 
 教务管理员通过时段限制制定基础排课规则，院系管理者在此基础上做最终排课。
+
+<a id="sec-7-1"></a>
 
 ### 7.1 限制类型与角色权限
 
@@ -2636,6 +2760,8 @@ Authorization: Bearer <accessToken>
 | academic_admin | 可增删改查全部时段限制 |
 | department | 可查看，不可修改 |
 | 其他角色 | 可在排课结果中看到被限制的时段效果 |
+
+<a id="sec-7-2"></a>
 
 ### 7.2 查询全部
 
@@ -2671,12 +2797,16 @@ Authorization: Bearer <accessToken>
 }
 ```
 
+<a id="sec-7-3"></a>
+
 ### 7.3 查询单条
 
 ```
 GET /api/time-restrictions/{id}
 Authorization: Bearer <accessToken>
 ```
+
+<a id="sec-7-4"></a>
 
 ### 7.4 新增
 
@@ -2709,6 +2839,8 @@ Content-Type: application/json
 }
 ```
 
+<a id="sec-7-5"></a>
+
 ### 7.5 修改
 
 ```
@@ -2716,6 +2848,8 @@ PUT /api/time-restrictions/{id}
 Authorization: Bearer <accessToken>
 Content-Type: application/json
 ```
+
+<a id="sec-7-6"></a>
 
 ### 7.6 删除
 
@@ -2726,11 +2860,15 @@ Authorization: Bearer <accessToken>
 
 ---
 
+<a id="sec-8"></a>
+
 ## 8. 排课模块
 
 基于 Timefold Solver 约束求解引擎，将授课草稿中的课程自动分配到合适的时间和教室。
 
 **完整流程**：前端逐班提交授课草稿到缓存（不写库）→ 全部配好后触发排课 → 后端消费缓存批量入库 → 求解器分配时间段和教室 → 结果写回 `teach_info` 表。
+
+<a id="sec-8-1"></a>
 
 ### 8.1 触发排课
 
@@ -2772,6 +2910,8 @@ Authorization: Bearer <accessToken>
   }
 }
 ```
+
+<a id="sec-8-2"></a>
 
 ### 8.2 查询排课方案
 
@@ -2854,6 +2994,8 @@ Authorization: Bearer <accessToken>
 - `"0hard/0soft"` — 完美解，所有硬约束均满足
 - `"-3hard/-10soft"` — 3 个硬约束违规（不可接受），10 个软约束违规
 
+<a id="sec-8-3"></a>
+
 ### 8.3 停止排课
 
 ```
@@ -2862,6 +3004,8 @@ Authorization: Bearer <accessToken>
 ```
 
 提前终止正在进行的求解，保留当前最优解。
+
+<a id="sec-8-4"></a>
 
 ### 8.4 约束说明
 
@@ -2876,6 +3020,8 @@ Authorization: Bearer <accessToken>
 > **学期隔离**：不同学期（semesterId 不同）的课程互不冲突，即使时间、教室、班级完全相同。
 > **周次重叠判断**：`a.startWeek ≤ b.endWeek && b.startWeek ≤ a.endWeek`。两门课的周次区间无交集时，即使同一时段也互不冲突。
 
+<a id="sec-8-5"></a>
+
 ### 8.5 排课配置
 
 ```yaml
@@ -2888,13 +3034,19 @@ timefold:
 
 > **求解终止条件**：到达 `spent-limit` 后自动停止。若在此之前找到 0hard 解也会提前终止。
 
+<a id="sec-8-6"></a>
+
 ### 8.6 合班上课
+
+<a id="sec-8-6-1"></a>
 
 #### 8.6.1 原理
 
 `teach_info` 表的 `class_name` 字段支持**逗号分隔多个班级名称**，表示多个班级的学生共同上这节课。
 
 排课时，求解器会通过 `StudentGroup` 交集检测班级冲突——只要两个课堂共享任意一个班级，就不能安排在同一时间段。
+
+<a id="sec-8-6-2"></a>
 
 #### 8.6.2 示例
 
@@ -2914,6 +3066,8 @@ teach_info.class_name = "计科2201,计科2101"
 
 排课时该课堂同时与计科2201和计科2101的课程产生冲突约束，确保重修学生不会在同一时间有两门课。
 
+<a id="sec-8-6-3"></a>
+
 #### 8.6.3 权限角色
 
 | 角色 | 权限 |
@@ -2923,9 +3077,13 @@ teach_info.class_name = "计科2201,计科2101"
 
 ---
 
+<a id="sec-9"></a>
+
 ## 9. 学期模块
 
 学期定义排课和课表查询的时间边界。所有课程的 startWeek/endWeek 范围必须在学期周次范围内。
+
+<a id="sec-9-1"></a>
 
 ### 9.1 日期自动计算规则
 
@@ -2947,6 +3105,8 @@ teach_info.class_name = "计科2201,计科2101"
 
 **三项全传时**：校验 `endDate` 是否等于 `startDate + (总周数 × 7 - 1)` 天，不匹配则返回 400 错误提示前端。只传一项或零项时不校验日期一致性。
 
+<a id="sec-9-2"></a>
+
 ### 9.2 查询全部学期
 
 ```
@@ -2967,6 +3127,8 @@ Authorization: Bearer <accessToken>
 }
 ```
 
+<a id="sec-9-3"></a>
+
 ### 9.3 查询当前学期
 
 ```
@@ -2975,6 +3137,8 @@ Authorization: Bearer <accessToken>
 ```
 
 > 排课前必须调用此接口确认当前学期存在。
+
+<a id="sec-9-4"></a>
 
 ### 9.4 新增学期
 
@@ -3019,7 +3183,8 @@ Content-Type: application/json
 }
 ```
 → 后端自动算出 `startWeek=1, endWeek=18`
-```
+
+<a id="sec-9-5"></a>
 
 ### 9.5 修改 / 删除学期
 
@@ -3043,11 +3208,15 @@ Authorization: Bearer <accessToken>
 
 ---
 
+<a id="sec-10"></a>
+
 ## 10. 选课模块
 
 学生选课采用"活动即课程"模式：教务管理员创建选课活动（同时录入课程信息）-> 绑定选课组 -> 开放选课 -> 学生抢选 -> 关闭 -> 分班。选课容量通过 Redis + Lua 脚本原子控制，避免超选。
 
 > **设计要点**：一个选课活动本身就是一门公选课，`selection_campaign` 表直接携带课程字段（courseName/courseCode/credit/courseHour/description/courseType/allowedGradeIds/allowedMajors/capacity）。**活动名称 `name` 同时作为课程名称**（`course_name` 列，单一事实源）。**不在 `course` 表生成衍生记录**：下游表（`teach_info` / `score` / `exam` / `time_restriction` / `teaching_evaluation`）通过可空的 `campaign_id` 引用活动，富化时按 `campaign_id` 查本表。`GET /api/courses` 里出现的公选课条目只是**运行时合成**的展示视图（见 5.5），不落库。不再有独立的 `selection_course` 表。
+
+<a id="sec-10-1"></a>
 
 ### 10.1 状态流转与角色权限
 
@@ -3086,6 +3255,8 @@ DRAFT --open()--> OPEN --close()--> CLOSED --finalize()--> FINALIZED
 | 原子逻辑 | `INCR` 后若超过 capacity 则 `DECR` 并返回 -1；选课记录插入失败时回滚 `DECR` |
 | 生命周期 | 活动进入 CLOSED/FINALIZED 后键不再使用，未自动清理 |
 
+<a id="sec-10-2"></a>
+
 ### 10.2 选课活动管理（教务管理员）
 
 ```
@@ -3101,6 +3272,8 @@ Authorization: Bearer <accessToken>
 ```
 
 **权限**：全部接口仅 `academic_admin` 可调用，其他角色返回 403。
+
+<a id="sec-10-2-1"></a>
 
 #### 10.2.1 新建选课活动
 
@@ -3231,6 +3404,8 @@ Content-Type: application/json
 | 时段限制 {id} 必须为 RESERVED 类型 |
 | 时段限制 {id} 已预留给其他课程 |
 
+<a id="sec-10-2-2"></a>
+
 #### 10.2.2 查询全部活动
 
 ```
@@ -3239,6 +3414,8 @@ Authorization: Bearer <accessToken>
 ```
 
 返回全部活动列表，每项字段同 10.2.1 响应。
+
+<a id="sec-10-2-3"></a>
 
 #### 10.2.3 查询活动详情
 
@@ -3258,6 +3435,8 @@ Authorization: Bearer <accessToken>
 | message |
 |---------|
 | 选课活动不存在 |
+
+<a id="sec-10-2-4"></a>
 
 #### 10.2.4 修改活动
 
@@ -3310,6 +3489,8 @@ Content-Type: application/json
 | 时段限制 {id} 必须为 RESERVED 类型 |
 | 时段限制 {id} 已预留给其他课程 |
 
+<a id="sec-10-2-5"></a>
+
 #### 10.2.5 删除活动
 
 仅 DRAFT 状态可删除，应用层级联清理（DB 无外键）：选课班成员 → 选课班 → 选课记录 → 活动-时段限制关联 → 本活动的 RESERVED 时段限制 → Redis 选课计数器 → 活动主表。公选课没有衍生 `course` 记录，无需联动删课程。
@@ -3325,6 +3506,8 @@ Authorization: Bearer <accessToken>
 |---------|
 | 选课活动不存在 |
 | 仅草稿状态的活动可删除 |
+
+<a id="sec-10-2-6"></a>
 
 #### 10.2.6 开启选课
 
@@ -3347,6 +3530,8 @@ Authorization: Bearer <accessToken>
 | 课程编号不能为空 |
 | 容量必须大于0 |
 
+<a id="sec-10-2-7"></a>
+
 #### 10.2.7 关闭选课
 
 将活动从 OPEN 切换为 CLOSED，学生无法再选课/退选。
@@ -3362,6 +3547,8 @@ Authorization: Bearer <accessToken>
 |---------|
 | 选课活动不存在 |
 | 仅开放状态的活动可关闭 |
+
+<a id="sec-10-2-8"></a>
 
 #### 10.2.8 分班
 
@@ -3386,6 +3573,8 @@ Authorization: Bearer <accessToken>
 | 选课活动不存在 |
 | 仅关闭状态的活动可分班 |
 
+<a id="sec-10-3"></a>
+
 ### 10.3 选课组管理（教务管理员）
 
 选课组是独立实体，可被多个选课活动复用；一个选课活动只能绑定一个选课组（通过 `selection_campaign.group_id` 字段直接存储）。每个选课组定义组内学生选课数上限（`maxCourses`）。
@@ -3405,6 +3594,8 @@ Authorization: Bearer <accessToken>
 ```
 
 **权限**：全部接口仅 `academic_admin` 可调用，其他角色返回 403。绑定/换绑通过 [10.2](#102-选课活动管理教务管理员) 的 create/update 接口完成，仅 DRAFT 状态活动可修改绑定。
+
+<a id="sec-10-3-1"></a>
 
 #### 10.3.1 新建选课组
 
@@ -3453,6 +3644,8 @@ Content-Type: application/json
 | 组名已存在 |
 | 本组选课上限必须大于0 |
 
+<a id="sec-10-3-2"></a>
+
 #### 10.3.2 查询全部选课组
 
 ```
@@ -3480,6 +3673,8 @@ Authorization: Bearer <accessToken>
 }
 ```
 
+<a id="sec-10-3-3"></a>
+
 #### 10.3.3 查询选课组详情
 
 ```
@@ -3500,6 +3695,8 @@ Authorization: Bearer <accessToken>
 | message |
 |---------|
 | 选课组不存在 |
+
+<a id="sec-10-3-4"></a>
 
 #### 10.3.4 修改选课组
 
@@ -3535,6 +3732,8 @@ Content-Type: application/json
 | 本组选课上限必须大于0 |
 | 组已被开放中的活动绑定，不可修改选课上限 |
 
+<a id="sec-10-3-5"></a>
+
 #### 10.3.5 删除选课组
 
 ```
@@ -3561,6 +3760,8 @@ Authorization: Bearer <accessToken>
 | campaignCount | Integer | 绑定到该组的选课活动数（也是组内课程数，因为一个活动即一门课） |
 | createTime | LocalDateTime | 选课组创建时间 |
 
+<a id="sec-10-3-6"></a>
+
 #### 10.3.6 查询可绑定到本组的活动
 
 ```
@@ -3577,6 +3778,8 @@ Authorization: Bearer <accessToken>
 | message |
 |---------|
 | 选课组不存在 |
+
+<a id="sec-10-4"></a>
 
 ### 10.4 分班结果查询（教务管理员）
 
@@ -3644,6 +3847,8 @@ Authorization: Bearer <accessToken>
 | studentNo | String | 学号 |
 | className | String | 班级名称 |
 
+<a id="sec-10-4-1"></a>
+
 #### 10.4.1 为选课班分配教师
 
 ```
@@ -3683,6 +3888,8 @@ Content-Type: application/json
 | 404 | 教学信息不存在 |
 | 400 | 引用的教师不存在(id=x) |
 
+<a id="sec-10-5"></a>
+
 ### 10.5 学生选课
 
 ```
@@ -3696,6 +3903,8 @@ Authorization: Bearer <accessToken>
 
 **权限**：全部接口仅 `student` 可调用，其他角色（含 academic_admin / teacher / department）返回 403。
 
+<a id="sec-10-5-1"></a>
+
 #### 10.5.1 查询可选课活动
 
 ```
@@ -3704,6 +3913,8 @@ Authorization: Bearer <accessToken>
 ```
 
 返回当前处于 OPEN 状态的活动列表，每项为 `StudentCampaignResponse`（含课程信息、组上下文、实时选课统计、本人是否已选）。
+
+<a id="sec-10-5-2"></a>
 
 #### 10.5.2 查询活动详情
 
@@ -3771,6 +3982,8 @@ Authorization: Bearer <accessToken>
 | selectedCount | Integer | 该活动当前已选人数（实时） |
 | remaining | Integer | 剩余容量（实时） |
 | selectedByMe | Boolean | 当前学生是否已选该活动 |
+
+<a id="sec-10-5-3"></a>
 
 #### 10.5.3 选课
 
@@ -3843,6 +4056,8 @@ Content-Type: application/json
 
 > 选课记录插入失败时（如数据库异常），会回滚 Redis 计数，保证一致性。
 
+<a id="sec-10-5-4"></a>
+
 #### 10.5.4 退选
 
 ```
@@ -3869,6 +4084,8 @@ Authorization: Bearer <accessToken>
 | 活动未开放，不可退选 |
 | 不在选课时间窗口内 |
 
+<a id="sec-10-5-5"></a>
+
 #### 10.5.5 查询我的选课记录
 
 ```
@@ -3886,6 +4103,8 @@ Authorization: Bearer <accessToken>
 
 ---
 
+<a id="sec-11"></a>
+
 ## 11. 文件模块
 
 通用文件传输：分片上传（断点续传 / 秒传 / SHA-256 完整性校验）、小文件整传、可续传下载、
@@ -3902,6 +4121,8 @@ Authorization: Bearer <accessToken>
 
 > 字段含义、前端上传器必须遵守的约定、完整错误码，见根目录 **《文件上传下载接口文档.md》**。
 
+<a id="sec-11-1"></a>
+
 ### 11.1 端点总览
 
 | 方法 | 路径 | 说明 |
@@ -3916,6 +4137,8 @@ Authorization: Bearer <accessToken>
 | POST | `/api/file/download` | 通用下载 |
 | GET | `/api/file/preview` | 在线预览（inline + Range 懒加载 → 206） |
 | GET | `/api/file/preview/info` | 预览元信息（大小 / 类型 / 可预览性） |
+
+<a id="sec-11-2"></a>
 
 ### 11.2 完整分片上传流程
 
@@ -3966,6 +4189,8 @@ curl -X POST "http://localhost:8080/api/file/uploads/{uploadId}/complete"   -H "
 **④ 出错时**：先 `POST /api/file/uploads/{uploadId}/verify` 拿缺失 / 损坏清单，**精准重传**这几片，
 再重新 `complete` —— 不必整个文件重来。用户主动放弃时 `DELETE /api/file/uploads/{uploadId}`。
 
+<a id="sec-11-3"></a>
+
 ### 11.3 通用下载
 
 ```bash
@@ -3977,6 +4202,8 @@ curl -X POST "http://localhost:8080/api/file/download"   -H "Authorization: Bear
 > ⚠️ **`Range` 在 POST 下依然返回 206**，但浏览器 / `wget -c` / IDM 的**自动**断点续传只对 GET 发起。
 > 用 POST 下载要续传必须前端自研分块循环。需要下载器自动续传时请用业务下载端点。
 
+<a id="sec-11-4"></a>
+
 ### 11.4 与业务端点的衔接
 
 practice 的 5 个提交端点（论文 / 开题 / 中期 / 实习报告 / 社会实践报告）支持**二选一**：
@@ -3986,11 +4213,15 @@ practice 的 5 个提交端点（论文 / 开题 / 中期 / 实习报告 / 社�
 
 两者同时给会返回 400；`filePath` 必须属于该端点对应的业务目录，否则 403。
 
+<a id="sec-11-5"></a>
+
 ### 11.5 业务附件端点（毕业设计 / 竞赛）
 
 以下附件点全部复用第 11 节的传输能力：小文件走各自端点的 multipart `file` 部分整传（≤20MB），
 大文件先走分片上传、再以 `filePath` + `fileOriginal`（表单字段或 `data` 内字段）提交产物路径，
 两者同时给 400。下载端点均为 GET 且支持 **Range 断点续传（206）+ 强 ETag**。
+
+<a id="sec-11-5-1"></a>
 
 #### 11.5.1 查重报告附件
 
@@ -4003,6 +4234,8 @@ practice 的 5 个提交端点（论文 / 开题 / 中期 / 实习报告 / 社�
 > （`@RequestPart("data")` 承载原 JSON，字段不变并新增可选 `filePath`/`fileOriginal`；
 > `@RequestPart("file")` 可选承载整传文件）。前端需同步改为 multipart 表单提交。
 
+<a id="sec-11-5-2"></a>
+
 #### 11.5.2 毕设活动资料（一个活动多份）
 
 | 方法 | 路径 | 权限 | 说明 |
@@ -4014,12 +4247,16 @@ practice 的 5 个提交端点（论文 / 开题 / 中期 / 实习报告 / 社�
 
 上传/删除动作均记入活动操作日志（JSONL）。
 
+<a id="sec-11-5-3"></a>
+
 #### 11.5.3 答辩材料附件
 
 | 方法 | 路径 | 权限 | 说明 |
 |------|------|------|------|
 | POST | `/api/practice/graduation/defense/{id}/material` | 院系（本院）/教务 | 上传材料，重复上传为**替换** |
 | GET | `/api/practice/graduation/defense/{id}/material/download` | 学生本人/院系/教务 | 材料下载（未上传 404） |
+
+<a id="sec-11-5-4"></a>
 
 #### 11.5.4 竞赛获奖证书附件
 
@@ -4030,6 +4267,8 @@ practice 的 5 个提交端点（论文 / 开题 / 中期 / 实习报告 / 社�
 
 删除竞赛结果时证书引用一并释放。
 
+<a id="sec-11-5-5"></a>
+
 #### 11.5.5 导出类端点的传输层变化
 
 - `GET /api/practice/graduation/theses/export-package`（查重数据包）：改为**流式生成 zip 落盘**
@@ -4038,6 +4277,8 @@ practice 的 5 个提交端点（论文 / 开题 / 中期 / 实习报告 / 社�
 - `GET /api/scores/export`、`GET /api/practice/graduation/dashboard/{campaignId}/export`、
   `GET /api/practice/graduation/defense/scores/export`：响应头统一为
   RFC5987 文件名 + `Accept-Ranges: bytes` + 内容 SHA-256 强 ETag（支持 206）。
+
+<a id="sec-11-6"></a>
 
 ### 11.6 在线预览（懒加载）
 
@@ -4049,6 +4290,8 @@ pdf.js 按页拉取、`<video>` 按拖动位置拉取，**首屏永不整传**�
 `Cache-Control: private, max-age=1年, immutable`（路径即内容摘要，字节永不改变），
 **二次打开零传输**。
 
+<a id="sec-11-6-1"></a>
+
 #### 11.6.1 预览元信息（先调，零内容传输）
 
 ```bash
@@ -4059,6 +4302,8 @@ curl "http://localhost:8080/api/file/preview/info?filePath=objects/course-materi
 
 前端据此决定策略：`previewable=false`（docx/xlsx/zip 等浏览器无法原生渲染的类型）→ 直接回退
 `POST /api/file/download`；`size` 大 → 提示「将按需加载」；`contentType` → 选 viewer。
+
+<a id="sec-11-6-2"></a>
 
 #### 11.6.2 预览内容
 
@@ -4076,6 +4321,8 @@ curl "http://localhost:8080/api/file/preview?filePath=objects/course-material/<s
   浏览器能原生渲染的子集）。其余类型返回 body code **415**，前端回退下载。
 - 不带 `Range` 时返回 200 完整正文（小图等一次性加载场景）。
 
+<a id="sec-11-6-3"></a>
+
 #### 11.6.3 前端对接要点
 
 - **鉴权仍是 Bearer 头**（本组端点不做归属判权，与通用下载同一暴露面；敏感文件请走业务判权端点）：
@@ -4089,6 +4336,8 @@ curl "http://localhost:8080/api/file/preview?filePath=objects/course-material/<s
 
 ---
 
+<a id="sec-12"></a>
+
 ## 12. 课程课业模块
 
 课程课业（`module/coursework`）为**授课安排**提供作业闭环、教学视频、课程资料、课程公告与平时分合成五项能力。
@@ -4097,12 +4346,16 @@ curl "http://localhost:8080/api/file/preview?filePath=objects/course-material/<s
 > 枚举与时间序列化取值、错误码分支（业务错误是 HTTP 200 + body.code）、13 条易踩坑清单与联调自检清单。
 > 视频播放的 WebSocket 协议见《docs/课程视频WS协议.md》。本节只列端点与关键约定。
 
+<a id="sec-12-1"></a>
+
 ### 12.1 授课组锚点（重要约定）
 
 同一「学期 + 课程/活动 + 教师 + 班级名」在 `teach_info` 里可能有多条行（对应多个上课时段）。
 课业内容**只挂其中的锚点行**（组内最小 `id`），服务端在写入/读取时统一归一。
 
 因此所有 `teachInfoId` 入参**接受组内任意一行**，无需前端自己找锚点；返回的 `teachInfoId` 一律是锚点行 id。
+
+<a id="sec-12-2"></a>
 
 ### 12.2 作业
 
@@ -4176,6 +4429,8 @@ curl "http://localhost:8080/api/file/preview?filePath=objects/course-material/<s
 **视图变化**：`AssignmentView` 增 `answerVisible`/`questionTypes`/`hasFileQuestion`/`questions`（仅详情）；
 提交视图去 `content`/`fileName`/`fileOriginal`，增 `autoScore`/`answers`（逐题：标准答案/得分/评语）。
 
+<a id="sec-12-3"></a>
+
 ### 12.3 教学视频（章节树 + WS 流式播放）
 
 视频按教科书式两级树组织：**章（CHAPTER）→ 节（SECTION）→ 视频**，章/节挂授课组锚点
@@ -4213,6 +4468,8 @@ tree 响应不再带 `commonVideos`：tree 与公共区**严格互补**——树
 - 一次 `read` 恰好回一帧；尾部短读的帧长小于请求 `length` 属正常；`offset` 越界回 12 字节空头帧
 - 在途 `read` 上限 8，超出回 429 error 帧（减速信号）；单连接限速 32MB/s
 
+<a id="sec-12-4"></a>
+
 ### 12.4 课程资料（文件夹树）
 
 资料按**自引用文件夹树**组织：文件夹挂授课组锚点（同一授课组一棵树），`parentId` 空 = 根层，
@@ -4246,6 +4503,8 @@ tree 响应不再带 `commonVideos`：tree 与公共区**严格互补**——树
 资料 ≤20MB，放行文档 / PPT / 表格 / PDF / 压缩包 / 图片。**下载走文件模块的
 `POST /api/file/download`**，请求体带列表返回的 `fileName` 作为 `filePath`。
 
+<a id="sec-12-5"></a>
+
 ### 12.5 课程公告
 
 | 方法 | 路径 | 权限 | 说明 |
@@ -4254,6 +4513,8 @@ tree 响应不再带 `commonVideos`：tree 与公共区**严格互补**——树
 | PUT | `/api/coursework/announcements/{id}` | 教师 | 编辑（**不重复通知**） |
 | DELETE | `/api/coursework/announcements/{id}` | 教师 | 删除 |
 | GET | `/api/coursework/announcements?teachInfoId=` | 教师/学生 | 列表 |
+
+<a id="sec-12-6"></a>
 
 ### 12.6 作业成绩合成平时分
 
@@ -4280,6 +4541,8 @@ tree 响应不再带 `commonVideos`：tree 与公共区**严格互补**——树
 
 ---
 
+<a id="sec-13"></a>
+
 ## 13. 成绩模块
 
 成绩（`module/score`）负责平时分占比配置、成绩录入与修改、按角色查询、学生成绩页、成绩分布统计、Excel/PDF 导出，以及「学生申请 → 教师回复 → 学生升级 → 教务终审」的成绩复核工作流。
@@ -4287,6 +4550,8 @@ tree 响应不再带 `commonVideos`：tree 与公共区**严格互补**——树
 > **状态码约定（第 13、14 节通用）**：未登录 / token 过期 / 用户类型不满足，由 `AuthInterceptor` 直接返回**真实 HTTP 401/403**，响应体只有 `{"code":..,"message":..}`（**没有 `data` 字段**）；
 > 业务校验失败（`BusinessException`）与参数绑定失败由 `GlobalExceptionHandler` 统一包装为 **HTTP 200 + body `code`**（400/403/404/409/500），body 形如 `{"code":409,"message":"成绩已锁定，不可修改","data":null}`。
 > 下文错误表除注明「HTTP 403」外，均为 HTTP 200 + body code，前端必须读 body 的 `code`。
+
+<a id="sec-13-1"></a>
 
 ### 13.1 权限与角色
 
@@ -4309,6 +4574,8 @@ tree 响应不再带 `commonVideos`：tree 与公共区**严格互补**——树
 **「本院」判定**：把 `teach_info.class_name`（合班 CSV）拆开，经「班级 → 专业 → 院系」两跳解析，**任一班级属于该院系的 college 即放行**；拆不出班级或院系未分配时拒绝。
 
 > 两类 403 的形态不同：**注解级**类型不符（如院系管理员调 `PUT /api/scores/config/1`、教师调 `/statistics`）是真实 HTTP 403；**服务层**归属不符（如教师录入他人课程）是 HTTP 200 + body `code=403`。
+
+<a id="sec-13-2"></a>
 
 ### 13.2 枚举、派生规则与锁定
 
@@ -4345,6 +4612,8 @@ totalScore = round2(regularScore × regularRatio / 100) + round2(finalScore × (
 > 写入成绩前必须先有占比配置：`POST /api/scores` 在无 `score_config` 行时直接 400 `请先设置平时分占比`。
 
 **时间序列化**：`LocalDate` → `"2026-06-20"`；`LocalTime` → `"09:00:00"`；`LocalDateTime` → `"2026-06-01T10:00:00"`（ISO-8601 默认，无自定义格式）。
+
+<a id="sec-13-3"></a>
 
 ### 13.3 端点总览
 
@@ -4394,7 +4663,11 @@ totalScore = round2(regularScore × regularRatio / 100) + round2(finalScore × (
 >
 > **新增类接口的响应是「内存实体直接富化」，不经回查库**：`POST /api/scores` 新建行的 `createTime` 与 `locked`、`POST /api/scores/reviews` 的 `createTime`、新建考试/占比配置的 `createTime` 可能为 `null`（库内 `DEFAULT CURRENT_TIMESTAMP` / `DEFAULT 0` 已正确落库）。需要完整视图请随后调查询接口。
 
+<a id="sec-13-4"></a>
+
 ### 13.4 平时分占比配置
+
+<a id="sec-13-4-1"></a>
 
 #### 13.4.1 设置占比
 
@@ -4440,6 +4713,8 @@ Content-Type: application/json
 | 403 | 权限不足（教师非本人授课安排） |
 | 404 | 授课安排不存在 |
 
+<a id="sec-13-4-2"></a>
+
 #### 13.4.2 查询占比
 
 ```
@@ -4447,6 +4722,8 @@ GET /api/scores/config/{teachInfoId}
 ```
 
 `data` 为 `ScoreConfig`（字段同上）；**未设置时 `data: null`**（不报错）。权限与错误同上。
+
+<a id="sec-13-5"></a>
 
 ### 13.5 录入名单
 
@@ -4484,7 +4761,11 @@ GET /api/scores/roster/{teachInfoId}?examId=
 | 400 | 考试与授课安排不匹配（考试不属于该 teachInfoId） |
 | 400 | 考试排考班级不在该授课安排的合班范围内 |
 
+<a id="sec-13-6"></a>
+
 ### 13.6 批量录入与单条修改
+
+<a id="sec-13-6-1"></a>
 
 #### 13.6.1 批量录入
 
@@ -4543,6 +4824,8 @@ Content-Type: application/json
 
 > 第 14 条在事务中抛出 → 本批全部回滚。教师若只想改个别学生，请走单条修改并逐条确认未锁定。
 
+<a id="sec-13-6-2"></a>
+
 #### 13.6.2 修改单条
 
 ```
@@ -4572,7 +4855,11 @@ Content-Type: application/json
 
 > 注意顺序：**锁定检查先于归属校验**，非本人教师在已锁定成绩上会收到 409 而不是 403。
 
+<a id="sec-13-7"></a>
+
 ### 13.7 成绩查询
+
+<a id="sec-13-7-1"></a>
 
 #### 13.7.1 按授课安排查询
 
@@ -4590,6 +4877,8 @@ GET /api/scores?teachInfoId=
 | 404 | 授课安排不存在 |
 | 403 | 权限不足 |
 
+<a id="sec-13-7-2"></a>
+
 #### 13.7.2 我的成绩
 
 ```
@@ -4604,6 +4893,8 @@ GET /api/scores/my?semesterId=
 - 返回该学期下该学生的**全部成绩类型**（`REGULAR` + `MAKEUP` + `RETAKE`），按 `courseId` 升序、`createTime` 倒序。
 - 当前无 `CURRENT` 学期且未传 `semesterId` → 返回 `[]`。
 - 不做额外归属校验，学生 id 取 JWT 上下文。
+
+<a id="sec-13-7-3"></a>
 
 #### 13.7.3 我的学期
 
@@ -4631,6 +4922,8 @@ GET /api/scores/my/semesters
   ]
 }
 ```
+
+<a id="sec-13-8"></a>
 
 ### 13.8 成绩统计
 
@@ -4692,6 +4985,8 @@ GET /api/scores/statistics?courseId=&source=&className=&semesterId=
 > `totalCount` 与 `passRate` 的分母口径不同：前者是全部成绩行，后者只算 `totalScore` 非 null 的行（课业合成的平时分在期末未出时总评为 null，会计入 `totalCount` 但不参与均分/及格率/人数分布）。
 > 结果在内存聚合，**无分页、顺序不保证**。
 
+<a id="sec-13-9"></a>
+
 ### 13.9 成绩导出
 
 ```
@@ -4734,6 +5029,8 @@ GET /api/scores/export?teachInfoId=&format=
 | 403 | 权限不足（HTTP 200 + body） |
 | 500 | 导出 Excel 失败 |
 | 500 | 导出 PDF 失败 |
+
+<a id="sec-13-10"></a>
 
 ### 13.10 成绩复核
 
@@ -4780,6 +5077,8 @@ PENDING ───────────────────────> T
 | resolvedTime | LocalDateTime | 终审时间 |
 | createTime | LocalDateTime | 申请时间 |
 
+<a id="sec-13-10-1"></a>
+
 #### 13.10.1 学生提交申请
 
 ```
@@ -4808,6 +5107,8 @@ POST /api/scores/reviews
 
 返回新建的 `ReviewView`（`status = 待教师处理`）。
 
+<a id="sec-13-10-2"></a>
+
 #### 13.10.2 我的申请
 
 ```
@@ -4815,6 +5116,8 @@ GET /api/scores/reviews/my
 ```
 
 返回当前学生全部复核申请（`createTime` 倒序），`List<ReviewView>`。
+
+<a id="sec-13-10-3"></a>
 
 #### 13.10.3 处理人待办列表
 
@@ -4847,6 +5150,8 @@ GET /api/scores/reviews?status=&page=&pageSize=
 
 > `status` 是查询参数枚举，请传 code（`PENDING` 等）；传中文描述会转换失败，返回 400 `参数类型错误: status`。
 
+<a id="sec-13-10-4"></a>
+
 #### 13.10.4 教师回复
 
 ```
@@ -4874,6 +5179,8 @@ POST /api/scores/reviews/{id}/reply
 | 400 | 引用的用户不存在(id=xxx) / 引用的教师不存在(id=xxx) |
 | 400 | 成绩不能为空 / 成绩必须在 0-100 之间（newTotalScore） |
 
+<a id="sec-13-10-5"></a>
+
 #### 13.10.5 学生升级到教务
 
 ```
@@ -4891,6 +5198,8 @@ POST /api/scores/reviews/{id}/escalate
 | 403 | 权限不足（非申请人） |
 | 409 | 仅教师已回复后可升级到教务 |
 | 400 | 引用的成绩不存在(id=xxx) / 引用的用户不存在(id=xxx) / 引用的教师不存在(id=xxx) |
+
+<a id="sec-13-10-6"></a>
 
 #### 13.10.6 教务终审
 
@@ -4920,9 +5229,13 @@ POST /api/scores/reviews/{id}/resolve
 
 ---
 
+<a id="sec-14"></a>
+
 ## 14. 考试模块
 
 考试（`module/exam`）分两条业务线：**期末/期中考试**（教务安排、绑授课安排、全班参加）与**补考/重修**（按不及格成绩自动生成考生名单、单独录入成绩）。状态码约定同第 13 节。
+
+<a id="sec-14-1"></a>
 
 ### 14.1 权限与枚举
 
@@ -4981,6 +5294,8 @@ POST /api/scores/reviews/{id}/resolve
 > **公选课补充（代码现状）**：`exam` / `score` 表都有 `campaign_id` 列，`ExamView` 富化也按 `campaign_id` 非空路由；但考试模块**所有写入路径只写 `course_id`**（`ExamCreateRequest` / `MakeupExamCreateRequest` 都没有 `campaignId` 字段）。
 > 因此 `GET /api/exams?source=SELECTION_CAMPAIGN`、公选课的补考自动名单与补考成绩录入在现有代码下不可用（按 `course_id` 匹配不到公选课成绩行）。这是已知实现缺口，不是调用姿势问题。
 
+<a id="sec-14-2"></a>
+
 ### 14.2 端点总览
 
 | 方法 | 路径 | 权限 | 说明 |
@@ -4997,7 +5312,11 @@ POST /api/scores/reviews/{id}/resolve
 | GET | `/api/exams/makeup?semesterId=` | 教务 | 补考/重修考试列表 |
 | POST | `/api/exams/{examId}/grades` | 教师本人/教务 | 录入补考/重修成绩 |
 
+<a id="sec-14-3"></a>
+
 ### 14.3 安排、修改与删除考试
+
+<a id="sec-14-3-1"></a>
 
 #### 14.3.1 安排考试（期末/期中）
 
@@ -5066,6 +5385,8 @@ Content-Type: application/json
 
 成功返回单个 `ExamView`（`status=已安排`，`createTime` 可能为 null，见 13.3 注）。
 
+<a id="sec-14-3-2"></a>
+
 #### 14.3.2 修改考试
 
 ```
@@ -5084,6 +5405,8 @@ PUT /api/exams/{id}
 - `endTime` 始终由 `startTime + durationMinutes` 重算，不接受客户端直传。
 - 返回更新后的 `ExamView`。
 
+<a id="sec-14-3-3"></a>
+
 #### 14.3.3 删除考试
 
 ```
@@ -5094,7 +5417,11 @@ DELETE /api/exams/{id}
 - **硬删除**（`exam` 表无逻辑删除列）：先删该考试的 `exam_student` 考生行，再删考试行。
 - **不检查也不清理**关联的成绩（`score` 行保留）、不做任何下游引用校验。
 
+<a id="sec-14-4"></a>
+
 ### 14.4 教务查询
+
+<a id="sec-14-4-1"></a>
 
 #### 14.4.1 考试分页列表
 
@@ -5113,6 +5440,8 @@ GET /api/exams?semesterId=&courseId=&source=&examType=&page=&pageSize=
 - 按 `examDate` 倒序；返回 `PageResult<ExamView>`（结构见 13.10.3）。
 - 结果包含各类考试（补考/重修同样在列表中，无默认类型过滤）。
 - 公选课路由注意见 14.1 末注（`campaign_id` 无写入路径，`source=SELECTION_CAMPAIGN` 实际恒为空）。
+
+<a id="sec-14-4-2"></a>
 
 #### 14.4.2 按班级查可排考课程
 
@@ -5155,7 +5484,11 @@ GET /api/exams/class-courses?classId=
 }
 ```
 
+<a id="sec-14-5"></a>
+
 ### 14.5 教师与学生查询
+
+<a id="sec-14-5-1"></a>
 
 #### 14.5.1 教师查询自己课程的考试
 
@@ -5166,6 +5499,8 @@ GET /api/exams/teacher
 - 取该教师**全部授课安排**（不限学期）的 `courseId` 与 `campaignId`，返回命中的考试（按 `examDate` 升序）。
 - 因此同一门课在其它学期/其它班级的考试也会一并出现；补考/重修考试（`teach_info_id` 为 null）只要 `course_id` 命中也会返回。
 - 教师无 teacher 子表记录或无授课安排 → `[]`。
+
+<a id="sec-14-5-2"></a>
 
 #### 14.5.2 学生查询自己的考试
 
@@ -5180,7 +5515,11 @@ GET /api/exams/my
 
 返回顺序：常规考试（`examDate` 升序）在前，补考/重修（`examDate` 升序）在后；**整体不是全局排序**。结果不去重（两条线类型不重叠）。
 
+<a id="sec-14-6"></a>
+
 ### 14.6 补考 / 重修
+
+<a id="sec-14-6-1"></a>
 
 #### 14.6.1 不及格名单（补考候选）
 
@@ -5208,6 +5547,8 @@ GET /api/exams/makeup/candidates?courseId=&source=&semesterId=
 | totalScore | BigDecimal | 原总评 |
 | scoreLevel | String | 原等级（`不及格`） |
 | semesterId | Long | 原成绩学期 |
+
+<a id="sec-14-6-2"></a>
 
 #### 14.6.2 建补考/重修考试
 
@@ -5269,6 +5610,8 @@ POST /api/exams/makeup
 
 成功返回 `ExamView`（`status=已安排`）。
 
+<a id="sec-14-6-3"></a>
+
 #### 14.6.3 补考/重修考试列表
 
 ```
@@ -5283,6 +5626,8 @@ GET /api/exams/makeup?semesterId=
 - 名单在建考时按不及格成绩**一次性生成**，之后**没有增删改查接口**；`ExamView` 也不返回名单或人数。
 - 学生 `/api/exams/my` 靠它判断补考/重修可见性。
 - **录入补考成绩时不校验名单成员**（见 14.7）。
+
+<a id="sec-14-7"></a>
 
 ### 14.7 补考 / 重修成绩录入
 
@@ -5338,6 +5683,8 @@ Content-Type: application/json
 
 ---
 
+<a id="sec-15"></a>
+
 ## 15. 学情分析模块
 
 学情分析模块（`module/analysis`）提供 8 组能力：成绩分析、学业预警、评教指标库、评教模板、评教周期与评教提交、教师教学质量、学习进度、学生画像/班级分析。所有端点前缀 `/api/analysis`，共 **36 个端点**。
@@ -5354,6 +5701,8 @@ module/analysis
 ├── service/      8 个接口 + impl/ 8 个实现
 └── util/         GpaCalculator / ScoreStats / CreditSource（纯函数，被画像/预警/班级分析复用）
 ```
+
+<a id="sec-15-0"></a>
 
 ### 15.0 通用约定
 
@@ -5407,6 +5756,8 @@ module/analysis
 
 ---
 
+<a id="sec-15-1"></a>
+
 ### 15.1 成绩分析
 
 按课程维度统计分数段分布、跨学期趋势与班级横向对比。
@@ -5434,6 +5785,8 @@ module/analysis
 4. 其他类型：403（已被类级注解拦住，实际不可达）。
 
 > **`courseId` 与 `source` 必须配对**：传公选课的 campaignId 却漏传 `source=SELECTION_CAMPAIGN`，会当成常规课 `course_id` 查询——结果通常为空；教师会因「未教授该课程」直接 403。趋势/对比接口的 `courseName` 由 `resolveNameByEitherId` 先按 course.id、再按 campaign.id 解析（不参考 `source`），若两表存在相同数值 id 会显示常规课的名称。
+
+<a id="sec-15-1-1"></a>
 
 #### 15.1.1 分数段分布
 
@@ -5500,6 +5853,8 @@ GET /api/analysis/scores/distribution?courseId=101&source=&className=&semesterId
 | 403 | 权限不足（教师未教授该课程） |
 | 403 | 拦截器：用户类型不在 TEACHER/DEPARTMENT/ACADEMIC_ADMIN |
 
+<a id="sec-15-1-2"></a>
+
 #### 15.1.2 课程跨学期趋势
 
 ```
@@ -5545,6 +5900,8 @@ GET /api/analysis/scores/trend?courseId=101&source=&className=
 - 学院/院系的 `className` 过滤同样生效；教师忽略该参数。
 
 **错误场景**：同 15.1.1（`课程ID不能为空` / 403）。
+
+<a id="sec-15-1-3"></a>
 
 #### 15.1.3 同课程班级横向对比
 
@@ -5597,6 +5954,8 @@ GET /api/analysis/scores/comparison?courseId=101&source=&semesterId=3
 
 ---
 
+<a id="sec-15-2"></a>
+
 ### 15.2 学业预警
 
 | 方法 | 路径 | 权限 | 说明 |
@@ -5638,6 +5997,8 @@ GET /api/analysis/scores/comparison?courseId=101&source=&semesterId=3
 - **GPA（预警口径）**：全部 REGULAR 成绩的累计加权 GPA（跨学期），规则同 15.0。
 - `semesterFailCount`：上述「未通过课程」中，其 REGULAR 成绩所在学期 == 当前学期的门数。
 
+<a id="sec-15-2-1"></a>
+
 #### 15.2.1 查询预警阈值配置
 
 ```
@@ -5669,6 +6030,8 @@ GET /api/analysis/warnings/config
   ]
 }
 ```
+
+<a id="sec-15-2-2"></a>
 
 #### 15.2.2 更新预警阈值配置
 
@@ -5719,6 +6082,8 @@ Content-Type: application/json
 | 400 | 预警级别不能为空（某条 `level` 为 null） |
 | 404 | 预警级别 YELLOW 配置不存在（消息中的级别为枚举 `toString`，中文入参也会显示成 code） |
 | 409 | 预警级别已存在（库中存在同级别重复行时才可达） |
+
+<a id="sec-15-2-3"></a>
 
 #### 15.2.3 触发预警扫描
 
@@ -5772,6 +6137,8 @@ POST /api/analysis/warnings/scan
 | 400 | 无启用的预警阈值配置（三级全 enabled=0 或配置表为空） |
 | 400 | 引用的用户不存在(id=xxx)（命中学生有成绩但 user 表无此人，且需新建记录时） |
 | 403 | 拦截器：非教务管理员 |
+
+<a id="sec-15-2-4"></a>
 
 #### 15.2.4 预警看板
 
@@ -5859,6 +6226,8 @@ GET /api/analysis/warnings?semesterId=&level=&page=&pageSize=
 | 400 | 未知预警级别: xxx |
 | 403 | 拦截器：非教务/院系 |
 
+<a id="sec-15-2-5"></a>
+
 #### 15.2.5 我的预警（学生）
 
 ```
@@ -5900,6 +6269,8 @@ GET /api/analysis/warnings/me
 
 ---
 
+<a id="sec-15-3"></a>
+
 ### 15.3 评教指标库
 
 评教指标是教务维护的**共享题库**（`evaluation_item`），模板通过 `item_id` 引用。指标名/满分**不在模板中冗余快照**，模板读取时实时返回指标库当前值；只有**已提交的评教明细**（`teaching_evaluation_score`）保留提交时的名称/满分快照，历史不可变。
@@ -5910,6 +6281,8 @@ GET /api/analysis/warnings/me
 | GET | `/api/analysis/evaluation-items` | 教务 | 全部指标（按创建时间倒序） |
 | PUT | `/api/analysis/evaluation-items/{id}` | 教务 | 修改指标 |
 | DELETE | `/api/analysis/evaluation-items/{id}` | 教务 | 删除指标（被模板引用时拒绝） |
+
+<a id="sec-15-3-1"></a>
 
 #### 15.3.1 新建指标
 
@@ -5970,6 +6343,8 @@ Content-Type: application/json
 | 409 | 指标名称已存在 |
 | 400 | 引用的用户不存在(id=xxx)（JWT 用户被硬删，极少见） |
 
+<a id="sec-15-3-2"></a>
+
 #### 15.3.2 指标列表
 
 ```
@@ -5978,6 +6353,8 @@ GET /api/analysis/evaluation-items
 ```
 
 返回 `ItemResponse` 数组，按 `createTime` 倒序；`usedCount` 为 `evaluation_template_item` 中引用该指标的关联行数（含停用模板的引用）。
+
+<a id="sec-15-3-3"></a>
 
 #### 15.3.3 修改指标
 
@@ -6014,6 +6391,8 @@ Content-Type: application/json
 | 400 | 满分须在 1-100 之间 |
 | 409 | 指标名称已存在 |
 
+<a id="sec-15-3-4"></a>
+
 #### 15.3.4 删除指标
 
 ```
@@ -6032,6 +6411,8 @@ DELETE /api/analysis/evaluation-items/{id}
 | 409 | 指标已被模板引用，无法删除 |
 
 ---
+
+<a id="sec-15-4"></a>
 
 ### 15.4 评教模板
 
@@ -6060,6 +6441,8 @@ DELETE /api/analysis/evaluation-items/{id}
 - 默认模板不可停用、不可删除。
 
 > **默认模板一旦存在就无法通过 API 切换**：`setDefault` 在检测到「存在另一个 `is_default=1` 的模板」时直接 409 `已有默认模板`，后面的「原默认置普通」代码实际执行不到；而默认模板又不可停用（409）、不可删除（409）。初始化脚本已种下「默认评教模板」，因此再对其它模板调用设默认必然失败。目前只能通过直接改库切换默认模板。
+
+<a id="sec-15-4-1"></a>
 
 #### 15.4.1 创建模板
 
@@ -6157,6 +6540,8 @@ Content-Type: application/json
 | 400 | 引用的用户不存在(id=xxx) |
 | 409 | 模板指标已存在（新模板无关联行，理论不可达；仅并发脏数据） |
 
+<a id="sec-15-4-2"></a>
+
 #### 15.4.2 模板列表 / 详情
 
 ```
@@ -6167,6 +6552,8 @@ GET /api/analysis/evaluation-templates/{id}
 
 - 列表：`TemplateResponse` 数组，按 `isDefault` 倒序、`createTime` 倒序（默认模板排最前）。
 - 详情：`{id}` 不存在 → 404 `模板不存在`。
+
+<a id="sec-15-4-3"></a>
 
 #### 15.4.3 修改模板
 
@@ -6195,6 +6582,8 @@ Content-Type: application/json
 | 400 | 模板名称不能为空 |
 | 400 | 至少需要 1 个指标 / 指标不可重复 / 存在无效指标 / 模板内各指标满分须一致 |
 
+<a id="sec-15-4-4"></a>
+
 #### 15.4.4 删除模板
 
 ```
@@ -6210,6 +6599,8 @@ DELETE /api/analysis/evaluation-templates/{id}
 4. 已有评教记录（`teaching_evaluation.template_id`）→ 409 `模板已有评教记录，无法删除`。
 
 校验通过后：硬删模板-指标关联行，模板本身逻辑删除。
+
+<a id="sec-15-4-5"></a>
 
 #### 15.4.5 设为全局默认
 
@@ -6229,6 +6620,8 @@ PUT /api/analysis/evaluation-templates/{id}/default
 | 409 | 已有默认模板（已存在另一个默认模板，见 15.4 开头陷阱） |
 
 **响应**：`{"code":200,"message":"success","data":null}`
+
+<a id="sec-15-4-6"></a>
 
 #### 15.4.6 启用/停用模板
 
@@ -6254,6 +6647,8 @@ PUT /api/analysis/evaluation-templates/{id}/status?status=DISABLED
 | 409 | 默认模板不可停用 |
 | 400 | 缺少必填参数: status |
 | 400 | 参数类型错误: status |
+
+<a id="sec-15-4-7"></a>
 
 #### 15.4.7 设置/清除课程级覆盖
 
@@ -6282,6 +6677,8 @@ Content-Type: application/json（body 可省略）
 | 404 | 模板不存在 |
 | 409 | 停用模板不可设为覆盖 |
 
+<a id="sec-15-4-8"></a>
+
 #### 15.4.8 查询课程级覆盖
 
 ```
@@ -6294,6 +6691,8 @@ GET /api/analysis/evaluation-templates/override/{teachInfoId}
 - **不校验授课安排是否存在**：传任意不存在的 `teachInfoId` 只会得到 null。
 
 ---
+
+<a id="sec-15-5"></a>
 
 ### 15.5 评教周期与评教提交
 
@@ -6312,6 +6711,8 @@ GET /api/analysis/evaluation-templates/override/{teachInfoId}
 - 未开启（无记录）或状态为 CLOSED 时：学生**不能提交**（即便只为更新已提交内容），提交前置校验直接 400 `评教暂未开放，请等待教务开启`。
 - 开/关分别记录 `openUserId/openTime` 与 `closeTime`；重复开启会把 `openTime` 重置为本次时间并清空 `closeTime`。
 - 周期与表单分离：**取表单接口不校验周期**（前端可在未开放时预取题目），只有提交校验。
+
+<a id="sec-15-5-1"></a>
 
 #### 15.5.1 获取评教表单
 
@@ -6371,6 +6772,8 @@ GET /api/analysis/evaluations/form?teachInfoId=55
 | 400 | 暂未配置评教模板，请联系教务（无覆盖且无全局默认，或覆盖指向的模板已删） |
 | 400 | 当前评教模板不可用（解析出的模板为停用状态） |
 | 400 | 缺少必填参数: teachInfoId |
+
+<a id="sec-15-5-2"></a>
 
 #### 15.5.2 提交评教
 
@@ -6477,6 +6880,8 @@ Content-Type: application/json
 | 400 | 提交了不属于评教模板的指标 |
 | 409 | 操作过于频繁，请稍后重试 |
 
+<a id="sec-15-5-3"></a>
+
 #### 15.5.3 我的评教
 
 ```
@@ -6488,6 +6893,8 @@ GET /api/analysis/evaluations/my
 - 富化课程名（公选课经 campaign 解析）/教师名/学期名/模板名，明细见 15.5.2。
 
 > **课程名富化的 id 撞车风险**：`loadNameMaps` 把常规课名与公选课活动名合并进**同一个** `id -> name` Map（公选课后写入），当某条评教的 `courseId` 与另一活动的 `campaignId` 数值相同时，常规课可能显示成公选课名（反之公选课恒按 campaignId 查，不受影响）。本项目 `course` 与 `selection_campaign` 均为自增 id，真实数据极易撞车；对课程名准确性要求高的页面建议以 `courseId=null` 判定公选课并核对展示。
+
+<a id="sec-15-5-4"></a>
 
 #### 15.5.4 开启评教周期
 
@@ -6538,6 +6945,8 @@ POST /api/analysis/evaluations/period/open
 | 400 | 请先配置默认评教模板 |
 | 400 | 引用的学期不存在(id=xxx)（学期在查询后被硬删，极少见） |
 
+<a id="sec-15-5-5"></a>
+
 #### 15.5.5 关闭评教周期
 
 ```
@@ -6554,6 +6963,8 @@ POST /api/analysis/evaluations/period/close
 | code | message |
 |------|---------|
 | 400 | 无当前学期 |
+
+<a id="sec-15-5-6"></a>
 
 #### 15.5.6 查询评教周期状态
 
@@ -6612,6 +7023,8 @@ GET /api/analysis/evaluations/period
 
 ---
 
+<a id="sec-15-6"></a>
+
 ### 15.6 教师教学质量
 
 | 方法 | 路径 | 权限 | 说明 |
@@ -6636,6 +7049,8 @@ GET /api/analysis/evaluations/period
 
 > **院系可见性存在 fail-open 边界**：`assertCanViewTeacher` 用 `Objects.equals(dept.getCollegeId(), teacher.getCollegeId())` 判定，若院系管理员与教师**双方 `college_id` 都为 null** 会判为同院放行（其他接口的 `StudentScopeResolver` 是 fail-closed）。正常数据下不会出现，但清理脏数据时需注意。
 
+<a id="sec-15-6-1"></a>
+
 #### 15.6.1 教师查询本人质量
 
 ```
@@ -6656,6 +7071,8 @@ GET /api/analysis/teacher-quality/me?semesterId=3
 |------|---------|
 | 404 | 教师信息不存在 |
 | 403 | 拦截器：非教师用户 |
+
+<a id="sec-15-6-2"></a>
 
 #### 15.6.2 查询指定教师质量
 
@@ -6724,6 +7141,8 @@ GET /api/analysis/teacher-quality/{teacherId}?semesterId=3
 | 403 | 权限不足（教师查他人 / 院系查外院） |
 | 403 | 拦截器：用户类型不符 |
 
+<a id="sec-15-6-3"></a>
+
 #### 15.6.3 教师质量列表/对比
 
 ```
@@ -6778,6 +7197,8 @@ GET /api/analysis/teacher-quality?semesterId=&page=&pageSize=
 
 ---
 
+<a id="sec-15-7"></a>
+
 ### 15.7 学习进度
 
 课程进度由 `teach_info` 周次 + 考试状态 + 成绩有无**派生计算**，不落表。
@@ -6786,6 +7207,8 @@ GET /api/analysis/teacher-quality?semesterId=&page=&pageSize=
 |------|------|------|------|
 | GET | `/api/analysis/progress/me` | 学生 | 本人当前学期进度 |
 | GET | `/api/analysis/progress/{studentUserId}` | 教务/院系 | 指定学生进度 |
+
+<a id="sec-15-7-1"></a>
 
 #### 15.7.1 我的学习进度
 
@@ -6873,6 +7296,8 @@ GET /api/analysis/progress/me
 |------|---------|
 | 404 | 学生不存在（无 student 子表行） |
 
+<a id="sec-15-7-2"></a>
+
 #### 15.7.2 查询指定学生学习进度
 
 ```
@@ -6894,7 +7319,11 @@ GET /api/analysis/progress/{studentUserId}
 
 ---
 
+<a id="sec-15-8"></a>
+
 ### 15.8 学生画像与班级/专业分析
+
+<a id="sec-15-8-1"></a>
 
 #### 15.8.1 学生个人画像
 
@@ -6998,6 +7427,8 @@ GET /api/analysis/profile/{studentUserId}
 | 403 | 权限不足（院系查外院 / 学生查他人） |
 | 404 | 学生不存在 |
 
+<a id="sec-15-8-2"></a>
+
 #### 15.8.2 班级/专业成绩聚合
 
 ```
@@ -7059,6 +7490,8 @@ GET /api/analysis/class-analysis?groupBy=class&semesterId=3
 |------|---------|
 | 403 | 拦截器：非教务/院系 |
 | 400 | 参数类型错误: semesterId |
+
+<a id="sec-15-8-3"></a>
 
 #### 15.8.3 单组跨学期趋势
 
@@ -7162,6 +7595,8 @@ GET /api/analysis/class-analysis/trend?groupBy=class&groupKey=计算机2301
 
 ---
 
+<a id="sec-16"></a>
+
 ## 16. 通知模块
 
 站内消息采用**单点 + 广播双轨**模型：
@@ -7195,6 +7630,8 @@ GET /api/analysis/class-analysis/trend?groupBy=class&groupKey=计算机2301
 >
 > 所有查询/已读/删除操作都只作用于**当前登录用户自己的数据**；不存在按 userId 查他人消息的入参。
 
+<a id="sec-16-1"></a>
+
 ### 16.1 消息类型与模型
 
 **NotificationTypeEnum**（`@EnumValue` 持久化 `code`，`@JsonValue` 输出 `description`）
@@ -7223,6 +7660,8 @@ GET /api/analysis/class-analysis/trend?groupBy=class&groupKey=计算机2301
 可见性判定：学生可见 `ALL + STUDENT`，其它用户类型（teacher / academic_admin / department）**只可见 `ALL`**。广播创建时 `target` 缺省为 `ALL`、`type` 缺省为 `SYSTEM`（仅注解场景可触发）。
 
 **已读回执模型**：`notification_read(user_id, broadcast_id, read_time)` 仅在用户主动标记广播已读时写入；未读 = 可见广播数 − 回执行数，因此不为每个接收者落库。回执的唯一性目前**只在应用层预检**（先查后插，捕获 `DuplicateKeyException`），数据库侧仅普通索引；极端并发下仍可能出现同一 `(user_id, broadcast_id)` 的重复回执，而未读数按回执行数扣减，重复行会让计数偏小。
+
+<a id="sec-16-2"></a>
 
 ### 16.2 未读消息数
 
@@ -7256,6 +7695,8 @@ Authorization: Bearer <accessToken>
 | code | message |
 |------|---------|
 | 401 | 请先登录 / token已过期，请刷新 / token无效（真实 HTTP 401） |
+
+<a id="sec-16-3"></a>
 
 ### 16.3 消息列表
 
@@ -7345,6 +7786,8 @@ Authorization: Bearer <accessToken>
 | 400 | 参数类型错误: page / 参数类型错误: pageSize（传了非数字） |
 | 401 | 请先登录 / token已过期，请刷新 / token无效（真实 HTTP 401） |
 
+<a id="sec-16-4"></a>
+
 ### 16.4 标记单点消息已读
 
 ```
@@ -7382,6 +7825,8 @@ Authorization: Bearer <accessToken>
 
 > 广播消息请走 16.5；用本端点传广播 id 时，服务端只在 `notification` 表查找，通常得到 404「消息不存在」。
 
+<a id="sec-16-5"></a>
+
 ### 16.5 标记广播消息已读
 
 ```
@@ -7416,6 +7861,8 @@ Authorization: Bearer <accessToken>
 
 > 本端点只校验广播 id 是否存在，**不校验该广播是否对当前用户可见**（例如教师可以对 `target_type=STUDENT` 的广播写已读回执）。不可见广播的回执不会影响该用户的未读数，但会留下一条孤立记录。
 
+<a id="sec-16-6"></a>
+
 ### 16.6 全部已读
 
 ```
@@ -7447,6 +7894,8 @@ Authorization: Bearer <accessToken>
 | 401 | 请先登录 / token已过期，请刷新 / token无效（真实 HTTP 401） |
 
 > 「全部已读」会把**所有可见广播**（包括从未打开过的）都记为已读，而不是只标记列表中已加载的部分。
+
+<a id="sec-16-7"></a>
 
 ### 16.7 删除消息
 
@@ -7482,6 +7931,8 @@ Authorization: Bearer <accessToken>
 | 401 | 请先登录 / token已过期，请刷新 / token无效（真实 HTTP 401） |
 
 > 本端点**只能删除单点消息**，广播消息没有删除接口。广播 id 与单点 id 是两套独立自增序列：传广播 id 通常得到 404「消息不存在」；若恰巧存在同 id 且属于本人的单点消息，则会删除那条单点消息（前端务必用 `broadcast` 字段区分后再调删除）。
+
+<a id="sec-16-8"></a>
 
 ### 16.8 发送消息
 
@@ -7550,6 +8001,8 @@ Content-Type: application/json
 >
 > 未做标题/内容长度前置校验，超出数据库列宽（128 / 512）会由数据库报错并落到 500。
 
+<a id="sec-16-9"></a>
+
 ### 16.9 WebSocket 实时推送
 
 实时消息走独立 WebSocket 通道（不走 `/api/**`，因此不使用 Bearer 头）：
@@ -7581,6 +8034,8 @@ ws://<host>/ws/notification?token=<accessToken>
 
 ---
 
+<a id="sec-17"></a>
+
 ## 17. 实践与创新管理模块
 
 实践与创新管理模块（`module/practice`）按业务子域拆分为四块：毕业设计与论文（`graduation`）、实习与培训（`internship`）、竞赛管理（`competition`）、社会实践（`socialpractice`）。本节只描述**毕业设计与论文**子域，其余子域见后续章节。
@@ -7603,7 +8058,11 @@ ws://<host>/ws/notification?token=<accessToken>
 
 所有学生、教师相关字段（`studentId` / `teacherId` / `prevTeacherId` / `reviewerId` / `defenseTeacherIds` / `advisorBy` / `reassignBy` / `confirmBy` 等）存的都是 **`user.id`**（不是 student/teacher 子表主键），与 selection / practice 其余子域一致。
 
+<a id="sec-17-1"></a>
+
 ### 17.1 通用约定
+
+<a id="sec-17-1-1"></a>
 
 #### 17.1.1 HTTP 状态码与 body.code
 
@@ -7630,6 +8089,8 @@ ws://<host>/ws/notification?token=<accessToken>
 | `请求体格式错误` | JSON 无法解析 / 枚举值非法（如 `result` 传了未知值） |
 | `上传文件过大，请压缩后重试` | multipart 超过 Spring 硬上限 25MB |
 
+<a id="sec-17-1-2"></a>
+
 #### 17.1.2 角色与鉴权注解
 
 | 文档用词 | `user_type` | 鉴权注解 |
@@ -7643,6 +8104,8 @@ ws://<host>/ws/notification?token=<accessToken>
 | 学生/教师 | `student` + `teacher` | `@RequireAuth({STUDENT, TEACHER})` |
 
 > ⚠️ **院系数据范围是「本院系」而非注解负责的**：注解只做角色门禁，院系只看到本院学生由 Service 层 `StudentScopeResolver` 按 `college_id` 裁剪（学生 → 班级 → 专业 → 院系两跳推导）。院系归属任一跳缺失（无班级 / 班级无专业 / 专业无院系）按 **fail-closed 不可见**处理。
+
+<a id="sec-17-1-3"></a>
 
 #### 17.1.3 时间与枚举序列化
 
@@ -7666,6 +8129,8 @@ ws://<host>/ws/notification?token=<accessToken>
 
 例外：中期检查记录的 `status` 在实体中是普通 String，**响应为英文** `SUBMITTED` / `REVIEWED`，不走枚举中文转换。
 
+<a id="sec-17-1-4"></a>
+
 #### 17.1.4 分页参数
 
 所有标注 `PageQuery` 的端点支持：
@@ -7684,6 +8149,8 @@ ws://<host>/ws/notification?token=<accessToken>
 | page | Integer | 当前页码 |
 | pageSize | Integer | 每页条数 |
 | pages | Long | 总页数 |
+
+<a id="sec-17-1-5"></a>
 
 #### 17.1.5 附件传输（与第 11 节衔接）
 
@@ -7711,6 +8178,8 @@ Spring multipart 硬上限为 **25MB**（`application.yaml`），超限返回 `4
 
 各下载端点均为 GET，响应头为 RFC5987 文件名 + `Accept-Ranges: bytes` + 内容 SHA-256 强 ETag，支持 `Range` → **206 断点续传**；错误响应仍是 JSON（HTTP 200 + body.code）。
 
+<a id="sec-17-1-6"></a>
+
 #### 17.1.6 通知与操作日志
 
 - **通知**：选题审批、教师自选、院系分配、改派、开题审核、中期结论、论文形式审查、查重结果、成绩发布共 **9 个场景**通过 `PracticeNoticeScenes`（`@NotifyUser`，类型 `PRACTICE`）发送站内消息，均由 `NotifyAspect` 在**事务提交后**发送（回滚不发；无事务立即发）。通知失败只记 warn，不影响业务返回。
@@ -7718,7 +8187,11 @@ Spring multipart 硬上限为 **25MB**（`application.yaml`），超限返回 `4
 
 ---
 
+<a id="sec-17-2"></a>
+
 ### 17.2 毕业设计与论文
+
+<a id="sec-17-2-1"></a>
 
 #### 17.2.1 端点总览
 
@@ -7792,6 +8265,8 @@ Spring multipart 硬上限为 **25MB**（`application.yaml`），超限返回 `4
 | GET | `/api/practice/graduation/dashboard/{campaignId}/logs?page=&pageSize=` | 教务 | 操作日志分页 | 17.2.11 |
 
 ---
+
+<a id="sec-17-2-2"></a>
 
 #### 17.2.2 毕设活动（Campaign）
 
@@ -7938,6 +8413,8 @@ Spring multipart 硬上限为 **25MB**（`application.yaml`），超限返回 `4
 
 ---
 
+<a id="sec-17-2-3"></a>
+
 #### 17.2.3 活动资料（Campaign Material）
 
 活动资料由教务下发模板/规范，一个活动可挂多份。**传输层细节（`file` / `filePath` 二选一、断点续传下载、删除由回收任务对账）见 [11.5.2](#1152-毕设活动资料一个活动多份)**，本节只补充业务语义。
@@ -7969,6 +8446,8 @@ Spring multipart 硬上限为 **25MB**（`application.yaml`），超限返回 `4
 - 上传/删除均写活动操作日志（`上传活动资料` / `删除活动资料`）。
 
 ---
+
+<a id="sec-17-2-4"></a>
 
 #### 17.2.4 选题申请与两级审批（Proposal）
 
@@ -8086,6 +8565,8 @@ REJECTED ──学生修改重提──> PENDING_DEPT（重新走完整两级审
 > ⚠️ `GET /pending/dept` / `GET /pending/academic` 的 `campaignId` 是必填 query 参数，漏传 → body 400 `缺少必填参数: campaignId`。
 
 ---
+
+<a id="sec-17-2-5"></a>
 
 #### 17.2.5 师生双选与分配（Assignment）
 
@@ -8218,6 +8699,8 @@ REJECTED ──学生修改重提──> PENDING_DEPT（重新走完整两级审
 > ⚠️ **院系为空时的可见性缺口**：`teacher/pool` 在教师 `college_id` 为空时把 `null` 传给查询层（= 不过滤），会返回全部参与年级学生；`unassigned` / 看板在院系管理员 `college_id` 为空时同样落入「不过滤」。写操作（pick/allocate/reassign）仍会 403，但列表会泄漏姓名/学号，调用方需知悉。
 
 ---
+
+<a id="sec-17-2-6"></a>
 
 #### 17.2.6 过程管理：开题报告 / 中期检查 / 指导记录
 
@@ -8370,6 +8853,8 @@ SUBMITTED ──教师评审（给出结论）──> REVIEWED（终态，记录
 
 ---
 
+<a id="sec-17-2-7"></a>
+
 #### 17.2.7 论文与版本管理（Thesis）
 
 **端点**
@@ -8497,6 +8982,8 @@ SUBMITTED ──教师评审（给出结论）──> REVIEWED（终态，记录
 
 ---
 
+<a id="sec-17-2-8"></a>
+
 #### 17.2.8 查重登记与查重报告（Duplicate Check）
 
 查重采用**第三方平台模式**：教务线下检测后登记结果，每次检测一行记录，历史全部保留（不通过后可再次检测）。
@@ -8585,6 +9072,8 @@ SUBMITTED ──教师评审（给出结论）──> REVIEWED（终态，记录
 
 ---
 
+<a id="sec-17-2-9"></a>
+
 #### 17.2.9 答辩安排与答辩材料（Defense）
 
 **端点**
@@ -8644,6 +9133,8 @@ SUBMITTED ──教师评审（给出结论）──> REVIEWED（终态，记录
 | 409 | 论文查重通过后才能安排答辩 |
 
 ---
+
+<a id="sec-17-2-10"></a>
 
 #### 17.2.10 成绩录入、合成与发布（Score）
 
@@ -8739,6 +9230,8 @@ INCOMPLETE（分项未齐备）──三项齐全──> COMPLETE（已合成总
 > 分项录入**没有活动状态门禁**，CLOSED 活动仍可录入（仅受查重门禁与发布状态约束）。
 
 ---
+
+<a id="sec-17-2-11"></a>
 
 #### 17.2.11 看板、导出与操作日志
 
@@ -8868,6 +9361,8 @@ INCOMPLETE（分项未齐备）──三项齐全──> COMPLETE（已合成总
 
 ---
 
+<a id="sec-17-2-12"></a>
+
 #### 17.2.12 关键门禁与状态速查
 
 | 环节 | 门禁 | 失败文案（code） |
@@ -8888,6 +9383,8 @@ INCOMPLETE（分项未齐备）──三项齐全──> COMPLETE（已合成总
 **完整状态枚举**（持久化 code 与响应中文的对应）见 17.1.3。
 
 ---
+
+<a id="sec-17-3"></a>
 
 ### 17.3 实习与培训
 
@@ -8929,6 +9426,8 @@ INCOMPLETE（分项未齐备）──三项齐全──> COMPLETE（已合成总
 > `EnrollStatusEnum.CANCELLED` 当前**不会落库**：退课走逻辑删除，见 17.3.5。
 
 ---
+
+<a id="sec-17-3-1"></a>
 
 #### 17.3.1 实习项目
 
@@ -9049,6 +9548,8 @@ INCOMPLETE（分项未齐备）──三项齐全──> COMPLETE（已合成总
 
 ---
 
+<a id="sec-17-3-2"></a>
+
 #### 17.3.2 实习报名与审核
 
 | 方法 | 路径 | 权限 | 说明 |
@@ -9136,6 +9637,8 @@ INCOMPLETE（分项未齐备）──三项齐全──> COMPLETE（已合成总
 | 409 | 实习容量已满，暂时无法通过该报名 | 审核通过但容量已满 |
 
 ---
+
+<a id="sec-17-3-3"></a>
 
 #### 17.3.3 实习成果报告
 
@@ -9245,6 +9748,8 @@ curl -X POST 'http://host/api/practice/internship-reports' \
 
 ---
 
+<a id="sec-17-3-4"></a>
+
 #### 17.3.4 培训课程
 
 | 方法 | 路径 | 权限 | 说明 |
@@ -9334,6 +9839,8 @@ curl -X POST 'http://host/api/practice/internship-reports' \
 
 ---
 
+<a id="sec-17-3-5"></a>
+
 #### 17.3.5 培训报名
 
 | 方法 | 路径 | 权限 | 说明 |
@@ -9395,6 +9902,8 @@ curl -X POST 'http://host/api/practice/internship-reports' \
 
 ---
 
+<a id="sec-17-4"></a>
+
 ### 17.4 竞赛管理
 
 竞赛子域（`module/practice/competition/`）由**教务管理员**统一管理；学生报名（个人 / 团队）后由教务审核，教务录入获奖结果并维护获奖证书。
@@ -9420,6 +9929,8 @@ curl -X POST 'http://host/api/practice/internship-reports' \
 > 响应输出中文描述。query 参数（如 `?status=OPEN`）只认枚举名 / code。
 
 ---
+
+<a id="sec-17-4-1"></a>
 
 #### 17.4.1 竞赛项目
 
@@ -9513,6 +10024,8 @@ curl -X POST 'http://host/api/practice/internship-reports' \
 | 409 | 存在未完结的报名，不可删除 | 删除时仍有 `PENDING` / `APPROVED` 报名 |
 
 ---
+
+<a id="sec-17-4-2"></a>
 
 #### 17.4.2 竞赛报名
 
@@ -9611,6 +10124,8 @@ curl -X POST 'http://host/api/practice/internship-reports' \
 | 409 | 该报名已处理 | 重复审核 |
 
 ---
+
+<a id="sec-17-4-3"></a>
 
 #### 17.4.3 竞赛结果与获奖证书
 
@@ -9712,6 +10227,8 @@ curl -X POST 'http://host/api/practice/internship-reports' \
 
 ---
 
+<a id="sec-17-5"></a>
+
 ### 17.5 社会实践
 
 社会实践子域（`module/practice/socialpractice/`）由**教务管理员**发布项目并审核申报；学生可个人 / 团队申报，审核通过后提交实践报告。
@@ -9733,6 +10250,8 @@ curl -X POST 'http://host/api/practice/internship-reports' \
 | `ReportStatusEnum` | `SUBMITTED` / `REVIEWED` | 已提交 / 已评审 |
 
 ---
+
+<a id="sec-17-5-1"></a>
 
 #### 17.5.1 实践项目
 
@@ -9819,6 +10338,8 @@ curl -X POST 'http://host/api/practice/internship-reports' \
 | 409 | 存在未完结的申报，不可删除 | 删除时仍有 `PENDING` / `APPROVED` 申报 |
 
 ---
+
+<a id="sec-17-5-2"></a>
 
 #### 17.5.2 项目申报与审核
 
@@ -9920,6 +10441,8 @@ curl -X POST 'http://host/api/practice/internship-reports' \
 | 409 | 该申报已处理 | 重复审核 |
 
 ---
+
+<a id="sec-17-5-3"></a>
 
 #### 17.5.3 社会实践报告
 
@@ -10025,9 +10548,13 @@ curl -X POST 'http://host/api/practice/social-practice-reports' \
 
 ---
 
+<a id="sec-17-6"></a>
+
 ### 17.6 文件附件与导出（practice）
 
 本小节覆盖 17.3–17.5 涉及的 3 类附件（实习成果报告 / 社会实践报告 / 竞赛获奖证书）。毕业设计相关的附件与导出见 11.5 及 17.1–17.2；**17.3–17.5 本身没有导出端点**。
+
+<a id="sec-17-6-1"></a>
 
 #### 17.6.1 二选一约定
 
@@ -10047,6 +10574,8 @@ curl -X POST 'http://host/api/practice/social-practice-reports' \
 > 整传还会受 Spring multipart 硬上限 25MB 约束：超过 25MB 由全局异常处理返回 400「上传文件过大，请压缩后重试」；
 > 20–25MB 之间则命中业务校验，返回 400「文件过大，最大允许 20MB」。
 
+<a id="sec-17-6-2"></a>
+
 #### 17.6.2 附件端点清单
 
 | 方法 | 路径 | 权限 | 附件语义 | biz |
@@ -10059,6 +10588,8 @@ curl -X POST 'http://host/api/practice/social-practice-reports' \
 | GET | `/api/practice/competitions/results/{id}/certificate/download` | 教务 / 获奖学生本人 | 下载 | - |
 
 > 证书两个端点已在 **11.5.4** 记录，此处只列清单；上传/替换语义：旧证书引用释放，新文件落库，响应对应更新后的结果视图。
+
+<a id="sec-17-6-3"></a>
 
 #### 17.6.3 下载行为
 
@@ -10076,6 +10607,8 @@ curl -X POST 'http://host/api/practice/social-practice-reports' \
 > 报告不存在 404、权限不足 403、附件缺失 404「文件不存在」、存储路径非法 400「非法的文件路径」。
 > 只有鉴权失败是真正的 HTTP 401 / 403（拦截器写出）。
 
+<a id="sec-17-6-4"></a>
+
 #### 17.6.4 附件错误清单
 
 | code | message | 触发 |
@@ -10088,6 +10621,8 @@ curl -X POST 'http://host/api/practice/social-practice-reports' \
 | 400 | 不支持的文件格式: {ext} | 扩展名不在该 biz 白名单（无扩展名时显示「（无扩展名）」） |
 | 400 | 文件过大，最大允许 20MB | 整传超过业务上限 |
 | 400 | 上传文件过大，请压缩后重试 | 超过 multipart 硬上限 25MB（全局兜底） |
+
+<a id="sec-17-6-5"></a>
 
 #### 17.6.5 文件生命周期
 
@@ -10102,9 +10637,13 @@ curl -X POST 'http://host/api/practice/social-practice-reports' \
 
 ---
 
+<a id="sec-18"></a>
+
 ## 18. 其它模块
 
 本节收录不属于前述业务域、但前端会直接调用的通用端点：用户个性化偏好与前端日志上报。
+
+<a id="sec-18-1"></a>
 
 ### 18.1 用户偏好
 
@@ -10117,6 +10656,8 @@ curl -X POST 'http://host/api/practice/social-practice-reports' \
 | DELETE | `/api/preferences/me` | 任意登录用户 | 重置本人偏好（物理删除） |
 
 存储：`user_preference` 表，`prefs` 为 JSON 列，一个用户一行（应用层保证；数据库只有 `user_id` 普通索引，无唯一约束）。
+
+<a id="sec-18-1-1"></a>
 
 #### 18.1.1 读取偏好
 
@@ -10158,6 +10699,8 @@ Authorization: Bearer <accessToken>
 | code | message |
 |------|---------|
 | 401 | 请先登录 / token已过期，请刷新 / token无效（真实 HTTP 401） |
+
+<a id="sec-18-1-2"></a>
 
 #### 18.1.2 浅合并偏好
 
@@ -10248,6 +10791,8 @@ Content-Type: application/json
 >
 > 服务层另有防御性校验「请求体不能为空」，正常 HTTP 调用会在参数绑定阶段先被 400「请求体格式错误」拦截。
 
+<a id="sec-18-1-3"></a>
+
 #### 18.1.3 重置偏好
 
 ```
@@ -10274,6 +10819,8 @@ Authorization: Bearer <accessToken>
 | code | message |
 |------|---------|
 | 401 | 请先登录 / token已过期，请刷新 / token无效（真实 HTTP 401） |
+
+<a id="sec-18-2"></a>
 
 ### 18.2 前端日志
 
@@ -10389,7 +10936,11 @@ Content-Type: application/json
 
 ---
 
+<a id="sec-19"></a>
+
 ## 19. 附录
+
+<a id="sec-19-1"></a>
 
 ### 19.1 完整调用流程示例
 
@@ -10486,6 +11037,8 @@ curl -X POST http://localhost:8080/api/login/logout \
   -H "Authorization: Bearer <accessToken>"
 ```
 
+<a id="sec-19-2"></a>
+
 ### 19.2 token 有效期配置
 
 ```yaml
@@ -10494,6 +11047,8 @@ jwt:
   access-token-expiration: 30m    # accessToken 有效期
   refresh-token-expiration: 7d    # refreshToken / session 有效期
 ```
+
+<a id="sec-19-3"></a>
 
 ### 19.3 密码安全
 
